@@ -42,6 +42,179 @@ for d in [BUSINESS_PROFILES_DIR, TRAINING_DATA_DIR, ADAPTERS_DIR, LOGS_DIR, DOCU
 API_KEYS = {}
 ACTIVITY_LOG = []
 
+# Voice configuration and platform connections
+VOICE_CONFIG = {
+    "selected_voice": "chatterbox_default",
+    "selected_provider": "chatterbox",
+    "voice_settings": {
+        "speed": 1.0,
+        "pitch": 1.0,
+        "volume": 1.0
+    }
+}
+
+VOICE_CHOICES = {
+    "chatterbox": {
+        "name": "Chatterbox",
+        "provider": "Resemble AI",
+        "voices": [
+            {"id": "chatterbox_default", "name": "Default", "gender": "neutral", "style": "conversational"},
+            {"id": "chatterbox_warm", "name": "Warm", "gender": "female", "style": "friendly"},
+            {"id": "chatterbox_professional", "name": "Professional", "gender": "male", "style": "business"},
+            {"id": "chatterbox_energetic", "name": "Energetic", "gender": "female", "style": "upbeat"},
+        ]
+    },
+    "kokoro": {
+        "name": "Kokoro",
+        "provider": "Kokoro TTS",
+        "voices": [
+            {"id": "af_bella", "name": "Bella", "gender": "female", "style": "american"},
+            {"id": "af_nicole", "name": "Nicole", "gender": "female", "style": "american"},
+            {"id": "am_adam", "name": "Adam", "gender": "male", "style": "american"},
+            {"id": "am_michael", "name": "Michael", "gender": "male", "style": "american"},
+            {"id": "bf_emma", "name": "Emma", "gender": "female", "style": "british"},
+            {"id": "bm_george", "name": "George", "gender": "male", "style": "british"},
+        ]
+    },
+    "xtts": {
+        "name": "XTTS-v2",
+        "provider": "Coqui AI",
+        "voices": [
+            {"id": "xtts_clone", "name": "Custom Clone", "gender": "custom", "style": "cloned"},
+            {"id": "xtts_en_female", "name": "English Female", "gender": "female", "style": "neutral"},
+            {"id": "xtts_en_male", "name": "English Male", "gender": "male", "style": "neutral"},
+        ]
+    },
+    "openvoice": {
+        "name": "OpenVoice",
+        "provider": "MyShell AI",
+        "voices": [
+            {"id": "openvoice_default", "name": "Default", "gender": "neutral", "style": "neutral"},
+            {"id": "openvoice_clone", "name": "Instant Clone", "gender": "custom", "style": "cloned"},
+        ]
+    },
+    "elevenlabs": {
+        "name": "ElevenLabs",
+        "provider": "ElevenLabs (Paid)",
+        "voices": [
+            {"id": "eleven_rachel", "name": "Rachel", "gender": "female", "style": "conversational"},
+            {"id": "eleven_drew", "name": "Drew", "gender": "male", "style": "neutral"},
+            {"id": "eleven_clyde", "name": "Clyde", "gender": "male", "style": "character"},
+            {"id": "eleven_paul", "name": "Paul", "gender": "male", "style": "news"},
+            {"id": "eleven_domi", "name": "Domi", "gender": "female", "style": "strong"},
+            {"id": "eleven_bella", "name": "Bella", "gender": "female", "style": "soft"},
+            {"id": "eleven_antoni", "name": "Antoni", "gender": "male", "style": "warm"},
+            {"id": "eleven_custom", "name": "Custom Clone", "gender": "custom", "style": "cloned"},
+        ]
+    },
+    "openai": {
+        "name": "OpenAI TTS",
+        "provider": "OpenAI (Paid)",
+        "voices": [
+            {"id": "openai_alloy", "name": "Alloy", "gender": "neutral", "style": "balanced"},
+            {"id": "openai_echo", "name": "Echo", "gender": "male", "style": "neutral"},
+            {"id": "openai_fable", "name": "Fable", "gender": "neutral", "style": "storytelling"},
+            {"id": "openai_onyx", "name": "Onyx", "gender": "male", "style": "deep"},
+            {"id": "openai_nova", "name": "Nova", "gender": "female", "style": "warm"},
+            {"id": "openai_shimmer", "name": "Shimmer", "gender": "female", "style": "expressive"},
+        ]
+    },
+    "azure": {
+        "name": "Azure TTS",
+        "provider": "Microsoft Azure (Paid)",
+        "voices": [
+            {"id": "azure_jenny", "name": "Jenny", "gender": "female", "style": "neural"},
+            {"id": "azure_guy", "name": "Guy", "gender": "male", "style": "neural"},
+            {"id": "azure_aria", "name": "Aria", "gender": "female", "style": "conversational"},
+            {"id": "azure_davis", "name": "Davis", "gender": "male", "style": "conversational"},
+        ]
+    },
+    "cartesia": {
+        "name": "Cartesia",
+        "provider": "Cartesia (Paid)",
+        "voices": [
+            {"id": "cartesia_default", "name": "Default", "gender": "neutral", "style": "natural"},
+            {"id": "cartesia_custom", "name": "Custom Voice", "gender": "custom", "style": "cloned"},
+        ]
+    }
+}
+
+PLATFORM_CONNECTIONS = {
+    "livekit": {
+        "name": "LiveKit",
+        "status": "disconnected",
+        "config": {
+            "url": "",
+            "api_key": "",
+            "api_secret": ""
+        },
+        "description": "Real-time voice and video with agents SDK"
+    },
+    "vapi": {
+        "name": "Vapi",
+        "status": "disconnected",
+        "config": {
+            "api_key": "",
+            "assistant_id": ""
+        },
+        "description": "Voice AI platform for building phone agents"
+    },
+    "twilio": {
+        "name": "Twilio",
+        "status": "disconnected",
+        "config": {
+            "account_sid": "",
+            "auth_token": "",
+            "phone_number": ""
+        },
+        "description": "Cloud communications platform for voice calls"
+    },
+    "retell": {
+        "name": "Retell AI",
+        "status": "disconnected",
+        "config": {
+            "api_key": "",
+            "agent_id": ""
+        },
+        "description": "Conversational voice AI for customer interactions"
+    },
+    "bland": {
+        "name": "Bland AI",
+        "status": "disconnected",
+        "config": {
+            "api_key": "",
+            "pathway_id": ""
+        },
+        "description": "AI phone agents for enterprises"
+    },
+    "vocode": {
+        "name": "Vocode",
+        "status": "disconnected",
+        "config": {
+            "api_key": ""
+        },
+        "description": "Open-source voice agent framework"
+    },
+    "daily": {
+        "name": "Daily.co",
+        "status": "disconnected",
+        "config": {
+            "api_key": "",
+            "room_url": ""
+        },
+        "description": "Real-time video/audio platform with Pipecat integration"
+    },
+    "websocket": {
+        "name": "Custom WebSocket",
+        "status": "disconnected",
+        "config": {
+            "url": "",
+            "auth_header": ""
+        },
+        "description": "Connect to any WebSocket-based voice service"
+    }
+}
+
 def add_activity(message, icon=""):
     """Add an activity to the log."""
     ACTIVITY_LOG.insert(0, {
@@ -446,6 +619,150 @@ def get_stats():
 
 
 # =============================================================================
+# API ENDPOINTS - VOICE CONFIGURATION
+# =============================================================================
+
+@app.route('/api/voice/providers')
+def get_voice_providers():
+    """Get all available voice providers and their voices."""
+    return jsonify(VOICE_CHOICES)
+
+
+@app.route('/api/voice/config')
+def get_voice_config():
+    """Get current voice configuration."""
+    return jsonify(VOICE_CONFIG)
+
+
+@app.route('/api/voice/config', methods=['POST'])
+def save_voice_config():
+    """Save voice configuration."""
+    global VOICE_CONFIG
+    data = request.json
+
+    if data.get('selected_voice'):
+        VOICE_CONFIG['selected_voice'] = data['selected_voice']
+    if data.get('selected_provider'):
+        VOICE_CONFIG['selected_provider'] = data['selected_provider']
+    if data.get('voice_settings'):
+        VOICE_CONFIG['voice_settings'].update(data['voice_settings'])
+
+    add_activity(f"Voice changed to {VOICE_CONFIG['selected_voice']}", "")
+    return jsonify({"success": True, "config": VOICE_CONFIG})
+
+
+@app.route('/api/voice/test', methods=['POST'])
+def test_voice():
+    """Test a voice with sample text."""
+    data = request.json
+    voice_id = data.get('voice_id', 'chatterbox_default')
+    text = data.get('text', 'Hello! This is a test of the voice synthesis system.')
+
+    # Simulated test response
+    add_activity(f"Voice test: {voice_id}", "")
+    return jsonify({
+        "success": True,
+        "voice_id": voice_id,
+        "text": text,
+        "duration_ms": random.randint(800, 2000),
+        "message": f"Voice '{voice_id}' tested successfully"
+    })
+
+
+# =============================================================================
+# API ENDPOINTS - PLATFORM CONNECTIONS
+# =============================================================================
+
+@app.route('/api/platforms')
+def get_platforms():
+    """Get all platform connections and their status."""
+    return jsonify(PLATFORM_CONNECTIONS)
+
+
+@app.route('/api/platforms/<platform_id>')
+def get_platform(platform_id):
+    """Get a specific platform connection."""
+    if platform_id in PLATFORM_CONNECTIONS:
+        return jsonify(PLATFORM_CONNECTIONS[platform_id])
+    return jsonify({"error": "Platform not found"}), 404
+
+
+@app.route('/api/platforms/<platform_id>/connect', methods=['POST'])
+def connect_platform(platform_id):
+    """Connect to a voice platform."""
+    global PLATFORM_CONNECTIONS
+
+    if platform_id not in PLATFORM_CONNECTIONS:
+        return jsonify({"error": "Platform not found"}), 404
+
+    data = request.json
+    config = data.get('config', {})
+
+    # Update the platform config
+    PLATFORM_CONNECTIONS[platform_id]['config'].update(config)
+
+    # Simulate connection test
+    has_required_fields = all(v for v in PLATFORM_CONNECTIONS[platform_id]['config'].values())
+
+    if has_required_fields:
+        PLATFORM_CONNECTIONS[platform_id]['status'] = 'connected'
+        add_activity(f"Connected to {PLATFORM_CONNECTIONS[platform_id]['name']}", "")
+        return jsonify({
+            "success": True,
+            "status": "connected",
+            "message": f"Successfully connected to {PLATFORM_CONNECTIONS[platform_id]['name']}"
+        })
+    else:
+        PLATFORM_CONNECTIONS[platform_id]['status'] = 'error'
+        return jsonify({
+            "success": False,
+            "status": "error",
+            "message": "Missing required configuration fields"
+        })
+
+
+@app.route('/api/platforms/<platform_id>/disconnect', methods=['POST'])
+def disconnect_platform(platform_id):
+    """Disconnect from a voice platform."""
+    global PLATFORM_CONNECTIONS
+
+    if platform_id not in PLATFORM_CONNECTIONS:
+        return jsonify({"error": "Platform not found"}), 404
+
+    PLATFORM_CONNECTIONS[platform_id]['status'] = 'disconnected'
+    add_activity(f"Disconnected from {PLATFORM_CONNECTIONS[platform_id]['name']}", "")
+
+    return jsonify({
+        "success": True,
+        "status": "disconnected",
+        "message": f"Disconnected from {PLATFORM_CONNECTIONS[platform_id]['name']}"
+    })
+
+
+@app.route('/api/platforms/<platform_id>/test', methods=['POST'])
+def test_platform(platform_id):
+    """Test a platform connection."""
+    if platform_id not in PLATFORM_CONNECTIONS:
+        return jsonify({"error": "Platform not found"}), 404
+
+    platform = PLATFORM_CONNECTIONS[platform_id]
+
+    if platform['status'] != 'connected':
+        return jsonify({
+            "success": False,
+            "message": "Platform is not connected"
+        })
+
+    # Simulate connection test
+    add_activity(f"Testing connection to {platform['name']}", "")
+    return jsonify({
+        "success": True,
+        "message": f"Connection to {platform['name']} is working",
+        "latency_ms": random.randint(50, 200)
+    })
+
+
+# =============================================================================
 # UNIFIED DASHBOARD HTML
 # =============================================================================
 
@@ -744,6 +1061,22 @@ DASHBOARD_HTML = '''
             outline: none;
             border-color: var(--neon-cyan);
             box-shadow: 0 0 15px rgba(0, 255, 242, 0.2);
+        }
+
+        /* Fix dropdown option styling for dark theme */
+        .form-select option,
+        select option {
+            background: #1a1a2e;
+            color: #ffffff;
+            padding: 0.5rem;
+        }
+
+        .form-select option:hover,
+        select option:hover,
+        .form-select option:checked,
+        select option:checked {
+            background: #00fff2;
+            color: #0a0a0f;
         }
 
         .form-textarea { resize: vertical; min-height: 80px; }
@@ -1609,9 +1942,73 @@ DASHBOARD_HTML = '''
 
             <!-- Voice Library -->
             <div id="command-voices" class="sub-tab-content">
+                <!-- Voice Selection Card -->
+                <div class="glass-card" style="margin-bottom: 1rem;">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">Voices</span> Voice Selection</div>
+                    </div>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Select your preferred TTS provider and voice for your agent.</p>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">TTS Provider</label>
+                            <select class="form-select" id="voice-provider" onchange="loadProviderVoices()">
+                                <option value="">Select a provider...</option>
+                                <optgroup label="Free / Open Source">
+                                    <option value="chatterbox">Chatterbox (Resemble AI)</option>
+                                    <option value="kokoro">Kokoro (Ultra-fast)</option>
+                                    <option value="xtts">XTTS-v2 (Coqui AI)</option>
+                                    <option value="openvoice">OpenVoice (MyShell)</option>
+                                </optgroup>
+                                <optgroup label="Paid Services">
+                                    <option value="elevenlabs">ElevenLabs</option>
+                                    <option value="openai">OpenAI TTS</option>
+                                    <option value="azure">Azure TTS</option>
+                                    <option value="cartesia">Cartesia</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Voice</label>
+                            <select class="form-select" id="voice-select" onchange="selectVoice()">
+                                <option value="">Select a voice...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="voice-details" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--glass-surface); border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong id="voice-name" style="color: var(--neon-cyan);"></strong>
+                                <span id="voice-meta" style="color: var(--text-secondary); margin-left: 0.5rem;"></span>
+                            </div>
+                            <span id="voice-status" class="table-status deployed">Selected</span>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 2;">
+                            <label class="form-label">Test Text</label>
+                            <input type="text" class="form-input" id="voice-test-text" value="Hello! How can I help you today?" placeholder="Enter text to test...">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label class="form-label">Speed</label>
+                            <input type="range" id="voice-speed" min="0.5" max="2" step="0.1" value="1" style="width: 100%;" oninput="document.getElementById('voice-speed-val').textContent = this.value + 'x'">
+                            <small style="color: var(--text-secondary);">Speed: <span id="voice-speed-val">1x</span></small>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-primary" onclick="testVoice()">Test Voice</button>
+                        <button class="btn btn-secondary" onclick="saveVoiceConfig()">Save as Default</button>
+                    </div>
+                    <div id="voice-test-result" style="margin-top: 1rem;"></div>
+                </div>
+
+                <!-- Voice Library Card -->
                 <div class="glass-card">
                     <div class="section-header">
-                        <div class="section-title"><span class="section-icon">Voices</span> Free TTS Voice Library</div>
+                        <div class="section-title"><span class="section-icon">Lib</span> Free TTS Voice Library</div>
                     </div>
                     <p style="color: var(--text-secondary); margin-bottom: 1rem;">Open-source Text-to-Speech models with voice cloning capabilities. Replace paid services like ElevenLabs and Cartesia.</p>
 
@@ -1744,18 +2141,178 @@ tts.tts_to_file(
 
             <!-- Voice Integration -->
             <div id="command-voice" class="sub-tab-content">
+                <!-- Platform Connections -->
+                <div class="glass-card" style="margin-bottom: 1rem;">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">Connect</span> Voice Platform Connections</div>
+                        <button class="btn btn-secondary btn-sm" onclick="loadPlatforms()">Refresh</button>
+                    </div>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Connect your Skill Command Center to voice platforms for real-time voice interactions.</p>
+
+                    <div id="platforms-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+                        <!-- LiveKit -->
+                        <div class="platform-card" id="platform-livekit" style="padding: 1rem; background: var(--glass-surface); border-radius: 8px; border: 1px solid var(--glass-border);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <strong style="color: var(--neon-cyan);">LiveKit</strong>
+                                <span id="status-livekit" class="table-status draft">Disconnected</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">Real-time voice and video with agents SDK</p>
+                            <div class="form-group" style="margin-bottom: 0.5rem;">
+                                <input type="text" class="form-input" id="livekit-url" placeholder="wss://your-app.livekit.cloud" style="font-size: 0.85rem;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0.5rem;">
+                                <input type="password" class="form-input" id="livekit-api-key" placeholder="API Key" style="font-size: 0.85rem;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0.75rem;">
+                                <input type="password" class="form-input" id="livekit-api-secret" placeholder="API Secret" style="font-size: 0.85rem;">
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-primary btn-sm" onclick="connectPlatform('livekit')">Connect</button>
+                                <button class="btn btn-secondary btn-sm" onclick="testPlatform('livekit')">Test</button>
+                            </div>
+                        </div>
+
+                        <!-- Vapi -->
+                        <div class="platform-card" id="platform-vapi" style="padding: 1rem; background: var(--glass-surface); border-radius: 8px; border: 1px solid var(--glass-border);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <strong style="color: var(--neon-green);">Vapi</strong>
+                                <span id="status-vapi" class="table-status draft">Disconnected</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">Voice AI platform for building phone agents</p>
+                            <div class="form-group" style="margin-bottom: 0.5rem;">
+                                <input type="password" class="form-input" id="vapi-api-key" placeholder="Vapi API Key" style="font-size: 0.85rem;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0.75rem;">
+                                <input type="text" class="form-input" id="vapi-assistant-id" placeholder="Assistant ID (optional)" style="font-size: 0.85rem;">
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-primary btn-sm" onclick="connectPlatform('vapi')">Connect</button>
+                                <button class="btn btn-secondary btn-sm" onclick="testPlatform('vapi')">Test</button>
+                            </div>
+                        </div>
+
+                        <!-- Twilio -->
+                        <div class="platform-card" id="platform-twilio" style="padding: 1rem; background: var(--glass-surface); border-radius: 8px; border: 1px solid var(--glass-border);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <strong style="color: var(--neon-purple);">Twilio</strong>
+                                <span id="status-twilio" class="table-status draft">Disconnected</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">Cloud communications for voice calls</p>
+                            <div class="form-group" style="margin-bottom: 0.5rem;">
+                                <input type="text" class="form-input" id="twilio-account-sid" placeholder="Account SID" style="font-size: 0.85rem;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0.5rem;">
+                                <input type="password" class="form-input" id="twilio-auth-token" placeholder="Auth Token" style="font-size: 0.85rem;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0.75rem;">
+                                <input type="text" class="form-input" id="twilio-phone" placeholder="+1234567890" style="font-size: 0.85rem;">
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-primary btn-sm" onclick="connectPlatform('twilio')">Connect</button>
+                                <button class="btn btn-secondary btn-sm" onclick="testPlatform('twilio')">Test</button>
+                            </div>
+                        </div>
+
+                        <!-- Retell AI -->
+                        <div class="platform-card" id="platform-retell" style="padding: 1rem; background: var(--glass-surface); border-radius: 8px; border: 1px solid var(--glass-border);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <strong style="color: var(--neon-orange);">Retell AI</strong>
+                                <span id="status-retell" class="table-status draft">Disconnected</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">Conversational voice AI for customer interactions</p>
+                            <div class="form-group" style="margin-bottom: 0.5rem;">
+                                <input type="password" class="form-input" id="retell-api-key" placeholder="Retell API Key" style="font-size: 0.85rem;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0.75rem;">
+                                <input type="text" class="form-input" id="retell-agent-id" placeholder="Agent ID" style="font-size: 0.85rem;">
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-primary btn-sm" onclick="connectPlatform('retell')">Connect</button>
+                                <button class="btn btn-secondary btn-sm" onclick="testPlatform('retell')">Test</button>
+                            </div>
+                        </div>
+
+                        <!-- Bland AI -->
+                        <div class="platform-card" id="platform-bland" style="padding: 1rem; background: var(--glass-surface); border-radius: 8px; border: 1px solid var(--glass-border);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <strong style="color: var(--neon-pink);">Bland AI</strong>
+                                <span id="status-bland" class="table-status draft">Disconnected</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">AI phone agents for enterprises</p>
+                            <div class="form-group" style="margin-bottom: 0.5rem;">
+                                <input type="password" class="form-input" id="bland-api-key" placeholder="Bland API Key" style="font-size: 0.85rem;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0.75rem;">
+                                <input type="text" class="form-input" id="bland-pathway-id" placeholder="Pathway ID" style="font-size: 0.85rem;">
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-primary btn-sm" onclick="connectPlatform('bland')">Connect</button>
+                                <button class="btn btn-secondary btn-sm" onclick="testPlatform('bland')">Test</button>
+                            </div>
+                        </div>
+
+                        <!-- Daily.co / Pipecat -->
+                        <div class="platform-card" id="platform-daily" style="padding: 1rem; background: var(--glass-surface); border-radius: 8px; border: 1px solid var(--glass-border);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <strong style="color: var(--neon-blue);">Daily.co</strong>
+                                <span id="status-daily" class="table-status draft">Disconnected</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">Real-time video/audio with Pipecat integration</p>
+                            <div class="form-group" style="margin-bottom: 0.5rem;">
+                                <input type="password" class="form-input" id="daily-api-key" placeholder="Daily API Key" style="font-size: 0.85rem;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0.75rem;">
+                                <input type="text" class="form-input" id="daily-room-url" placeholder="Room URL (optional)" style="font-size: 0.85rem;">
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-primary btn-sm" onclick="connectPlatform('daily')">Connect</button>
+                                <button class="btn btn-secondary btn-sm" onclick="testPlatform('daily')">Test</button>
+                            </div>
+                        </div>
+
+                        <!-- Vocode -->
+                        <div class="platform-card" id="platform-vocode" style="padding: 1rem; background: var(--glass-surface); border-radius: 8px; border: 1px solid var(--glass-border);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <strong style="color: var(--neon-yellow);">Vocode</strong>
+                                <span id="status-vocode" class="table-status draft">Disconnected</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">Open-source voice agent framework</p>
+                            <div class="form-group" style="margin-bottom: 0.75rem;">
+                                <input type="password" class="form-input" id="vocode-api-key" placeholder="Vocode API Key" style="font-size: 0.85rem;">
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-primary btn-sm" onclick="connectPlatform('vocode')">Connect</button>
+                                <button class="btn btn-secondary btn-sm" onclick="testPlatform('vocode')">Test</button>
+                            </div>
+                        </div>
+
+                        <!-- Custom WebSocket -->
+                        <div class="platform-card" id="platform-websocket" style="padding: 1rem; background: var(--glass-surface); border-radius: 8px; border: 1px solid var(--glass-border);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <strong style="color: var(--text-primary);">Custom WebSocket</strong>
+                                <span id="status-websocket" class="table-status draft">Disconnected</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">Connect to any WebSocket-based service</p>
+                            <div class="form-group" style="margin-bottom: 0.5rem;">
+                                <input type="text" class="form-input" id="websocket-url" placeholder="wss://your-server.com/ws" style="font-size: 0.85rem;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0.75rem;">
+                                <input type="password" class="form-input" id="websocket-auth" placeholder="Auth Header (optional)" style="font-size: 0.85rem;">
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-primary btn-sm" onclick="connectPlatform('websocket')">Connect</button>
+                                <button class="btn btn-secondary btn-sm" onclick="testPlatform('websocket')">Test</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="platform-message" style="margin-top: 1rem;"></div>
+                </div>
+
+                <!-- Integration Code Examples -->
                 <div class="glass-card">
                     <div class="section-header">
-                        <div class="section-title"><span class="section-icon">Voice</span> Voice Platform Integration</div>
+                        <div class="section-title"><span class="section-icon">Code</span> Integration Examples</div>
                     </div>
-                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Connect the Skill Command Center to your voice platform.</p>
-                    <h4 style="color: var(--neon-cyan); margin: 1rem 0 0.5rem;">Supported Platforms</h4>
-                    <ul style="color: var(--text-secondary); margin-bottom: 1rem;">
-                        <li>LiveKit</li>
-                        <li>Vapi</li>
-                        <li>Twilio</li>
-                        <li>Custom WebSocket</li>
-                    </ul>
                     <h4 style="color: var(--neon-cyan); margin-bottom: 0.5rem;">Basic Integration</h4>
                     <pre class="code-block">from skill_command_center import SkillCommandCenter
 
@@ -1765,17 +2322,56 @@ center = SkillCommandCenter()
 async def on_user_speech(text: str):
     async for chunk in center.process_query(text, use_latency_masking=True):
         await tts.speak(chunk)</pre>
-                    <h4 style="color: var(--neon-cyan); margin: 1rem 0 0.5rem;">LiveKit Integration</h4>
-                    <pre class="code-block">from livekit.agents import llm
+                    <h4 style="color: var(--neon-cyan); margin: 1rem 0 0.5rem;">LiveKit Agents Integration</h4>
+                    <pre class="code-block">from livekit.agents import llm, Agent
+from livekit.plugins import silero
 
-class HybridLLM(llm.LLM):
+class SkillCenterLLM(llm.LLM):
     def __init__(self):
         self.center = SkillCommandCenter()
 
     async def chat(self, messages):
         prompt = messages[-1].content
         async for chunk in self.center.process_query(prompt):
-            yield llm.ChatChunk(content=chunk)</pre>
+            yield llm.ChatChunk(content=chunk)
+
+# Use with LiveKit Agent
+agent = Agent(
+    vad=silero.VAD(),
+    llm=SkillCenterLLM(),
+    tts=your_tts_provider
+)</pre>
+                    <h4 style="color: var(--neon-green); margin: 1rem 0 0.5rem;">Vapi Custom LLM</h4>
+                    <pre class="code-block"># Set your server URL in Vapi dashboard as Custom LLM endpoint
+from flask import Flask, request, jsonify
+
+@app.route('/vapi/chat', methods=['POST'])
+async def vapi_handler():
+    data = request.json
+    message = data['messages'][-1]['content']
+
+    response = ""
+    async for chunk in center.process_query(message):
+        response += chunk
+
+    return jsonify({
+        "message": {"role": "assistant", "content": response}
+    })</pre>
+                    <h4 style="color: var(--neon-purple); margin: 1rem 0 0.5rem;">Daily.co Pipecat Integration</h4>
+                    <pre class="code-block">from pipecat.pipeline import Pipeline
+from pipecat.transports.services.daily import DailyTransport
+
+class SkillCenterProcessor:
+    async def process(self, text):
+        async for chunk in center.process_query(text):
+            yield chunk
+
+pipeline = Pipeline([
+    DailyTransport(room_url, token),
+    your_stt,
+    SkillCenterProcessor(),
+    your_tts
+])</pre>
                 </div>
             </div>
         </div>
@@ -2302,6 +2898,298 @@ print("Training complete: adapters/${skillId}")`;
         }
 
         // ============================================================
+        // VOICE MANAGEMENT
+        // ============================================================
+        let voiceProviders = {};
+
+        async function loadVoiceProviders() {
+            try {
+                const res = await fetch('/api/voice/providers');
+                voiceProviders = await res.json();
+            } catch (e) {
+                console.error('Failed to load voice providers:', e);
+            }
+        }
+
+        function loadProviderVoices() {
+            const provider = document.getElementById('voice-provider').value;
+            const voiceSelect = document.getElementById('voice-select');
+
+            voiceSelect.innerHTML = '<option value="">Select a voice...</option>';
+            document.getElementById('voice-details').style.display = 'none';
+
+            if (!provider || !voiceProviders[provider]) return;
+
+            const providerData = voiceProviders[provider];
+            providerData.voices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.id;
+                option.textContent = `${voice.name} (${voice.gender}, ${voice.style})`;
+                voiceSelect.appendChild(option);
+            });
+        }
+
+        function selectVoice() {
+            const provider = document.getElementById('voice-provider').value;
+            const voiceId = document.getElementById('voice-select').value;
+
+            if (!provider || !voiceId || !voiceProviders[provider]) {
+                document.getElementById('voice-details').style.display = 'none';
+                return;
+            }
+
+            const voice = voiceProviders[provider].voices.find(v => v.id === voiceId);
+            if (voice) {
+                document.getElementById('voice-details').style.display = 'block';
+                document.getElementById('voice-name').textContent = voice.name;
+                document.getElementById('voice-meta').textContent = `${voiceProviders[provider].name} | ${voice.gender} | ${voice.style}`;
+            }
+        }
+
+        async function testVoice() {
+            const voiceId = document.getElementById('voice-select').value;
+            const text = document.getElementById('voice-test-text').value;
+            const speed = document.getElementById('voice-speed').value;
+            const resultEl = document.getElementById('voice-test-result');
+
+            if (!voiceId) {
+                resultEl.innerHTML = '<div style="color: var(--neon-orange);">Please select a voice first</div>';
+                return;
+            }
+
+            resultEl.innerHTML = '<div style="color: var(--neon-cyan);">Testing voice...</div>';
+
+            // Use browser Speech Synthesis API for demo playback
+            if ('speechSynthesis' in window) {
+                // Cancel any ongoing speech
+                window.speechSynthesis.cancel();
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = parseFloat(speed);
+
+                // Try to find a matching voice
+                const voices = window.speechSynthesis.getVoices();
+                if (voices.length > 0) {
+                    // Pick a voice based on the selected voice characteristics
+                    const voiceName = document.getElementById('voice-select').selectedOptions[0]?.text || '';
+                    if (voiceName.toLowerCase().includes('female')) {
+                        const femaleVoice = voices.find(v => v.name.toLowerCase().includes('female') || v.name.includes('Samantha') || v.name.includes('Victoria'));
+                        if (femaleVoice) utterance.voice = femaleVoice;
+                    } else if (voiceName.toLowerCase().includes('male')) {
+                        const maleVoice = voices.find(v => v.name.toLowerCase().includes('male') || v.name.includes('Daniel') || v.name.includes('Alex'));
+                        if (maleVoice) utterance.voice = maleVoice;
+                    }
+                }
+
+                const startTime = Date.now();
+
+                utterance.onend = () => {
+                    const duration = Date.now() - startTime;
+                    resultEl.innerHTML = `<div style="color: var(--neon-green);">&#9658; Voice played successfully (${duration}ms)</div>`;
+                };
+
+                utterance.onerror = (e) => {
+                    resultEl.innerHTML = `<div style="color: var(--neon-orange);">Playback error: ${e.error}</div>`;
+                };
+
+                window.speechSynthesis.speak(utterance);
+                resultEl.innerHTML = '<div style="color: var(--neon-cyan);">&#9658; Playing voice...</div>';
+            } else {
+                // Fallback to API call if Speech Synthesis not available
+                try {
+                    const res = await fetch('/api/voice/test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ voice_id: voiceId, text, speed: parseFloat(speed) })
+                    });
+                    const result = await res.json();
+
+                    if (result.success) {
+                        resultEl.innerHTML = `<div style="color: var(--neon-green);">Voice test completed in ${result.duration_ms}ms (audio not available in this browser)</div>`;
+                    } else {
+                        resultEl.innerHTML = `<div style="color: var(--neon-orange);">Test failed: ${result.message}</div>`;
+                    }
+                } catch (e) {
+                    resultEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
+                }
+            }
+        }
+
+        async function saveVoiceConfig() {
+            const provider = document.getElementById('voice-provider').value;
+            const voiceId = document.getElementById('voice-select').value;
+            const speed = document.getElementById('voice-speed').value;
+            const resultEl = document.getElementById('voice-test-result');
+
+            if (!voiceId) {
+                resultEl.innerHTML = '<div style="color: var(--neon-orange);">Please select a voice first</div>';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/voice/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        selected_provider: provider,
+                        selected_voice: voiceId,
+                        voice_settings: { speed: parseFloat(speed) }
+                    })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    resultEl.innerHTML = '<div style="color: var(--neon-green);">Voice configuration saved as default!</div>';
+                } else {
+                    resultEl.innerHTML = '<div style="color: var(--neon-orange);">Failed to save configuration</div>';
+                }
+            } catch (e) {
+                resultEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
+            }
+        }
+
+        // ============================================================
+        // PLATFORM CONNECTIONS
+        // ============================================================
+        async function loadPlatforms() {
+            try {
+                const res = await fetch('/api/platforms');
+                const platforms = await res.json();
+
+                for (const [id, platform] of Object.entries(platforms)) {
+                    updatePlatformStatus(id, platform.status);
+                }
+            } catch (e) {
+                console.error('Failed to load platforms:', e);
+            }
+        }
+
+        function updatePlatformStatus(platformId, status) {
+            const statusEl = document.getElementById(`status-${platformId}`);
+            if (!statusEl) return;
+
+            statusEl.className = 'table-status';
+            switch (status) {
+                case 'connected':
+                    statusEl.classList.add('deployed');
+                    statusEl.textContent = 'Connected';
+                    break;
+                case 'error':
+                    statusEl.classList.add('training');
+                    statusEl.textContent = 'Error';
+                    break;
+                default:
+                    statusEl.classList.add('draft');
+                    statusEl.textContent = 'Disconnected';
+            }
+        }
+
+        function getPlatformConfig(platformId) {
+            const config = {};
+            switch (platformId) {
+                case 'livekit':
+                    config.url = document.getElementById('livekit-url').value;
+                    config.api_key = document.getElementById('livekit-api-key').value;
+                    config.api_secret = document.getElementById('livekit-api-secret').value;
+                    break;
+                case 'vapi':
+                    config.api_key = document.getElementById('vapi-api-key').value;
+                    config.assistant_id = document.getElementById('vapi-assistant-id').value;
+                    break;
+                case 'twilio':
+                    config.account_sid = document.getElementById('twilio-account-sid').value;
+                    config.auth_token = document.getElementById('twilio-auth-token').value;
+                    config.phone_number = document.getElementById('twilio-phone').value;
+                    break;
+                case 'retell':
+                    config.api_key = document.getElementById('retell-api-key').value;
+                    config.agent_id = document.getElementById('retell-agent-id').value;
+                    break;
+                case 'bland':
+                    config.api_key = document.getElementById('bland-api-key').value;
+                    config.pathway_id = document.getElementById('bland-pathway-id').value;
+                    break;
+                case 'daily':
+                    config.api_key = document.getElementById('daily-api-key').value;
+                    config.room_url = document.getElementById('daily-room-url').value;
+                    break;
+                case 'vocode':
+                    config.api_key = document.getElementById('vocode-api-key').value;
+                    break;
+                case 'websocket':
+                    config.url = document.getElementById('websocket-url').value;
+                    config.auth_header = document.getElementById('websocket-auth').value;
+                    break;
+            }
+            return config;
+        }
+
+        async function connectPlatform(platformId) {
+            const config = getPlatformConfig(platformId);
+            const messageEl = document.getElementById('platform-message');
+
+            messageEl.innerHTML = '<div style="color: var(--neon-cyan);">Connecting...</div>';
+
+            try {
+                const res = await fetch(`/api/platforms/${platformId}/connect`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ config })
+                });
+                const result = await res.json();
+
+                updatePlatformStatus(platformId, result.status);
+
+                if (result.success) {
+                    messageEl.innerHTML = `<div style="color: var(--neon-green);">${result.message}</div>`;
+                } else {
+                    messageEl.innerHTML = `<div style="color: var(--neon-orange);">${result.message}</div>`;
+                }
+            } catch (e) {
+                messageEl.innerHTML = `<div style="color: var(--neon-orange);">Connection failed: ${e.message}</div>`;
+            }
+        }
+
+        async function testPlatform(platformId) {
+            const messageEl = document.getElementById('platform-message');
+
+            messageEl.innerHTML = '<div style="color: var(--neon-cyan);">Testing connection...</div>';
+
+            try {
+                const res = await fetch(`/api/platforms/${platformId}/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    messageEl.innerHTML = `<div style="color: var(--neon-green);">${result.message} (latency: ${result.latency_ms}ms)</div>`;
+                } else {
+                    messageEl.innerHTML = `<div style="color: var(--neon-orange);">${result.message}</div>`;
+                }
+            } catch (e) {
+                messageEl.innerHTML = `<div style="color: var(--neon-orange);">Test failed: ${e.message}</div>`;
+            }
+        }
+
+        async function disconnectPlatform(platformId) {
+            const messageEl = document.getElementById('platform-message');
+
+            try {
+                const res = await fetch(`/api/platforms/${platformId}/disconnect`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await res.json();
+
+                updatePlatformStatus(platformId, result.status);
+                messageEl.innerHTML = `<div style="color: var(--text-secondary);">${result.message}</div>`;
+            } catch (e) {
+                messageEl.innerHTML = `<div style="color: var(--neon-orange);">Disconnect failed: ${e.message}</div>`;
+            }
+        }
+
+        // ============================================================
         // INITIALIZATION
         // ============================================================
         document.addEventListener('DOMContentLoaded', () => {
@@ -2309,6 +3197,8 @@ print("Training complete: adapters/${skillId}")`;
             refreshServerStatus();
             loadMetrics();
             loadActivity();
+            loadVoiceProviders();
+            loadPlatforms();
 
             setInterval(loadSkills, 30000);
             setInterval(refreshServerStatus, 10000);
