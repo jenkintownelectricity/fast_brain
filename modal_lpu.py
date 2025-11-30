@@ -10,18 +10,15 @@ from typing import Optional
 lpu_image = (
     modal.Image.debian_slim()
     .apt_install("git", "cmake", "ninja-build", "clang", "build-essential", "wget")
+    # Install huggingface_hub FIRST (needed by setup_env.py to download model)
+    .pip_install("huggingface_hub[cli]")
     # Clone the 1-bit LLM architecture
     .run_commands(
         "git clone --recursive https://github.com/microsoft/BitNet /root/BitNet",
     )
-    # "Fabricate" the chip (Compile the C++ kernels)
+    # "Fabricate" the chip (Compile the C++ kernels AND download model)
     .run_commands(
         "cd /root/BitNet && python3 setup_env.py --hf-repo HF1BitLLM/Llama3-8B-1.58-100B-tokens -q i2_s"
-    )
-    # Pre-download the model weights so they are baked into the image (Fast Boot)
-    .pip_install("huggingface_hub")
-    .run_commands(
-        "huggingface-cli download HF1BitLLM/Llama3-8B-1.58-100B-tokens --local-dir /root/models/bitnet_llama3"
     )
 )
 
@@ -46,7 +43,8 @@ class VirtualLPU:
         This runs when the 'chip' powers on.
         We verify the model path and prepare the C++ executable command.
         """
-        self.model_path = "/root/models/bitnet_llama3/ggml-model-i2_s.gguf"
+        # setup_env.py downloads model to BitNet/models/ and converts to GGUF
+        self.model_path = "/root/BitNet/models/Llama3-8B-1.58-100B-tokens/ggml-model-i2_s.gguf"
         self.exec_path = "/root/BitNet/run_inference.py"  # Wrapper provided by repo
         self.skills_path = "/root/skills"
 
