@@ -20,11 +20,11 @@ lpu_image = (
     .run_commands(
         "python3 -c \"from huggingface_hub import snapshot_download; snapshot_download('HF1BitLLM/Llama3-8B-1.58-100B-tokens', local_dir='/root/BitNet/models/Llama3-8B-1.58-100B-tokens')\""
     )
-    # Install dependencies needed for GGUF conversion
-    .pip_install("transformers", "sentencepiece", "numpy", "torch")
+    # Install dependencies needed for GGUF conversion (v2 - cache bust)
+    .pip_install("transformers", "sentencepiece", "numpy")
     # Compile kernels and convert model to GGUF (model already downloaded)
     .run_commands(
-        "cd /root/BitNet && python3 setup_env.py -md models/Llama3-8B-1.58-100B-tokens -q i2_s"
+        "cd /root/BitNet && pip install -r requirements.txt && python3 setup_env.py -md models/Llama3-8B-1.58-100B-tokens -q i2_s"
     )
 )
 
