@@ -10,21 +10,19 @@ from typing import Optional
 lpu_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("git", "cmake", "ninja-build", "clang", "build-essential", "wget")
-    # Install huggingface_hub for downloading
+    # Install huggingface_hub
     .pip_install("huggingface_hub")
     # Clone the 1-bit LLM architecture
     .run_commands(
         "git clone --recursive https://github.com/microsoft/BitNet /root/BitNet",
     )
-    # Download model via Python (avoids CLI escaping issues)
+    # Download model using Python (bypasses CLI issues)
     .run_commands(
         "python3 -c \"from huggingface_hub import snapshot_download; snapshot_download('HF1BitLLM/Llama3-8B-1.58-100B-tokens', local_dir='/root/BitNet/models/Llama3-8B-1.58-100B-tokens')\""
     )
-    # Install dependencies needed for GGUF conversion (v2 - cache bust)
-    .pip_install("transformers", "sentencepiece", "numpy")
-    # Compile kernels and convert model to GGUF (model already downloaded)
+    # Compile the C++ kernels (skip the download step in setup_env.py)
     .run_commands(
-        "cd /root/BitNet && pip install -r requirements.txt && python3 setup_env.py -md models/Llama3-8B-1.58-100B-tokens -q i2_s"
+        "cd /root/BitNet && python3 setup_env.py -md models/Llama3-8B-1.58-100B-tokens -q i2_s"
     )
 )
 
@@ -44,8 +42,7 @@ skills_volume = modal.Volume.from_name("lpu-skills", create_if_missing=True)
     volumes={"/root/skills": skills_volume}  # Mount skill adapters
 )
 class VirtualLPU:
-    @modal.enter()
-    def startup(self):
+    def __enter__(self):
         """
         This runs when the 'chip' powers on.
         We verify the model path and prepare the C++ executable command.
@@ -62,37 +59,6 @@ class VirtualLPU:
         # But BitNet loads via the CLI command per request in the default script.
         # For true <10ms latency, we would use the C++ binary directly via subprocess.
         print("⚡ LPU Online. Ternary weights loaded.")
-
-    @modal.method()
-    def debug(self) -> str:
-        """Inspect the container filesystem to find the right inference command."""
-        import glob
-        info = []
-
-        # Check BitNet directory
-        info.append("=== /root/BitNet contents ===")
-        for f in sorted(glob.glob("/root/BitNet/*")):
-            info.append(f"  {f}")
-
-        # Check for Python scripts
-        info.append("\n=== Python scripts ===")
-        for f in sorted(glob.glob("/root/BitNet/*.py")):
-            info.append(f"  {f}")
-
-        # Check for binaries in build
-        info.append("\n=== Build binaries ===")
-        for f in sorted(glob.glob("/root/BitNet/build/**/llama-*", recursive=True)):
-            info.append(f"  {f}")
-
-        # Check model files
-        info.append("\n=== Model files ===")
-        for f in sorted(glob.glob("/root/BitNet/models/**/*.gguf", recursive=True)):
-            info.append(f"  {f}")
-
-        # Check if run_inference.py exists
-        info.append(f"\n=== run_inference.py exists: {os.path.exists('/root/BitNet/run_inference.py')} ===")
-
-        return "\n".join(info)
 
     @modal.method()
     def list_skills(self) -> list:
@@ -116,7 +82,7 @@ class VirtualLPU:
         """
         start = time.time()
 
-        # Build the command - run from BitNet directory
+        # Build the command
         cmd = [
             "python3", self.exec_path,
             "-m", self.model_path,
@@ -134,39 +100,29 @@ class VirtualLPU:
             else:
                 print(f"⚠️ Skill not found: {skill_adapter}, using base model")
 
-        # Run the command and capture all output
-        result = subprocess.run(
+        # Open a pipe to the process to stream results instantly
+        process = subprocess.Popen(
             cmd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            cwd="/root/BitNet"
+            bufsize=1  # Line buffered
         )
 
-        # Yield stdout
-        if result.stdout:
-            yield result.stdout
-
-        # Show stderr for debugging
-        if result.stderr:
-            yield f"\n[stderr]: {result.stderr}"
-
-        if result.returncode != 0:
-            yield f"\n[exit code]: {result.returncode}"
+        # Yield tokens as they are generated (Streaming)
+        for line in process.stdout:
+            yield line
 
         print(f"⏱️ Inference Time: {time.time() - start:.2f}s")
 
 # 3. Local Entrypoint (To test it from your laptop)
 @app.local_entrypoint()
-def main(debug: bool = False):
+def main():
     print("Connecting to Cloud LPU...")
     lpu = VirtualLPU()
-
-    if debug:
-        print(lpu.debug.remote())
-        return
-
+    
     prompt = "User: Explain quantum computing in one sentence.\nAssistant:"
-
+    
     print(f"Sending: {prompt}")
     for chunk in lpu.chat.remote_gen(prompt):
         print(chunk, end="", flush=True)
