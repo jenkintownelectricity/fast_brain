@@ -64,6 +64,37 @@ class VirtualLPU:
         print("⚡ LPU Online. Ternary weights loaded.")
 
     @modal.method()
+    def debug(self) -> str:
+        """Inspect the container filesystem to find the right inference command."""
+        import glob
+        info = []
+
+        # Check BitNet directory
+        info.append("=== /root/BitNet contents ===")
+        for f in sorted(glob.glob("/root/BitNet/*")):
+            info.append(f"  {f}")
+
+        # Check for Python scripts
+        info.append("\n=== Python scripts ===")
+        for f in sorted(glob.glob("/root/BitNet/*.py")):
+            info.append(f"  {f}")
+
+        # Check for binaries in build
+        info.append("\n=== Build binaries ===")
+        for f in sorted(glob.glob("/root/BitNet/build/**/llama-*", recursive=True)):
+            info.append(f"  {f}")
+
+        # Check model files
+        info.append("\n=== Model files ===")
+        for f in sorted(glob.glob("/root/BitNet/models/**/*.gguf", recursive=True)):
+            info.append(f"  {f}")
+
+        # Check if run_inference.py exists
+        info.append(f"\n=== run_inference.py exists: {os.path.exists('/root/BitNet/run_inference.py')} ===")
+
+        return "\n".join(info)
+
+    @modal.method()
     def list_skills(self) -> list:
         """List all available skill adapters on the volume."""
         skills_volume.reload()  # Sync latest from cloud
@@ -120,12 +151,16 @@ class VirtualLPU:
 
 # 3. Local Entrypoint (To test it from your laptop)
 @app.local_entrypoint()
-def main():
+def main(debug: bool = False):
     print("Connecting to Cloud LPU...")
     lpu = VirtualLPU()
-    
+
+    if debug:
+        print(lpu.debug.remote())
+        return
+
     prompt = "User: Explain quantum computing in one sentence.\nAssistant:"
-    
+
     print(f"Sending: {prompt}")
     for chunk in lpu.chat.remote_gen(prompt):
         print(chunk, end="", flush=True)
