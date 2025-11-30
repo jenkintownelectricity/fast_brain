@@ -116,7 +116,7 @@ class VirtualLPU:
         """
         start = time.time()
 
-        # Build the command
+        # Build the command - run from BitNet directory
         cmd = [
             "python3", self.exec_path,
             "-m", self.model_path,
@@ -134,18 +134,24 @@ class VirtualLPU:
             else:
                 print(f"⚠️ Skill not found: {skill_adapter}, using base model")
 
-        # Open a pipe to the process to stream results instantly
-        process = subprocess.Popen(
+        # Run the command and capture all output
+        result = subprocess.run(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
-            bufsize=1  # Line buffered
+            cwd="/root/BitNet"
         )
 
-        # Yield tokens as they are generated (Streaming)
-        for line in process.stdout:
-            yield line
+        # Yield stdout
+        if result.stdout:
+            yield result.stdout
+
+        # Show stderr for debugging
+        if result.stderr:
+            yield f"\n[stderr]: {result.stderr}"
+
+        if result.returncode != 0:
+            yield f"\n[exit code]: {result.returncode}"
 
         print(f"⏱️ Inference Time: {time.time() - start:.2f}s")
 
