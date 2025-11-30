@@ -44,7 +44,8 @@ skills_volume = modal.Volume.from_name("lpu-skills", create_if_missing=True)
     volumes={"/root/skills": skills_volume}  # Mount skill adapters
 )
 class VirtualLPU:
-    def __enter__(self):
+    @modal.enter()
+    def startup(self):
         """
         This runs when the 'chip' powers on.
         We verify the model path and prepare the C++ executable command.
