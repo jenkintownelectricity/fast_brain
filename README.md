@@ -113,8 +113,8 @@ async def entrypoint(ctx: JobContext):
 
 ## Configuration
 
-- `keep_warm=1`: One instance always ready (zero cold start)
-- `keep_warm=0`: Standard serverless (~2s startup)
+- `min_containers=1`: One instance always ready (zero cold start)
+- `min_containers=0`: Standard serverless (~2s startup)
 - `timeout=600`: 10 minute max inference time
 
 ## Files

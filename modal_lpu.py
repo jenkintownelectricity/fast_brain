@@ -36,7 +36,7 @@ skills_volume = modal.Volume.from_name("lpu-skills", create_if_missing=True)
 # If you remove keep_warm, it becomes standard serverless (Cheaper, 2s startup lag).
 @app.cls(
     image=lpu_image,
-    keep_warm=1,
+    min_containers=1,  # One instance always ready (zero cold start)
     timeout=600,
     volumes={"/root/skills": skills_volume}  # Mount skill adapters
 )
