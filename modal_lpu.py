@@ -8,17 +8,23 @@ from typing import Optional
 # We build a custom Docker image that has the BitNet C++ kernels pre-compiled.
 # This acts like "taping out" your chip design.
 lpu_image = (
-    modal.Image.debian_slim()
+    modal.Image.debian_slim(python_version="3.11")
     .apt_install("git", "cmake", "ninja-build", "clang", "build-essential", "wget")
-    # Install huggingface_hub FIRST (needed by setup_env.py to download model)
-    .pip_install("huggingface_hub[cli]")
+    # Install huggingface_hub for downloading
+    .pip_install("huggingface_hub")
     # Clone the 1-bit LLM architecture
     .run_commands(
         "git clone --recursive https://github.com/microsoft/BitNet /root/BitNet",
     )
-    # "Fabricate" the chip (Compile the C++ kernels AND download model)
+    # Download model via Python (avoids CLI escaping issues)
     .run_commands(
-        "cd /root/BitNet && python3 setup_env.py --hf-repo HF1BitLLM/Llama3-8B-1.58-100B-tokens -q i2_s"
+        "python3 -c \"from huggingface_hub import snapshot_download; snapshot_download('HF1BitLLM/Llama3-8B-1.58-100B-tokens', local_dir='/root/BitNet/models/Llama3-8B-1.58-100B-tokens')\""
+    )
+    # Install dependencies needed for GGUF conversion
+    .pip_install("transformers", "sentencepiece", "numpy", "torch")
+    # Compile kernels and convert model to GGUF (model already downloaded)
+    .run_commands(
+        "cd /root/BitNet && python3 setup_env.py -md models/Llama3-8B-1.58-100B-tokens -q i2_s"
     )
 )
 
