@@ -1063,6 +1063,22 @@ DASHBOARD_HTML = '''
             box-shadow: 0 0 15px rgba(0, 255, 242, 0.2);
         }
 
+        /* Fix dropdown option styling for dark theme */
+        .form-select option,
+        select option {
+            background: #1a1a2e;
+            color: #ffffff;
+            padding: 0.5rem;
+        }
+
+        .form-select option:hover,
+        select option:hover,
+        .form-select option:checked,
+        select option:checked {
+            background: #00fff2;
+            color: #0a0a0f;
+        }
+
         .form-textarea { resize: vertical; min-height: 80px; }
 
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -2943,21 +2959,59 @@ print("Training complete: adapters/${skillId}")`;
 
             resultEl.innerHTML = '<div style="color: var(--neon-cyan);">Testing voice...</div>';
 
-            try {
-                const res = await fetch('/api/voice/test', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ voice_id: voiceId, text, speed: parseFloat(speed) })
-                });
-                const result = await res.json();
+            // Use browser Speech Synthesis API for demo playback
+            if ('speechSynthesis' in window) {
+                // Cancel any ongoing speech
+                window.speechSynthesis.cancel();
 
-                if (result.success) {
-                    resultEl.innerHTML = `<div style="color: var(--neon-green);">Voice test completed in ${result.duration_ms}ms</div>`;
-                } else {
-                    resultEl.innerHTML = `<div style="color: var(--neon-orange);">Test failed: ${result.message}</div>`;
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = parseFloat(speed);
+
+                // Try to find a matching voice
+                const voices = window.speechSynthesis.getVoices();
+                if (voices.length > 0) {
+                    // Pick a voice based on the selected voice characteristics
+                    const voiceName = document.getElementById('voice-select').selectedOptions[0]?.text || '';
+                    if (voiceName.toLowerCase().includes('female')) {
+                        const femaleVoice = voices.find(v => v.name.toLowerCase().includes('female') || v.name.includes('Samantha') || v.name.includes('Victoria'));
+                        if (femaleVoice) utterance.voice = femaleVoice;
+                    } else if (voiceName.toLowerCase().includes('male')) {
+                        const maleVoice = voices.find(v => v.name.toLowerCase().includes('male') || v.name.includes('Daniel') || v.name.includes('Alex'));
+                        if (maleVoice) utterance.voice = maleVoice;
+                    }
                 }
-            } catch (e) {
-                resultEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
+
+                const startTime = Date.now();
+
+                utterance.onend = () => {
+                    const duration = Date.now() - startTime;
+                    resultEl.innerHTML = `<div style="color: var(--neon-green);">&#9658; Voice played successfully (${duration}ms)</div>`;
+                };
+
+                utterance.onerror = (e) => {
+                    resultEl.innerHTML = `<div style="color: var(--neon-orange);">Playback error: ${e.error}</div>`;
+                };
+
+                window.speechSynthesis.speak(utterance);
+                resultEl.innerHTML = '<div style="color: var(--neon-cyan);">&#9658; Playing voice...</div>';
+            } else {
+                // Fallback to API call if Speech Synthesis not available
+                try {
+                    const res = await fetch('/api/voice/test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ voice_id: voiceId, text, speed: parseFloat(speed) })
+                    });
+                    const result = await res.json();
+
+                    if (result.success) {
+                        resultEl.innerHTML = `<div style="color: var(--neon-green);">Voice test completed in ${result.duration_ms}ms (audio not available in this browser)</div>`;
+                    } else {
+                        resultEl.innerHTML = `<div style="color: var(--neon-orange);">Test failed: ${result.message}</div>`;
+                    }
+                } catch (e) {
+                    resultEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
+                }
             }
         }
 
