@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BitNet LPU Roadmap: The "God Mode" Voice Agent</title>
+    <style>
+        :root {
+            --bg-dark: #0a0a0f;
+            --card-bg: #14141f;
+            --accent-primary: #00f2ff; /* Cyan for LPU/Future */
+            --accent-secondary: #ff0055; /* Magenta for Traditional/Slow */
+            --accent-tertiary: #00ff9d; /* Green for Success/Feasibility */
+            --text-main: #e0e0e0;
+            --text-muted: #858595;
+            --font-stack: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: var(--font-stack);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            margin-bottom: 5rem;
+            position: relative;
+        }
+        
+        header::after {
+            content: '';
+            position: absolute;
+            bottom: -2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent-secondary), var(--accent-primary));
+            border-radius: 2px;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin: 0;
+            background: linear-gradient(135deg, #fff 0%, #a5a5a5 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.05em;
+        }
+
+        .subtitle {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            margin-top: 1rem;
+        }
+
+        /* Architecture Section */
+        .section-title {
+            font-size: 2rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .section-title::before {
+            content: '#';
+            color: var(--accent-primary);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 4rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255,255,255,0.1);
+        }
+
+        .card-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .card h3 {
+            margin-top: 0;
+            font-size: 1.5rem;
+            color: #fff;
+        }
+
+        .highlight-text {
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        /* BitNet Visual */
+        .bitnet-visual {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 2rem;
+            background: rgba(0,0,0,0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+        }
+        
+        .weight-val {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            text-align: center;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.1);
+            color: var(--text-muted);
+        }
+        
+        .weight-ternary {
+            background: rgba(0, 242, 255, 0.2);
+            color: var(--accent-primary);
+            border: 1px solid var(--accent-primary);
+        }
+
+        /* Latency Comparison */
+        .latency-diagram {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 4rem;
+        }
+
+        .path-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+
+        .path-label {
+            width: 120px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .path-track {
+            flex-grow: 1;
+            height: 40px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            position: relative;
+        }
+
+        .node {
+            background: #2a2a35;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: #fff;
+            z-index: 2;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            white-space: nowrap;
+        }
+
+        .node.internet {
+            background: rgba(255, 0, 85, 0.2);
+            color: var(--accent-secondary);
+            border: 1px solid var(--accent-secondary);
+        }
+
+        .node.lpu {
+            background: rgba(0, 242, 255, 0.2);
+            color: var(--accent-primary);
+            border: 1px solid var(--accent-primary);
+            font-weight: bold;
+        }
+        
+        .node.db {
+            background: rgba(255, 184, 108, 0.2);
+            color: #ffb86c;
+            border: 1px solid #ffb86c;
+        }
+
+        .connector {
+            flex-grow: 1;
+            height: 2px;
+            background: #444;
+            margin: 0 5px;
+        }
+
+        .connector.slow { border-bottom: 2px dashed var(--accent-secondary); background: transparent; }
+        .connector.fast { background: var(--accent-primary); height: 3px; box-shadow: 0 0 10px var(--accent-primary); }
+
+        .time-saved {
+            margin-left: 20px;
+            color: var(--accent-tertiary);
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        /* Feasibility Table */
+        .feasibility-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 4rem;
+        }
+
+        .feasibility-table th {
+            text-align: left;
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
+
+        .feasibility-table td {
+            padding: 1.5rem 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .status-badge {
+            background: rgba(0, 255, 157, 0.15);
+            color: var(--accent-tertiary);
+            padding: 0.25rem 0.75rem;
+            border-radius: 99px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* LoRA Swarm Section */
+        .swarm-container {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .base-brain {
+            width: 150px;
+            height: 150px;
+            background: linear-gradient(135deg, #2a2a35, #1a1a25);
+            border-radius: 12px;
+            border: 2px solid var(--text-muted);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .adapters {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .adapter {
+            padding: 0.5rem 1rem;
+            background: rgba(0, 242, 255, 0.1);
+            border: 1px solid var(--accent-primary);
+            border-radius: 8px;
+            color: var(--accent-primary);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .adapter:hover {
+            background: var(--accent-primary);
+            color: #000;
+            transform: translateX(-10px);
+        }
+
+        .arrow-anim {
+            font-size: 2rem;
+            color: var(--text-muted);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+
+        /* Step-by-Step Guide Styles */
+        .step-list {
+            list-style: none;
+            padding: 0;
+            position: relative;
+        }
+
+        .step-list::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 20px;
+            width: 2px;
+            background: rgba(255,255,255,0.1);
+        }
+
+        .step-item {
+            margin-bottom: 2.5rem;
+            padding-left: 60px;
+            position: relative;
+        }
+
+        .step-number {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 40px;
+            height: 40px;
+            background: var(--card-bg);
+            border: 2px solid var(--accent-primary);
+            border-radius: 50%;
+            color: var(--accent-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            z-index: 2;
+        }
+
+        .step-content h4 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.2rem;
+            color: #fff;
+        }
+
+        .cmd-block {
+            background: #000;
+            padding: 1rem;
+            border-radius: 6px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            color: #a5b3ce;
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-top: 0.5rem;
+            overflow-x: auto;
+        }
+
+        /* Code Block Mockup */
+        .code-block {
+            background: #000;
+            padding: 1.5rem;
+            border-radius: 8px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9rem;
+            color: #a5b3ce;
+            border-left: 3px solid var(--accent-primary);
+            margin-top: 2rem;
+            white-space: pre-wrap;
+        }
+        .kw { color: #c678dd; }
+        .func { color: #61afef; }
+        .str { color: #98c379; }
+        .comment { color: #5c6370; font-style: italic; }
+
+        /* Cost Table */
+        .cost-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        .cost-box {
+            background: rgba(255,255,255,0.05);
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .cost-price {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #fff;
+            margin: 0.5rem 0;
+        }
+        
+        /* Architecture Flow Vertical */
+        .arch-flow {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            align-items: center;
+            margin: 2rem 0;
+        }
+        
+        .arch-row {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            width: 100%;
+            justify-content: center;
+        }
+        
+        .arch-box {
+            padding: 1rem;
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            min-width: 150px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .arch-box.active {
+            border-color: var(--accent-primary);
+            background: rgba(0, 242, 255, 0.05);
+        }
+        
+        .arch-line {
+            width: 2px;
+            height: 30px;
+            background: #444;
+        }
+        
+        .arch-arrow-down {
+            width: 0; 
+            height: 0; 
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 5px solid #444;
+        }
+        
+        /* Expert Builder Visualization */
+        .expert-builder {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(90deg, rgba(20,20,31,1) 0%, rgba(10,30,40,1) 100%);
+            padding: 2rem;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.05);
+            margin-top: 2rem;
+        }
+        .expert-step {
+            text-align: center;
+            flex: 1;
+            position: relative;
+        }
+        .expert-step::after {
+            content: '➔';
+            position: absolute;
+            right: -10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 1.5rem;
+        }
+        .expert-step:last-child::after { content: none; }
+        .expert-icon { font-size: 2rem; display: block; margin-bottom: 0.5rem; }
+
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <h1>The BitNet LPU Roadmap</h1>
+        <p class="subtitle">Architecting the "God Mode" Voice Agent: Zero Latency, Zero Token Cost</p>
+    </div>
+</header>
+
+<div class="container">
+
+    <!-- Section 1: The Core Architecture -->
+    <h2 class="section-title">1. The Architecture: "The BitNet LPU"</h2>
+    <div class="grid-2">
+        <div class="card">
+            <span class="card-icon">🧠</span>
+            <h3>The Physics</h3>
+            <p>Traditional LLMs use heavy 16-bit float math. BitNet uses <span class="highlight-text">Ternary Weights</span> (only -1, 0, +1).</p>
+            <p>This means we replace complex multiplication with simple <strong>addition</strong>. It's computationally "light" enough to run on standard hardware with specialized speeds.</p>
+            <div class="bitnet-visual">
+                <div>Standard (FP16): <span class="weight-val">0.34</span> <span class="weight-val">-1.2</span> <span class="weight-val">0.05</span></div>
+                <div>BitNet: <span class="weight-val weight-ternary">+1</span> <span class="weight-val weight-ternary">-1</span> <span class="weight-val weight-ternary">0</span></div>
+            </div>
+        </div>
+        <div class="card">
+            <span class="card-icon">⚡</span>
+            <h3>The Result</h3>
+            <p>You can run a "Llama-3-level" brain on a standard CPU or FPGA with <span class="highlight-text">near-zero latency</span>.</p>
+            <p>Because the model is ~10x lighter, it fits entirely in fast memory, removing the bottleneck of moving data back and forth.</p>
+            <div style="margin-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+                <strong>Cost Impact:</strong><br>
+                <span style="color: var(--accent-secondary)">OpenAI:</span> $X.XX per token<br>
+                <span style="color: var(--accent-tertiary)">Your LPU:</span> $0.00 per token (Fixed Hardware Cost)
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 2: Latency Visualization -->
+    <h2 class="section-title">2. Visualizing the Latency Win</h2>
+    <div class="latency-diagram">
+        <p style="margin-bottom: 1.5rem; color: var(--text-muted);">By moving the "Brain" directly next to the "Ears" (on the same server), we eliminate the biggest bottleneck: The Internet.</p>
+        
+        <!-- Old Path -->
+        <div class="path-row">
+            <div class="path-label">Current Path</div>
+            <div class="path-track">
+                <div class="node">User</div>
+                <div class="connector"></div>
+                <div class="node">WebRTC</div>
+                <div class="connector"></div>
+                <div class="node">Server</div>
+                <div class="connector slow"></div>
+                <div class="node internet">Internet</div>
+                <div class="connector slow"></div>
+                <div class="node internet">OpenAI</div>
+                <div class="connector slow"></div>
+                <div class="node">User</div>
+            </div>
+            <div class="time-saved" style="color: var(--accent-secondary);">~1500ms</div>
+        </div>
+
+        <!-- New Path -->
+        <div class="path-row">
+            <div class="path-label" style="color: var(--accent-primary);">LPU Path</div>
+            <div class="path-track" style="background: rgba(0, 242, 255, 0.05); border: 1px solid rgba(0, 242, 255, 0.2);">
+                <div class="node">User</div>
+                <div class="connector fast"></div>
+                <div class="node">WebRTC</div>
+                <div class="connector fast"></div>
+                <div class="node lpu">[Server + LPU]</div>
+                <div class="connector fast"></div>
+                <div class="node">User</div>
+            </div>
+            <div class="time-saved">~200ms <span style="font-size:0.8rem; font-weight:normal; color:#fff;">(Speed of Light Win)</span></div>
+        </div>
+    </div>
+
+    <!-- Section 3: Getting Smarter -->
+    <h2 class="section-title">3. Getting Smarter: The "LoRA Swarm"</h2>
+    <p style="max-width: 700px; margin-bottom: 2rem;">Hardware is usually "frozen." To learn without retraining the whole chip, we use <strong>Dynamic LoRA Adapters</strong>. Think of the LPU as a Console and knowledge as Cartridges.</p>
+    
+    <div class="swarm-container">
+        <div class="adapters">
+            <div class="adapter">Solar_Expert.lora <span style="float:right; font-size:0.8em; opacity:0.7;">10MB</span></div>
+            <div class="adapter">NEC_2025_Code.lora <span style="float:right; font-size:0.8em; opacity:0.7;">12MB</span></div>
+            <div class="adapter">Scheduler.lora <span style="float:right; font-size:0.8em; opacity:0.7;">8MB</span></div>
+        </div>
+        
+        <div class="arrow-anim">➔</div>
+        
+        <div class="base-brain">
+            <span style="font-size: 2rem;">🧊</span>
+            <strong>Frozen Base Model</strong>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">(BitNet b1.58)</span>
+        </div>
+
+        <div style="flex: 1; padding-left: 2rem;">
+            <h4>The Workflow</h4>
+            <ol style="color: var(--text-muted); font-size: 0.9rem;">
+                <li><strong>Event:</strong> Agent fails a solar question.</li>
+                <li><strong>Auto-Train:</strong> System scrapes manual, trains tiny LoRA (5 mins).</li>
+                <li><strong>Hot-Swap:</strong> LPU loads 'Solar_Expert.lora' in 5ms.</li>
+                <li><strong>Result:</strong> Instant expert.</li>
+            </ol>
+        </div>
+    </div>
+
+    <!-- NEW SECTION: Expert Builder -->
+    <h2 class="section-title">4. Case Study: Building the "Voice AI Expert"</h2>
+    <p style="margin-bottom: 1rem;">Using the Swarm architecture to build a domain-specific expert in "AI Voice Agents" (LiveKit, WebRTC, Latency Optimization).</p>
+    
+    <div class="expert-builder">
+        <div class="expert-step">
+            <span class="expert-icon">📄</span>
+            <strong>1. Ingest Docs</strong>
+            <p style="font-size:0.8rem; color:var(--text-muted);">WebRTC Specs, LiveKit SDKs, OpenAI API Docs</p>
+        </div>
+        <div class="expert-step">
+            <span class="expert-icon">⚙️</span>
+            <strong>2. Train Adapter</strong>
+            <p style="font-size:0.8rem; color:var(--text-muted);">Run <code>train_expert.py</code> on Colab (5 mins)</p>
+        </div>
+        <div class="expert-step">
+            <span class="expert-icon">💾</span>
+            <strong>3. Save LoRA</strong>
+            <p style="font-size:0.8rem; color:var(--text-muted);">Produces <code>voice_architect.lora</code> (50MB)</p>
+        </div>
+        <div class="expert-step">
+            <span class="expert-icon">🚀</span>
+            <strong>4. Deploy to LPU</strong>
+            <p style="font-size:0.8rem; color:var(--text-muted);">Hot-swap into LiveKit Agent</p>
+        </div>
+    </div>
+
+    <!-- Section 5: Feasibility -->
+    <h2 class="section-title">5. Summary: Is it Feasible?</h2>
+    <table class="feasibility-table">
+        <thead>
+            <tr>
+                <th>Feature</th>
+                <th>Difficulty</th>
+                <th>Payoff</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Zero Cost (Per Token)</strong></td>
+                <td>High</td>
+                <td>Massive</td>
+                <td><span class="status-badge">✅ Doable (BitNet)</span></td>
+            </tr>
+            <tr>
+                <td><strong>Zero Latency</strong></td>
+                <td>Extreme</td>
+                <td>High</td>
+                <td><span class="status-badge">✅ Doable (Local LPU)</span></td>
+            </tr>
+            <tr>
+                <td><strong>"Getting Smarter"</strong></td>
+                <td>Medium</td>
+                <td>High</td>
+                <td><span class="status-badge">✅ Doable (LoRA Swarm)</span></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- NEW SECTION: Build Guide -->
+    <h2 class="section-title">6. Build Guide: The Modal LPU Factory</h2>
+    <p style="margin-bottom: 2rem;">You don't need a physical factory. Using Modal, you can define a "Virtual Chip" in code and deploy it to a high-speed server instantly.</p>
+
+    <div class="card" style="margin-bottom: 2rem; border-color: var(--accent-primary);">
+        <h3 style="color: var(--accent-primary);">💰 Economic Analysis: Your $30 Credit</h3>
+        <div class="cost-grid">
+            <div class="cost-box">
+                <span style="font-size:0.9rem; color:var(--text-muted);">Development Cost</span>
+                <div class="cost-price">~$0.05</div>
+                <p style="font-size:0.8rem;">To build the Docker image once.</p>
+            </div>
+            <div class="cost-box">
+                <span style="font-size:0.9rem; color:var(--text-muted);">Runtime (Chatting)</span>
+                <div class="cost-price">~750 Hours</div>
+                <p style="font-size:0.8rem;">Of active conversation time on Free tier.</p>
+            </div>
+        </div>
+    </div>
+
+    <ul class="step-list">
+        <li class="step-item">
+            <div class="step-number">1</div>
+            <div class="step-content">
+                <h4>Design the Chip (modal_lpu.py)</h4>
+                <p>Save this Python file. It defines the hardware environment (C++ kernels) and the inference logic.</p>
+                <div class="code-block">
+<span class="kw">import</span> modal
+<span class="kw">import</span> subprocess
+<span class="kw">import</span> time
+
+<span class="comment"># 1. Define the "Silicon" (The Environment)</span>
+lpu_image = (
+    modal.Image.debian_slim()
+    .apt_install(<span class="str">"git"</span>, <span class="str">"cmake"</span>, <span class="str">"ninja-build"</span>, <span class="str">"clang"</span>, <span class="str">"build-essential"</span>, <span class="str">"wget"</span>)
+    .run_commands(
+        <span class="str">"git clone --recursive https://github.com/microsoft/BitNet /root/BitNet"</span>,
+    )
+    <span class="comment"># "Fabricate" the chip (Compile the C++ kernels)</span>
+    .run_commands(
+        <span class="str">"cd /root/BitNet && python3 setup_env.py --hf-repo HF1BitLLM/Llama3-8B-1.58-100B-tokens -q i2_s"</span>
+    )
+    <span class="comment"># Pre-download the model weights so they are baked into the image</span>
+    .pip_install(<span class="str">"huggingface_hub"</span>)
+    .run_commands(
+        <span class="str">"huggingface-cli download HF1BitLLM/Llama3-8B-1.58-100B-tokens --local-dir /root/models/bitnet_llama3"</span>
+    )
+)
+
+app = modal.App(<span class="str">"bitnet-lpu-v1"</span>)
+
+<span class="comment"># 2. Define the "LPU" Class</span>
+<span class="comment"># keep_warm=1 ensures one "chip" is always powered on (Zero Latency)</span>
+@app.cls(image=lpu_image, keep_warm=1, timeout=600)
+<span class="kw">class</span> <span class="func">VirtualLPU</span>:
+    <span class="kw">def</span> <span class="func">__enter__</span>(<span class="kw">self</span>):
+        <span class="kw">self</span>.model_path = <span class="str">"/root/models/bitnet_llama3/ggml-model-i2_s.gguf"</span>
+        <span class="kw">self</span>.exec_path = <span class="str">"/root/BitNet/run_inference.py"</span>
+        print(<span class="str">"⚡ LPU Online. Ternary weights loaded."</span>)
+
+    @modal.method()
+    <span class="kw">def</span> <span class="func">chat</span>(<span class="kw">self</span>, prompt: str):
+        <span class="comment"># We invoke the C++ kernel directly for raw speed</span>
+        cmd = [
+            <span class="str">"python3"</span>, <span class="kw">self</span>.exec_path,
+            <span class="str">"-m"</span>, <span class="kw">self</span>.model_path,
+            <span class="str">"-p"</span>, prompt,
+            <span class="str">"-n"</span>, <span class="str">"128"</span>, <span class="comment"># Max tokens</span>
+            <span class="str">"-t"</span>, <span class="str">"4"</span>    <span class="comment"># Threads</span>
+        ]
+        <span class="comment"># Open a low-level pipe to stream tokens instantly</span>
+        process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1
+        )
+        <span class="kw">for</span> line <span class="kw">in</span> process.stdout:
+            <span class="kw">yield</span> line
+
+<span class="comment"># 3. Local Entrypoint (Test from Laptop)</span>
+@app.local_entrypoint()
+<span class="kw">def</span> <span class="func">main</span>():
+    print(<span class="str">"Connecting to Cloud LPU..."</span>)
+    lpu = VirtualLPU()
+    <span class="kw">for</span> chunk <span class="kw">in</span> lpu.chat.remote_gen(<span class="str">"Explain quantum computing in one sentence."</span>):
+        print(chunk, end=<span class="str">""</span>, flush=True)
+                </div>
+            </div>
+        </li>
+
+        <li class="step-item">
+            <div class="step-number">2</div>
+            <div class="step-content">
+                <h4>Fabricate (Deploy)</h4>
+                <p>Run this command in your terminal. Modal will build the environment in the cloud.</p>
+                <div class="cmd-block">
+                    modal deploy modal_lpu.py
+                </div>
+            </div>
+        </li>
+
+        <li class="step-item">
+            <div class="step-number">3</div>
+            <div class="step-content">
+                <h4>Connect LiveKit Agent</h4>
+                <p>Inside your existing LiveKit Agent code, swap OpenAI for your new LPU.</p>
+                <div class="code-block">
+<span class="comment"># In your agent.py</span>
+<span class="kw">import</span> modal
+
+<span class="comment"># Connect to your running LPU</span>
+lpu = modal.Cls.lookup(<span class="str">"bitnet-lpu-v1"</span>, <span class="str">"VirtualLPU"</span>)()
+
+<span class="comment"># Use it instead of OpenAI</span>
+response_stream = lpu.chat.remote_gen(user_prompt)
+                </div>
+            </div>
+        </li>
+    </ul>
+
+    <!-- NEW SECTION: Integration Roadmap -->
+    <h2 class="section-title">7. Ecosystem Integration</h2>
+    <p style="margin-bottom: 2rem;">How does the Virtual LPU fit into your existing world? Here are the two primary architecture maps.</p>
+
+    <div class="grid-2">
+        <!-- Scenario A: Traditional App -->
+        <div class="card">
+            <h3>A. Traditional App (Hybrid)</h3>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">Replacing OpenAI in a standard React/Node/Postgres stack.</p>
+            
+            <div class="arch-flow">
+                <div class="arch-box">Frontend (React/Next.js)</div>
+                <div class="arch-line"><div class="arch-arrow-down"></div></div>
+                <div class="arch-box">Backend API (Node/Python)</div>
+                <div class="arch-row" style="margin-top: 0.5rem;">
+                    <div class="arch-line" style="height: 20px; width: 50%;"></div>
+                    <div class="arch-line" style="height: 20px; width: 50%;"></div>
+                </div>
+                <div class="arch-row">
+                    <div class="arch-box db" style="font-size:0.8rem;">Postgres DB<br>(Context/History)</div>
+                    <div class="arch-box active" style="font-size:0.8rem;">Virtual LPU (Modal)<br>(Intelligence)</div>
+                </div>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center;">
+                Backend pulls Context from DB ➔ Sends to LPU ➔ Streams response to Frontend
+            </div>
+        </div>
+
+        <!-- Scenario B: WebRTC Voice -->
+        <div class="card">
+            <h3>B. The "Voice Core" (WebRTC)</h3>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">Eliminating HTTP latency for instant voice conversations.</p>
+            
+            <div class="arch-flow">
+                <div class="arch-box">User (Microphone)</div>
+                <div class="arch-line"><div class="arch-arrow-down"></div></div>
+                <div class="arch-box" style="border-style: dashed;">LiveKit Cloud (WebRTC)</div>
+                <div class="arch-line"><div class="arch-arrow-down"></div></div>
+                <div class="arch-box">Agent Worker (Python)</div>
+                <div class="arch-row" style="margin-top: 0.5rem;">
+                    <div class="arch-line" style="height: 20px; width: 100%;"></div>
+                </div>
+                <div class="arch-box active" style="width: 80%;">
+                    <strong>Virtual LPU</strong>
+                    <div style="font-size: 0.7rem; color: var(--accent-primary);">Zero-Latency RPC Link</div>
+                </div>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; margin-top: 1rem;">
+                Audio ➔ Text ➔ LPU ➔ Text ➔ Audio<br>
+                (Entire loop happens in < 500ms)
+            </div>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>
