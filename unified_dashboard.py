@@ -821,20 +821,19 @@ def fast_brain_health():
             "message": "FAST_BRAIN_URL not set"
         })
 
-    # Try to connect to Fast Brain (using deployed fast-brain-api endpoints)
+    # Try to connect to Fast Brain LPU
     try:
         import httpx
         with httpx.Client(timeout=5.0) as client:
-            response = client.get(f"{url}/api/v1/health")
+            response = client.get(f"{url}/health")
             if response.status_code == 200:
                 health_data = response.json()
                 api_status = health_data.get("status", "unknown")
-                FAST_BRAIN_CONFIG['status'] = 'connected' if api_status in ['healthy', 'degraded'] else 'error'
+                FAST_BRAIN_CONFIG['status'] = 'connected' if api_status in ['healthy', 'initializing'] else 'error'
                 return jsonify({
                     "status": api_status,
-                    "model_loaded": health_data.get("lpu_connected", False),
-                    "skills": health_data.get("skills_available", 0),
-                    "uptime": health_data.get("uptime_seconds", 0),
+                    "model_loaded": health_data.get("model_loaded", False),
+                    "skills": health_data.get("skills_available", []),
                     "version": health_data.get("version", "unknown"),
                 })
     except Exception as e:
@@ -867,18 +866,20 @@ def fast_brain_chat():
 
         start_time = time.time()
 
-        # Build prompt with optional system context
-        full_prompt = message
+        # Build messages array for OpenAI-compatible API
+        messages = []
         if system_prompt:
-            full_prompt = f"{system_prompt}\n\nUser: {message}\nAssistant:"
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": message})
 
-        # Use deployed fast-brain-api /api/v1/think endpoint
+        # Use Fast Brain LPU /v1/chat/completions endpoint
         with httpx.Client(timeout=30.0) as client:
             response = client.post(
-                f"{url}/api/v1/think",
+                f"{url}/v1/chat/completions",
                 json={
-                    "user_input": full_prompt,
+                    "messages": messages,
                     "max_tokens": max_tokens,
+                    "stream": False,
                 },
             )
             # If 422, get the validation error details
@@ -893,8 +894,9 @@ def fast_brain_chat():
         # Update stats
         FAST_BRAIN_CONFIG['stats']['total_requests'] += 1
 
-        # Extract content from think response
-        content = result.get('response', result.get('text', result.get('output', '')))
+        # Extract content from OpenAI-compatible response
+        choices = result.get('choices', [])
+        content = choices[0].get('message', {}).get('content', '') if choices else ''
         metrics = result.get('metrics', {"ttfb_ms": elapsed_ms, "tokens_per_sec": 0})
 
         add_activity(f"Fast Brain chat: {message[:30]}...", "")
@@ -932,12 +934,13 @@ def fast_brain_benchmark():
         with httpx.Client(timeout=30.0) as client:
             for i in range(num_requests):
                 start = time.time()
-                # Use deployed fast-brain-api /api/v1/think endpoint
+                # Use Fast Brain LPU /v1/chat/completions endpoint
                 response = client.post(
-                    f"{url}/api/v1/think",
+                    f"{url}/v1/chat/completions",
                     json={
-                        "user_input": prompt,
+                        "messages": [{"role": "user", "content": prompt}],
                         "max_tokens": 50,
+                        "stream": False,
                     },
                 )
                 elapsed = (time.time() - start) * 1000
