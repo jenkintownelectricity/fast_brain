@@ -46,10 +46,14 @@ class BitNetInference:
 
     def load(self):
         """Load the BitNet model."""
+        import os
+        # Completely disable CUDA to avoid initialization errors
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
-        print(f"Loading BitNet model: {self.model_id}")
+        print(f"Loading BitNet model: {self.model_id} (CPU only)")
         start = time.time()
 
         self.tokenizer = AutoTokenizer.from_pretrained(
