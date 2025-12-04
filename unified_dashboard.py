@@ -825,12 +825,15 @@ def fast_brain_health():
         with httpx.Client(timeout=5.0) as client:
             response = client.get(f"{url}/api/v1/health")
             if response.status_code == 200:
-                FAST_BRAIN_CONFIG['status'] = 'connected'
                 health_data = response.json()
+                api_status = health_data.get("status", "unknown")
+                FAST_BRAIN_CONFIG['status'] = 'connected' if api_status in ['healthy', 'degraded'] else 'error'
                 return jsonify({
-                    "status": "healthy",
-                    "model_loaded": health_data.get("status") == "healthy",
-                    "skills": health_data.get("skills", []),
+                    "status": api_status,
+                    "model_loaded": health_data.get("lpu_connected", False),
+                    "skills": health_data.get("skills_available", 0),
+                    "uptime": health_data.get("uptime_seconds", 0),
+                    "version": health_data.get("version", "unknown"),
                 })
     except Exception as e:
         FAST_BRAIN_CONFIG['status'] = 'error'
