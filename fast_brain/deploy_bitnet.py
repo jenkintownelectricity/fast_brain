@@ -41,7 +41,7 @@ class BitNetInference:
     def __init__(self):
         self.model = None
         self.tokenizer = None
-        self.device = "cuda"
+        self.device = "cpu"  # Use CPU for BitNet compatibility
         self.model_id = "HF1BitLLM/Llama3-8B-1.58-100B-tokens"
 
     def load(self):
@@ -57,12 +57,13 @@ class BitNetInference:
             trust_remote_code=True,
         )
 
-        # Load with automatic device mapping for GPU
+        # Load on CPU for BitNet 1.58-bit compatibility
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_id,
-            torch_dtype=torch.float16,
-            device_map="auto",
+            torch_dtype=torch.float32,
+            device_map="cpu",
             trust_remote_code=True,
+            low_cpu_mem_usage=True,
         )
 
         # Set pad token if not set
@@ -70,7 +71,7 @@ class BitNetInference:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
         load_time = time.time() - start
-        print(f"Model loaded in {load_time:.2f}s")
+        print(f"Model loaded in {load_time:.2f}s on CPU")
 
     def generate_stream(
         self,
@@ -325,7 +326,8 @@ async def create_chat_completion(request: ChatRequest):
 
 @app.cls(
     image=image,
-    gpu="T4",  # NVIDIA T4 for cost-effective inference
+    cpu=4,  # Use more CPU cores for inference
+    memory=32768,  # 32GB RAM for 8B model
     timeout=600,
     container_idle_timeout=300,  # Keep warm for 5 minutes
 )
