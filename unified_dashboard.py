@@ -763,6 +763,488 @@ def test_platform(platform_id):
 
 
 # =============================================================================
+# API ENDPOINTS - FAST BRAIN
+# =============================================================================
+
+FAST_BRAIN_CONFIG = {
+    "url": os.getenv("FAST_BRAIN_URL", ""),
+    "status": "disconnected",
+    "model": "bitnet-llama3-8b",
+    "gpu": "T4",
+    "min_containers": 1,
+    "max_containers": 10,
+    "stats": {
+        "total_requests": 0,
+        "avg_ttfb_ms": 0,
+        "avg_throughput_tps": 0,
+        "uptime_hours": 0,
+    }
+}
+
+
+@app.route('/api/fast-brain/config')
+def get_fast_brain_config():
+    """Get Fast Brain configuration and status."""
+    return jsonify(FAST_BRAIN_CONFIG)
+
+
+@app.route('/api/fast-brain/config', methods=['POST'])
+def update_fast_brain_config():
+    """Update Fast Brain configuration."""
+    global FAST_BRAIN_CONFIG
+    data = request.json
+
+    if 'url' in data:
+        FAST_BRAIN_CONFIG['url'] = data['url']
+        os.environ['FAST_BRAIN_URL'] = data['url']
+
+    if 'min_containers' in data:
+        FAST_BRAIN_CONFIG['min_containers'] = data['min_containers']
+    if 'max_containers' in data:
+        FAST_BRAIN_CONFIG['max_containers'] = data['max_containers']
+
+    add_activity(f"Fast Brain config updated", "")
+    return jsonify({"success": True, "config": FAST_BRAIN_CONFIG})
+
+
+@app.route('/api/fast-brain/health')
+def fast_brain_health():
+    """Check Fast Brain health."""
+    global FAST_BRAIN_CONFIG
+
+    url = FAST_BRAIN_CONFIG.get('url')
+    if not url:
+        return jsonify({
+            "status": "not_configured",
+            "message": "FAST_BRAIN_URL not set"
+        })
+
+    # Try to connect to Fast Brain
+    try:
+        import httpx
+        with httpx.Client(timeout=5.0) as client:
+            response = client.get(f"{url}/health")
+            if response.status_code == 200:
+                FAST_BRAIN_CONFIG['status'] = 'connected'
+                health_data = response.json()
+                return jsonify({
+                    "status": "healthy",
+                    "model_loaded": health_data.get("model_loaded", False),
+                    "skills": health_data.get("skills_available", []),
+                })
+    except Exception as e:
+        FAST_BRAIN_CONFIG['status'] = 'error'
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        })
+
+    FAST_BRAIN_CONFIG['status'] = 'disconnected'
+    return jsonify({"status": "disconnected"})
+
+
+@app.route('/api/fast-brain/chat', methods=['POST'])
+def fast_brain_chat():
+    """Send a chat request to Fast Brain."""
+    data = request.json
+    message = data.get('message', '')
+    system_prompt = data.get('system_prompt', '')
+    max_tokens = data.get('max_tokens', 256)
+    stream = data.get('stream', False)
+
+    url = FAST_BRAIN_CONFIG.get('url')
+    if not url:
+        return jsonify({"success": False, "error": "Fast Brain not configured"})
+
+    try:
+        import httpx
+        import time
+
+        start_time = time.time()
+
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": message})
+
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(
+                f"{url}/v1/chat/completions",
+                json={
+                    "messages": messages,
+                    "max_tokens": max_tokens,
+                    "stream": False,
+                },
+            )
+            response.raise_for_status()
+            result = response.json()
+
+        elapsed_ms = (time.time() - start_time) * 1000
+
+        # Update stats
+        FAST_BRAIN_CONFIG['stats']['total_requests'] += 1
+
+        content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+        metrics = result.get('metrics', {})
+
+        add_activity(f"Fast Brain chat: {message[:30]}...", "")
+
+        return jsonify({
+            "success": True,
+            "response": content,
+            "metrics": {
+                "ttfb_ms": metrics.get('ttfb_ms', elapsed_ms),
+                "total_time_ms": elapsed_ms,
+                "tokens_per_sec": metrics.get('tokens_per_sec', 0),
+            }
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route('/api/fast-brain/benchmark', methods=['POST'])
+def fast_brain_benchmark():
+    """Run a benchmark on Fast Brain."""
+    data = request.json
+    num_requests = data.get('num_requests', 5)
+    prompt = data.get('prompt', 'Hello, how are you?')
+
+    url = FAST_BRAIN_CONFIG.get('url')
+    if not url:
+        return jsonify({"success": False, "error": "Fast Brain not configured"})
+
+    results = []
+    try:
+        import httpx
+        import time
+
+        with httpx.Client(timeout=30.0) as client:
+            for i in range(num_requests):
+                start = time.time()
+                response = client.post(
+                    f"{url}/v1/chat/completions",
+                    json={
+                        "messages": [{"role": "user", "content": prompt}],
+                        "max_tokens": 50,
+                        "stream": False,
+                    },
+                )
+                elapsed = (time.time() - start) * 1000
+                result = response.json()
+                metrics = result.get('metrics', {})
+                results.append({
+                    "request": i + 1,
+                    "ttfb_ms": metrics.get('ttfb_ms', elapsed),
+                    "total_ms": elapsed,
+                    "tokens_per_sec": metrics.get('tokens_per_sec', 0),
+                })
+
+        avg_ttfb = sum(r['ttfb_ms'] for r in results) / len(results)
+        avg_total = sum(r['total_ms'] for r in results) / len(results)
+        avg_tps = sum(r['tokens_per_sec'] for r in results) / len(results)
+
+        return jsonify({
+            "success": True,
+            "results": results,
+            "summary": {
+                "avg_ttfb_ms": round(avg_ttfb, 2),
+                "avg_total_ms": round(avg_total, 2),
+                "avg_tokens_per_sec": round(avg_tps, 2),
+                "ttfb_target_met": avg_ttfb < 50,
+                "throughput_target_met": avg_tps > 500,
+            }
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+# =============================================================================
+# API ENDPOINTS - VOICE LAB
+# =============================================================================
+
+VOICE_PROJECTS = {}
+VOICE_TRAINING_QUEUE = []
+
+
+@app.route('/api/voice-lab/projects')
+def get_voice_projects():
+    """Get all voice projects."""
+    return jsonify(list(VOICE_PROJECTS.values()))
+
+
+@app.route('/api/voice-lab/projects', methods=['POST'])
+def create_voice_project():
+    """Create a new voice project."""
+    data = request.json
+    project_id = f"voice_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    project = {
+        "id": project_id,
+        "name": data.get("name", "Untitled Voice"),
+        "description": data.get("description", ""),
+        "base_voice": data.get("base_voice", "chatterbox_default"),
+        "provider": data.get("provider", "chatterbox"),
+        "status": "draft",
+        "samples": [],
+        "settings": {
+            "pitch": 1.0,
+            "speed": 1.0,
+            "emotion": "neutral",
+            "style": "conversational",
+        },
+        "training_data": [],
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat(),
+    }
+
+    VOICE_PROJECTS[project_id] = project
+    add_activity(f"Voice project created: {project['name']}", "")
+    return jsonify({"success": True, "project": project})
+
+
+@app.route('/api/voice-lab/projects/<project_id>')
+def get_voice_project(project_id):
+    """Get a specific voice project."""
+    if project_id in VOICE_PROJECTS:
+        return jsonify(VOICE_PROJECTS[project_id])
+    return jsonify({"error": "Project not found"}), 404
+
+
+@app.route('/api/voice-lab/projects/<project_id>', methods=['PUT'])
+def update_voice_project(project_id):
+    """Update a voice project."""
+    if project_id not in VOICE_PROJECTS:
+        return jsonify({"error": "Project not found"}), 404
+
+    data = request.json
+    project = VOICE_PROJECTS[project_id]
+
+    if 'name' in data:
+        project['name'] = data['name']
+    if 'description' in data:
+        project['description'] = data['description']
+    if 'settings' in data:
+        project['settings'].update(data['settings'])
+
+    project['updated_at'] = datetime.now().isoformat()
+
+    return jsonify({"success": True, "project": project})
+
+
+@app.route('/api/voice-lab/projects/<project_id>/samples', methods=['POST'])
+def add_voice_sample(project_id):
+    """Add a training sample to a voice project."""
+    if project_id not in VOICE_PROJECTS:
+        return jsonify({"error": "Project not found"}), 404
+
+    data = request.json
+    sample = {
+        "id": f"sample_{len(VOICE_PROJECTS[project_id]['samples'])+1}",
+        "text": data.get("text", ""),
+        "audio_url": data.get("audio_url", ""),
+        "duration_ms": data.get("duration_ms", 0),
+        "emotion": data.get("emotion", "neutral"),
+        "created_at": datetime.now().isoformat(),
+    }
+
+    VOICE_PROJECTS[project_id]['samples'].append(sample)
+    VOICE_PROJECTS[project_id]['updated_at'] = datetime.now().isoformat()
+
+    return jsonify({"success": True, "sample": sample})
+
+
+@app.route('/api/voice-lab/projects/<project_id>/train', methods=['POST'])
+def train_voice(project_id):
+    """Start training a custom voice."""
+    if project_id not in VOICE_PROJECTS:
+        return jsonify({"error": "Project not found"}), 404
+
+    project = VOICE_PROJECTS[project_id]
+
+    if len(project['samples']) < 3:
+        return jsonify({
+            "success": False,
+            "error": "Need at least 3 audio samples to train"
+        })
+
+    project['status'] = 'training'
+    project['training_started'] = datetime.now().isoformat()
+
+    VOICE_TRAINING_QUEUE.append({
+        "project_id": project_id,
+        "started_at": datetime.now().isoformat(),
+        "progress": 0,
+    })
+
+    add_activity(f"Voice training started: {project['name']}", "")
+
+    return jsonify({
+        "success": True,
+        "message": "Training started",
+        "estimated_time_minutes": len(project['samples']) * 5
+    })
+
+
+@app.route('/api/voice-lab/projects/<project_id>/test', methods=['POST'])
+def test_voice_project(project_id):
+    """Test a trained voice with sample text."""
+    if project_id not in VOICE_PROJECTS:
+        return jsonify({"error": "Project not found"}), 404
+
+    data = request.json
+    text = data.get("text", "Hello, this is a test of my custom voice.")
+
+    project = VOICE_PROJECTS[project_id]
+
+    # Simulate voice synthesis
+    add_activity(f"Voice test: {project['name']}", "")
+
+    return jsonify({
+        "success": True,
+        "project_id": project_id,
+        "text": text,
+        "duration_ms": len(text) * 50,  # Rough estimate
+        "audio_url": None,  # Would be real audio URL
+        "message": f"Voice '{project['name']}' synthesized successfully"
+    })
+
+
+@app.route('/api/voice-lab/training-status')
+def get_voice_training_status():
+    """Get status of all voice training jobs."""
+    # Simulate progress
+    for job in VOICE_TRAINING_QUEUE:
+        if job['progress'] < 100:
+            job['progress'] = min(100, job['progress'] + random.randint(5, 15))
+
+        if job['progress'] >= 100:
+            project = VOICE_PROJECTS.get(job['project_id'])
+            if project:
+                project['status'] = 'trained'
+
+    return jsonify(VOICE_TRAINING_QUEUE)
+
+
+# =============================================================================
+# API ENDPOINTS - SKILL FINE-TUNING
+# =============================================================================
+
+SKILL_TRAINING_JOBS = {}
+
+
+@app.route('/api/skills/<skill_id>/fine-tune', methods=['POST'])
+def fine_tune_skill(skill_id):
+    """Start fine-tuning a skill with new examples."""
+    data = request.json
+    examples = data.get('examples', [])
+
+    if not examples:
+        return jsonify({"success": False, "error": "No examples provided"})
+
+    job_id = f"ft_{skill_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    SKILL_TRAINING_JOBS[job_id] = {
+        "id": job_id,
+        "skill_id": skill_id,
+        "status": "running",
+        "progress": 0,
+        "examples_count": len(examples),
+        "started_at": datetime.now().isoformat(),
+        "metrics": {
+            "loss": 2.5,
+            "accuracy": 0.0,
+        }
+    }
+
+    # Save examples to training data
+    training_file = TRAINING_DATA_DIR / f"{skill_id}_finetune.jsonl"
+    with open(training_file, 'a') as f:
+        for ex in examples:
+            f.write(json.dumps(ex) + '\n')
+
+    add_activity(f"Fine-tuning started for {skill_id} with {len(examples)} examples", "")
+
+    return jsonify({
+        "success": True,
+        "job_id": job_id,
+        "message": f"Fine-tuning started with {len(examples)} examples"
+    })
+
+
+@app.route('/api/skills/<skill_id>/fine-tune/status')
+def get_fine_tune_status(skill_id):
+    """Get fine-tuning status for a skill."""
+    jobs = [j for j in SKILL_TRAINING_JOBS.values() if j['skill_id'] == skill_id]
+
+    # Simulate progress
+    for job in jobs:
+        if job['status'] == 'running' and job['progress'] < 100:
+            job['progress'] = min(100, job['progress'] + random.randint(10, 25))
+            job['metrics']['loss'] = max(0.1, job['metrics']['loss'] - 0.3)
+            job['metrics']['accuracy'] = min(0.99, job['metrics']['accuracy'] + 0.1)
+
+            if job['progress'] >= 100:
+                job['status'] = 'completed'
+                job['completed_at'] = datetime.now().isoformat()
+
+    return jsonify(jobs)
+
+
+@app.route('/api/skills/<skill_id>/feedback', methods=['POST'])
+def add_skill_feedback(skill_id):
+    """Add feedback for a skill response."""
+    data = request.json
+
+    feedback = {
+        "skill_id": skill_id,
+        "query": data.get("query", ""),
+        "response": data.get("response", ""),
+        "rating": data.get("rating", 0),  # 1-5 or thumbs up/down
+        "corrected_response": data.get("corrected_response"),
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    # Save to feedback file
+    feedback_file = TRAINING_DATA_DIR / f"{skill_id}_feedback.jsonl"
+    with open(feedback_file, 'a') as f:
+        f.write(json.dumps(feedback) + '\n')
+
+    add_activity(f"Feedback added for {skill_id}", "")
+
+    return jsonify({"success": True, "feedback": feedback})
+
+
+@app.route('/api/skills/<skill_id>/auto-improve', methods=['POST'])
+def auto_improve_skill(skill_id):
+    """Automatically improve skill based on collected feedback."""
+    feedback_file = TRAINING_DATA_DIR / f"{skill_id}_feedback.jsonl"
+
+    if not feedback_file.exists():
+        return jsonify({"success": False, "error": "No feedback collected yet"})
+
+    # Count feedback
+    with open(feedback_file, 'r') as f:
+        feedback_count = sum(1 for _ in f)
+
+    if feedback_count < 10:
+        return jsonify({
+            "success": False,
+            "error": f"Need at least 10 feedback items, have {feedback_count}"
+        })
+
+    # Trigger auto-improvement (simulated)
+    add_activity(f"Auto-improvement started for {skill_id} with {feedback_count} feedback items", "")
+
+    return jsonify({
+        "success": True,
+        "message": f"Auto-improvement started with {feedback_count} feedback items",
+        "estimated_time_minutes": 15
+    })
+
+
+# =============================================================================
 # UNIFIED DASHBOARD HTML
 # =============================================================================
 
@@ -1496,6 +1978,8 @@ DASHBOARD_HTML = '''
         <!-- Main Tabs -->
         <div class="main-tabs">
             <button class="main-tab-btn active" onclick="showMainTab('dashboard')">Dashboard</button>
+            <button class="main-tab-btn" onclick="showMainTab('fastbrain')">Fast Brain</button>
+            <button class="main-tab-btn" onclick="showMainTab('voicelab')">Voice Lab</button>
             <button class="main-tab-btn" onclick="showMainTab('factory')">Skill Factory</button>
             <button class="main-tab-btn" onclick="showMainTab('command')">Command Center</button>
             <button class="main-tab-btn" onclick="showMainTab('lpu')">LPU Inference</button>
@@ -2414,6 +2898,336 @@ pipeline = Pipeline([
                 </div>
             </div>
         </div>
+
+        <!-- ================================================================ -->
+        <!-- FAST BRAIN TAB -->
+        <!-- ================================================================ -->
+        <div id="tab-fastbrain" class="tab-content">
+            <div class="dashboard-grid">
+                <!-- Status Cards -->
+                <div class="glass-card stat-card card-quarter">
+                    <div class="stat-value" id="fb-status">Offline</div>
+                    <div class="stat-label">Status</div>
+                </div>
+                <div class="glass-card stat-card card-quarter">
+                    <div class="stat-value green" id="fb-ttfb">--ms</div>
+                    <div class="stat-label">Avg TTFB</div>
+                </div>
+                <div class="glass-card stat-card card-quarter">
+                    <div class="stat-value pink" id="fb-throughput">--</div>
+                    <div class="stat-label">Tokens/sec</div>
+                </div>
+                <div class="glass-card stat-card card-quarter">
+                    <div class="stat-value orange" id="fb-requests">0</div>
+                    <div class="stat-label">Total Requests</div>
+                </div>
+
+                <!-- Configuration -->
+                <div class="glass-card card-half">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">Config</span> Fast Brain Configuration</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Fast Brain URL</label>
+                        <input type="text" class="form-input" id="fb-url" placeholder="https://your-modal-url.modal.run">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Min Containers</label>
+                            <input type="number" class="form-input" id="fb-min-containers" value="1" min="0" max="10">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Max Containers</label>
+                            <input type="number" class="form-input" id="fb-max-containers" value="10" min="1" max="100">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <button class="btn btn-primary" onclick="saveFastBrainConfig()">Save Config</button>
+                        <button class="btn btn-secondary" onclick="checkFastBrainHealth()">Check Health</button>
+                    </div>
+                    <div id="fb-config-message" style="margin-top: 1rem;"></div>
+                </div>
+
+                <!-- Performance Targets -->
+                <div class="glass-card card-half">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">Target</span> Performance Targets</div>
+                    </div>
+                    <table class="skills-table">
+                        <tr>
+                            <td>Time to First Byte (TTFB)</td>
+                            <td><span id="fb-ttfb-target" class="table-status draft">&lt;50ms</span></td>
+                        </tr>
+                        <tr>
+                            <td>Throughput</td>
+                            <td><span id="fb-throughput-target" class="table-status draft">&gt;500 tok/s</span></td>
+                        </tr>
+                        <tr>
+                            <td>Cold Start</td>
+                            <td><span class="table-status deployed">&lt;5s (warm)</span></td>
+                        </tr>
+                        <tr>
+                            <td>Model</td>
+                            <td>BitNet Llama3-8B (1.58-bit)</td>
+                        </tr>
+                        <tr>
+                            <td>GPU</td>
+                            <td>NVIDIA T4</td>
+                        </tr>
+                    </table>
+                    <button class="btn btn-success" onclick="runFastBrainBenchmark()" style="margin-top: 1rem;">Run Benchmark</button>
+                </div>
+
+                <!-- Chat Test -->
+                <div class="glass-card card-full">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">Chat</span> Test Fast Brain</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">System Prompt (optional)</label>
+                        <input type="text" class="form-input" id="fb-system-prompt" placeholder="You are a helpful assistant...">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Message</label>
+                        <textarea class="form-textarea" id="fb-message" placeholder="Enter your message to test Fast Brain..."></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Max Tokens</label>
+                            <input type="number" class="form-input" id="fb-max-tokens" value="256" min="16" max="1024">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="testFastBrainChat()" id="fb-chat-btn">Send to Fast Brain</button>
+                    <div style="margin-top: 1rem;">
+                        <label class="form-label">Response</label>
+                        <div class="console" id="fb-response">Waiting for request...</div>
+                    </div>
+                    <div id="fb-metrics" style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;"></div>
+                </div>
+
+                <!-- Benchmark Results -->
+                <div class="glass-card card-full" id="fb-benchmark-results" style="display: none;">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">Bench</span> Benchmark Results</div>
+                    </div>
+                    <div id="fb-benchmark-output"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================================================================ -->
+        <!-- VOICE LAB TAB -->
+        <!-- ================================================================ -->
+        <div id="tab-voicelab" class="tab-content">
+            <!-- Sub-tabs -->
+            <div class="sub-tabs">
+                <button class="sub-tab-btn active" onclick="showVoiceLabTab('projects')">Voice Projects</button>
+                <button class="sub-tab-btn" onclick="showVoiceLabTab('create')">Create Voice</button>
+                <button class="sub-tab-btn" onclick="showVoiceLabTab('training')">Training Queue</button>
+                <button class="sub-tab-btn" onclick="showVoiceLabTab('skills')">Skill Training</button>
+            </div>
+
+            <!-- Voice Projects List -->
+            <div id="voicelab-projects" class="sub-tab-content active">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">Voice</span> Your Voice Projects</div>
+                        <button class="btn btn-primary btn-sm" onclick="showVoiceLabTab('create')">+ New Voice</button>
+                    </div>
+                    <div id="voice-projects-list" class="skills-grid">
+                        <div style="color: var(--text-secondary); padding: 2rem; text-align: center;">
+                            No voice projects yet. Click "New Voice" to create one.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Create Voice -->
+            <div id="voicelab-create" class="sub-tab-content">
+                <div class="dashboard-grid">
+                    <div class="glass-card card-half">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">New</span> Create Custom Voice</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Voice Name</label>
+                            <input type="text" class="form-input" id="vl-name" placeholder="My Custom Voice">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-textarea" id="vl-description" placeholder="Describe the voice characteristics..."></textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Base Voice Provider</label>
+                                <select class="form-select" id="vl-provider">
+                                    <option value="chatterbox">Chatterbox</option>
+                                    <option value="xtts">XTTS-v2 (Coqui)</option>
+                                    <option value="openvoice">OpenVoice</option>
+                                    <option value="elevenlabs">ElevenLabs</option>
+                                    <option value="cartesia">Cartesia</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Base Voice</label>
+                                <select class="form-select" id="vl-base-voice">
+                                    <option value="default">Default</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" onclick="createVoiceProject()">Create Project</button>
+                        <div id="vl-create-message" style="margin-top: 1rem;"></div>
+                    </div>
+
+                    <div class="glass-card card-half">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">Settings</span> Voice Settings</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Pitch: <span id="vl-pitch-value">1.0</span></label>
+                            <input type="range" class="form-input" id="vl-pitch" min="0.5" max="2.0" step="0.1" value="1.0" oninput="document.getElementById('vl-pitch-value').textContent = this.value">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Speed: <span id="vl-speed-value">1.0</span></label>
+                            <input type="range" class="form-input" id="vl-speed" min="0.5" max="2.0" step="0.1" value="1.0" oninput="document.getElementById('vl-speed-value').textContent = this.value">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Emotion</label>
+                            <select class="form-select" id="vl-emotion">
+                                <option value="neutral">Neutral</option>
+                                <option value="happy">Happy</option>
+                                <option value="sad">Sad</option>
+                                <option value="angry">Angry</option>
+                                <option value="excited">Excited</option>
+                                <option value="calm">Calm</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Speaking Style</label>
+                            <select class="form-select" id="vl-style">
+                                <option value="conversational">Conversational</option>
+                                <option value="professional">Professional</option>
+                                <option value="friendly">Friendly</option>
+                                <option value="formal">Formal</option>
+                                <option value="casual">Casual</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="glass-card card-full">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">Audio</span> Upload Training Samples</div>
+                        </div>
+                        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                            Upload 3+ audio samples (5-30 seconds each) to train your custom voice. Clearer recordings produce better results.
+                        </p>
+                        <div class="file-upload" onclick="document.getElementById('vl-audio-input').click()">
+                            <div class="file-upload-icon">Upload Audio</div>
+                            <div class="file-upload-text">Click to upload audio files (WAV, MP3, M4A)</div>
+                            <input type="file" id="vl-audio-input" accept="audio/*" multiple style="display: none;">
+                        </div>
+                        <div id="vl-samples-list" style="margin-top: 1rem;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Training Queue -->
+            <div id="voicelab-training" class="sub-tab-content">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">Train</span> Voice Training Queue</div>
+                        <button class="btn btn-secondary btn-sm" onclick="refreshVoiceTrainingStatus()">Refresh</button>
+                    </div>
+                    <div id="voice-training-queue">
+                        <div style="color: var(--text-secondary); padding: 2rem; text-align: center;">
+                            No voice training jobs in progress.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Skill Training -->
+            <div id="voicelab-skills" class="sub-tab-content">
+                <div class="dashboard-grid">
+                    <div class="glass-card card-half">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">Tune</span> Fine-tune Skills</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Select Skill</label>
+                            <select class="form-select" id="ft-skill-select">
+                                <option value="">Select a skill...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Training Examples (JSONL format)</label>
+                            <textarea class="form-textarea" id="ft-examples" placeholder='{"instruction": "...", "input": "...", "output": "..."}'></textarea>
+                        </div>
+                        <button class="btn btn-primary" onclick="startSkillFineTune()">Start Fine-tuning</button>
+                        <div id="ft-message" style="margin-top: 1rem;"></div>
+                    </div>
+
+                    <div class="glass-card card-half">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">Feedback</span> Add Training Feedback</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Select Skill</label>
+                            <select class="form-select" id="feedback-skill-select">
+                                <option value="">Select a skill...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Query</label>
+                            <input type="text" class="form-input" id="feedback-query" placeholder="What the user asked...">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Response (from skill)</label>
+                            <textarea class="form-textarea" id="feedback-response" placeholder="What the skill responded..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Rating</label>
+                            <select class="form-select" id="feedback-rating">
+                                <option value="1">1 - Very Poor</option>
+                                <option value="2">2 - Poor</option>
+                                <option value="3">3 - Acceptable</option>
+                                <option value="4">4 - Good</option>
+                                <option value="5">5 - Excellent</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Corrected Response (optional)</label>
+                            <textarea class="form-textarea" id="feedback-corrected" placeholder="What the response should have been..."></textarea>
+                        </div>
+                        <button class="btn btn-success" onclick="submitSkillFeedback()">Submit Feedback</button>
+                    </div>
+
+                    <div class="glass-card card-full">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">Auto</span> Auto-Improvement Status</div>
+                        </div>
+                        <table class="skills-table">
+                            <thead>
+                                <tr>
+                                    <th>Skill</th>
+                                    <th>Feedback Count</th>
+                                    <th>Last Trained</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="skill-improvement-table">
+                                <tr>
+                                    <td colspan="5" style="text-align: center; color: var(--text-secondary);">
+                                        Select a skill and add feedback to enable auto-improvement
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -2427,6 +3241,8 @@ pipeline = Pipeline([
             event.target.classList.add('active');
 
             if (tabId === 'dashboard') { loadSkills(); loadMetrics(); }
+            if (tabId === 'fastbrain') { loadFastBrainConfig(); }
+            if (tabId === 'voicelab') { loadVoiceProjects(); loadSkillsForDropdowns(); }
             if (tabId === 'factory') { loadProfileDropdowns(); }
             if (tabId === 'command') { refreshStats(); }
         }
@@ -3186,6 +4002,396 @@ print("Training complete: adapters/${skillId}")`;
                 messageEl.innerHTML = `<div style="color: var(--text-secondary);">${result.message}</div>`;
             } catch (e) {
                 messageEl.innerHTML = `<div style="color: var(--neon-orange);">Disconnect failed: ${e.message}</div>`;
+            }
+        }
+
+        // ============================================================
+        // FAST BRAIN FUNCTIONS
+        // ============================================================
+        async function loadFastBrainConfig() {
+            try {
+                const res = await fetch('/api/fast-brain/config');
+                const config = await res.json();
+
+                document.getElementById('fb-url').value = config.url || '';
+                document.getElementById('fb-min-containers').value = config.min_containers || 1;
+                document.getElementById('fb-max-containers').value = config.max_containers || 10;
+                document.getElementById('fb-status').textContent = config.status || 'Offline';
+                document.getElementById('fb-requests').textContent = config.stats?.total_requests || 0;
+
+                if (config.status === 'connected') {
+                    document.getElementById('fb-status').style.color = 'var(--neon-green)';
+                } else {
+                    document.getElementById('fb-status').style.color = 'var(--text-secondary)';
+                }
+            } catch (e) {
+                console.error('Failed to load Fast Brain config:', e);
+            }
+        }
+
+        async function saveFastBrainConfig() {
+            const messageEl = document.getElementById('fb-config-message');
+            messageEl.innerHTML = '<div style="color: var(--neon-cyan);">Saving...</div>';
+
+            try {
+                const res = await fetch('/api/fast-brain/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: document.getElementById('fb-url').value,
+                        min_containers: parseInt(document.getElementById('fb-min-containers').value),
+                        max_containers: parseInt(document.getElementById('fb-max-containers').value),
+                    })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    messageEl.innerHTML = '<div style="color: var(--neon-green);">Configuration saved!</div>';
+                    loadFastBrainConfig();
+                } else {
+                    messageEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${result.error}</div>`;
+                }
+            } catch (e) {
+                messageEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function checkFastBrainHealth() {
+            const messageEl = document.getElementById('fb-config-message');
+            messageEl.innerHTML = '<div style="color: var(--neon-cyan);">Checking health...</div>';
+
+            try {
+                const res = await fetch('/api/fast-brain/health');
+                const result = await res.json();
+
+                if (result.status === 'healthy') {
+                    messageEl.innerHTML = `<div style="color: var(--neon-green);">Connected! Model loaded: ${result.model_loaded}</div>`;
+                    document.getElementById('fb-status').textContent = 'Online';
+                    document.getElementById('fb-status').style.color = 'var(--neon-green)';
+                } else if (result.status === 'not_configured') {
+                    messageEl.innerHTML = '<div style="color: var(--neon-orange);">Not configured - enter URL above</div>';
+                } else {
+                    messageEl.innerHTML = `<div style="color: var(--neon-orange);">${result.message || 'Connection failed'}</div>`;
+                }
+            } catch (e) {
+                messageEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function testFastBrainChat() {
+            const btn = document.getElementById('fb-chat-btn');
+            const responseEl = document.getElementById('fb-response');
+            const metricsEl = document.getElementById('fb-metrics');
+
+            const message = document.getElementById('fb-message').value;
+            const systemPrompt = document.getElementById('fb-system-prompt').value;
+            const maxTokens = parseInt(document.getElementById('fb-max-tokens').value);
+
+            if (!message) {
+                alert('Please enter a message');
+                return;
+            }
+
+            btn.innerHTML = '<span class="spinner"></span> Sending...';
+            btn.disabled = true;
+            responseEl.textContent = 'Processing...';
+            metricsEl.textContent = '';
+
+            try {
+                const res = await fetch('/api/fast-brain/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message, system_prompt: systemPrompt, max_tokens: maxTokens })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    responseEl.textContent = result.response;
+                    const metrics = result.metrics;
+                    metricsEl.innerHTML = `TTFB: <span style="color: ${metrics.ttfb_ms < 50 ? 'var(--neon-green)' : 'var(--neon-orange)'}">${metrics.ttfb_ms.toFixed(1)}ms</span> | Total: ${metrics.total_time_ms.toFixed(1)}ms | Throughput: ${metrics.tokens_per_sec.toFixed(1)} tok/s`;
+
+                    // Update targets
+                    document.getElementById('fb-ttfb-target').className = `table-status ${metrics.ttfb_ms < 50 ? 'deployed' : 'draft'}`;
+                    document.getElementById('fb-throughput-target').className = `table-status ${metrics.tokens_per_sec > 500 ? 'deployed' : 'draft'}`;
+                } else {
+                    responseEl.innerHTML = `<span style="color: var(--neon-orange);">Error: ${result.error}</span>`;
+                }
+            } catch (e) {
+                responseEl.innerHTML = `<span style="color: var(--neon-orange);">Error: ${e.message}</span>`;
+            }
+
+            btn.innerHTML = 'Send to Fast Brain';
+            btn.disabled = false;
+        }
+
+        async function runFastBrainBenchmark() {
+            const resultsDiv = document.getElementById('fb-benchmark-results');
+            const outputDiv = document.getElementById('fb-benchmark-output');
+
+            resultsDiv.style.display = 'block';
+            outputDiv.innerHTML = '<div style="color: var(--neon-cyan);">Running benchmark (5 requests)...</div>';
+
+            try {
+                const res = await fetch('/api/fast-brain/benchmark', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ num_requests: 5, prompt: 'Hello, how are you?' })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    const summary = result.summary;
+                    outputDiv.innerHTML = `
+                        <div style="margin-bottom: 1rem;">
+                            <h4 style="color: var(--neon-cyan); margin-bottom: 0.5rem;">Summary</h4>
+                            <p>Avg TTFB: <span style="color: ${summary.ttfb_target_met ? 'var(--neon-green)' : 'var(--neon-orange)'}">${summary.avg_ttfb_ms}ms</span> ${summary.ttfb_target_met ? '✓' : '✗'} (target: <50ms)</p>
+                            <p>Avg Total: ${summary.avg_total_ms}ms</p>
+                            <p>Avg Throughput: <span style="color: ${summary.throughput_target_met ? 'var(--neon-green)' : 'var(--neon-orange)'}">${summary.avg_tokens_per_sec} tok/s</span> ${summary.throughput_target_met ? '✓' : '✗'} (target: >500)</p>
+                        </div>
+                        <h4 style="color: var(--neon-cyan); margin-bottom: 0.5rem;">Individual Requests</h4>
+                        <table class="skills-table">
+                            <tr><th>#</th><th>TTFB</th><th>Total</th><th>Tokens/sec</th></tr>
+                            ${result.results.map(r => `<tr><td>${r.request}</td><td>${r.ttfb_ms.toFixed(1)}ms</td><td>${r.total_ms.toFixed(1)}ms</td><td>${r.tokens_per_sec.toFixed(1)}</td></tr>`).join('')}
+                        </table>
+                    `;
+
+                    // Update status cards
+                    document.getElementById('fb-ttfb').textContent = `${summary.avg_ttfb_ms}ms`;
+                    document.getElementById('fb-throughput').textContent = `${summary.avg_tokens_per_sec}`;
+                } else {
+                    outputDiv.innerHTML = `<div style="color: var(--neon-orange);">Error: ${result.error}</div>`;
+                }
+            } catch (e) {
+                outputDiv.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
+            }
+        }
+
+        // ============================================================
+        // VOICE LAB FUNCTIONS
+        // ============================================================
+        function showVoiceLabTab(tabId) {
+            document.querySelectorAll('#tab-voicelab .sub-tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('#tab-voicelab .sub-tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('voicelab-' + tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        async function loadVoiceProjects() {
+            try {
+                const res = await fetch('/api/voice-lab/projects');
+                const projects = await res.json();
+
+                const container = document.getElementById('voice-projects-list');
+                if (projects.length === 0) {
+                    container.innerHTML = '<div style="color: var(--text-secondary); padding: 2rem; text-align: center;">No voice projects yet. Click "New Voice" to create one.</div>';
+                    return;
+                }
+
+                container.innerHTML = projects.map(p => `
+                    <div class="skill-card ${p.status}" onclick="openVoiceProject('${p.id}')">
+                        <div class="skill-header">
+                            <div>
+                                <div class="skill-name">${p.name}</div>
+                                <div class="skill-type">${p.provider} | ${p.base_voice}</div>
+                            </div>
+                            <span class="skill-status ${p.status}">${p.status}</span>
+                        </div>
+                        <div class="skill-metrics">
+                            <div class="skill-metric">
+                                <div class="metric-value">${p.samples?.length || 0}</div>
+                                <div class="metric-label">Samples</div>
+                            </div>
+                            <div class="skill-metric">
+                                <div class="metric-value">${p.settings?.speed || 1.0}x</div>
+                                <div class="metric-label">Speed</div>
+                            </div>
+                            <div class="skill-metric">
+                                <div class="metric-value">${p.settings?.emotion || 'neutral'}</div>
+                                <div class="metric-label">Emotion</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Failed to load voice projects:', e);
+            }
+        }
+
+        async function createVoiceProject() {
+            const messageEl = document.getElementById('vl-create-message');
+            messageEl.innerHTML = '<div style="color: var(--neon-cyan);">Creating project...</div>';
+
+            try {
+                const res = await fetch('/api/voice-lab/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: document.getElementById('vl-name').value || 'Untitled Voice',
+                        description: document.getElementById('vl-description').value,
+                        provider: document.getElementById('vl-provider').value,
+                        base_voice: document.getElementById('vl-base-voice').value,
+                        settings: {
+                            pitch: parseFloat(document.getElementById('vl-pitch').value),
+                            speed: parseFloat(document.getElementById('vl-speed').value),
+                            emotion: document.getElementById('vl-emotion').value,
+                            style: document.getElementById('vl-style').value,
+                        }
+                    })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    messageEl.innerHTML = `<div style="color: var(--neon-green);">Project "${result.project.name}" created!</div>`;
+                    loadVoiceProjects();
+                    showVoiceLabTab('projects');
+                } else {
+                    messageEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${result.error}</div>`;
+                }
+            } catch (e) {
+                messageEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
+            }
+        }
+
+        function openVoiceProject(projectId) {
+            alert('Opening project: ' + projectId + '\\n\\nFull project editor coming soon!');
+        }
+
+        async function refreshVoiceTrainingStatus() {
+            const container = document.getElementById('voice-training-queue');
+
+            try {
+                const res = await fetch('/api/voice-lab/training-status');
+                const jobs = await res.json();
+
+                if (jobs.length === 0) {
+                    container.innerHTML = '<div style="color: var(--text-secondary); padding: 2rem; text-align: center;">No voice training jobs in progress.</div>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <table class="skills-table">
+                        <tr><th>Project</th><th>Progress</th><th>Started</th><th>Status</th></tr>
+                        ${jobs.map(j => `
+                            <tr>
+                                <td>${j.project_id}</td>
+                                <td>
+                                    <div style="background: var(--glass-surface); border-radius: 4px; overflow: hidden; height: 20px;">
+                                        <div style="background: linear-gradient(90deg, var(--neon-cyan), var(--neon-green)); height: 100%; width: ${j.progress}%;"></div>
+                                    </div>
+                                    <span style="font-size: 0.75rem;">${j.progress}%</span>
+                                </td>
+                                <td>${new Date(j.started_at).toLocaleString()}</td>
+                                <td><span class="table-status ${j.progress >= 100 ? 'deployed' : 'training'}">${j.progress >= 100 ? 'Complete' : 'Training'}</span></td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                `;
+            } catch (e) {
+                container.innerHTML = `<div style="color: var(--neon-orange);">Error loading training status</div>`;
+            }
+        }
+
+        // ============================================================
+        // SKILL FINE-TUNING FUNCTIONS
+        // ============================================================
+        async function loadSkillsForDropdowns() {
+            try {
+                const res = await fetch('/api/skills');
+                const skills = await res.json();
+
+                const ftSelect = document.getElementById('ft-skill-select');
+                const fbSelect = document.getElementById('feedback-skill-select');
+
+                const options = '<option value="">Select a skill...</option>' +
+                    skills.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+
+                ftSelect.innerHTML = options;
+                fbSelect.innerHTML = options;
+            } catch (e) {
+                console.error('Failed to load skills for dropdowns:', e);
+            }
+        }
+
+        async function startSkillFineTune() {
+            const messageEl = document.getElementById('ft-message');
+            const skillId = document.getElementById('ft-skill-select').value;
+            const examplesText = document.getElementById('ft-examples').value;
+
+            if (!skillId) {
+                messageEl.innerHTML = '<div style="color: var(--neon-orange);">Please select a skill</div>';
+                return;
+            }
+
+            // Parse JSONL examples
+            let examples = [];
+            try {
+                const lines = examplesText.trim().split('\\n').filter(l => l.trim());
+                examples = lines.map(l => JSON.parse(l));
+            } catch (e) {
+                messageEl.innerHTML = '<div style="color: var(--neon-orange);">Invalid JSONL format</div>';
+                return;
+            }
+
+            if (examples.length === 0) {
+                messageEl.innerHTML = '<div style="color: var(--neon-orange);">Please add at least one training example</div>';
+                return;
+            }
+
+            messageEl.innerHTML = '<div style="color: var(--neon-cyan);">Starting fine-tuning...</div>';
+
+            try {
+                const res = await fetch(`/api/skills/${skillId}/fine-tune`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ examples })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    messageEl.innerHTML = `<div style="color: var(--neon-green);">${result.message}</div>`;
+                } else {
+                    messageEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${result.error}</div>`;
+                }
+            } catch (e) {
+                messageEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function submitSkillFeedback() {
+            const skillId = document.getElementById('feedback-skill-select').value;
+            const query = document.getElementById('feedback-query').value;
+            const response = document.getElementById('feedback-response').value;
+            const rating = document.getElementById('feedback-rating').value;
+            const corrected = document.getElementById('feedback-corrected').value;
+
+            if (!skillId || !query || !response) {
+                alert('Please fill in skill, query, and response');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/skills/${skillId}/feedback`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query,
+                        response,
+                        rating: parseInt(rating),
+                        corrected_response: corrected || null
+                    })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    alert('Feedback submitted successfully!');
+                    document.getElementById('feedback-query').value = '';
+                    document.getElementById('feedback-response').value = '';
+                    document.getElementById('feedback-corrected').value = '';
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
             }
         }
 
