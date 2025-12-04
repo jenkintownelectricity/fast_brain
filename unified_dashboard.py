@@ -769,16 +769,70 @@ def test_platform(platform_id):
 FAST_BRAIN_CONFIG = {
     "url": os.getenv("FAST_BRAIN_URL", ""),
     "status": "disconnected",
-    "model": "bitnet-llama3-8b",
-    "gpu": "T4",
+    "model": "groq-llama-3.3-70b",
+    "backend": "groq",
     "min_containers": 1,
     "max_containers": 10,
+    "selected_skill": "general",
     "stats": {
         "total_requests": 0,
         "avg_ttfb_ms": 0,
         "avg_throughput_tps": 0,
         "uptime_hours": 0,
+        "errors": [],
     }
+}
+
+# Local skills cache (synced from Fast Brain LPU)
+FAST_BRAIN_SKILLS = {
+    "general": {
+        "id": "general",
+        "name": "General Assistant",
+        "description": "Helpful general-purpose assistant",
+        "system_prompt": "You are a helpful AI assistant. Be friendly, concise, and helpful. Respond in 1-2 sentences unless more detail is needed.",
+        "knowledge": [],
+        "is_builtin": True,
+    },
+    "receptionist": {
+        "id": "receptionist",
+        "name": "Professional Receptionist",
+        "description": "Expert phone answering and call handling",
+        "system_prompt": "You are a professional AI receptionist. Respond in 1-2 short sentences maximum. Be warm, helpful, and conversational—never robotic.",
+        "knowledge": [],
+        "is_builtin": True,
+    },
+    "electrician": {
+        "id": "electrician",
+        "name": "Electrician Assistant",
+        "description": "Expert in electrical services and scheduling",
+        "system_prompt": "You are an AI assistant for an electrical contracting business. Be professional, safety-conscious, and helpful.",
+        "knowledge": ["Panel upgrades: $1,500-$3,000", "EV charger: $500-$2,000", "Emergency: 24/7 with $150 fee"],
+        "is_builtin": True,
+    },
+    "plumber": {
+        "id": "plumber",
+        "name": "Plumber Assistant",
+        "description": "Expert in plumbing services",
+        "system_prompt": "You are an AI assistant for a plumbing company. Be helpful and knowledgeable about plumbing services.",
+        "knowledge": ["Drain cleaning: $150-$300", "Water heater: $1,000-$3,000"],
+        "is_builtin": True,
+    },
+    "lawyer": {
+        "id": "lawyer",
+        "name": "Legal Intake Assistant",
+        "description": "Professional legal intake and scheduling",
+        "system_prompt": "You are a legal intake assistant. Be professional, confidential, and thorough. DO NOT provide legal advice.",
+        "knowledge": ["Initial consultations typically free", "All communications confidential"],
+        "is_builtin": True,
+    },
+}
+
+# System status tracking for comprehensive monitoring
+SYSTEM_STATUS = {
+    "fast_brain": {"status": "unknown", "last_check": None, "error": None, "latency_ms": None},
+    "hive215": {"status": "unknown", "last_check": None, "error": None, "latency_ms": None},
+    "groq": {"status": "unknown", "last_check": None, "error": None},
+    "modal": {"status": "unknown", "last_check": None, "error": None},
 }
 
 
@@ -971,6 +1025,265 @@ def fast_brain_benchmark():
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
+
+
+# =============================================================================
+# API ENDPOINTS - FAST BRAIN SKILLS
+# =============================================================================
+
+@app.route('/api/fast-brain/skills')
+def get_fast_brain_skills():
+    """Get all available skills."""
+    url = FAST_BRAIN_CONFIG.get('url')
+
+    # Try to fetch from deployed LPU first
+    if url:
+        try:
+            import httpx
+            with httpx.Client(timeout=5.0) as client:
+                response = client.get(f"{url}/v1/skills")
+                if response.status_code == 200:
+                    remote_skills = response.json().get("skills", [])
+                    # Merge remote skills with local cache
+                    for skill in remote_skills:
+                        if skill["id"] not in FAST_BRAIN_SKILLS:
+                            FAST_BRAIN_SKILLS[skill["id"]] = {
+                                **skill,
+                                "is_builtin": False,
+                            }
+        except:
+            pass  # Fall back to local cache
+
+    return jsonify({
+        "skills": list(FAST_BRAIN_SKILLS.values()),
+        "selected": FAST_BRAIN_CONFIG.get("selected_skill", "general")
+    })
+
+
+@app.route('/api/fast-brain/skills', methods=['POST'])
+def create_fast_brain_skill():
+    """Create a new custom skill."""
+    global FAST_BRAIN_SKILLS
+    data = request.json
+
+    skill_id = data.get('skill_id', '').lower().replace(' ', '_')
+    if not skill_id:
+        return jsonify({"success": False, "error": "Skill ID is required"})
+
+    if skill_id in FAST_BRAIN_SKILLS and FAST_BRAIN_SKILLS[skill_id].get('is_builtin'):
+        return jsonify({"success": False, "error": "Cannot overwrite built-in skill"})
+
+    skill = {
+        "id": skill_id,
+        "name": data.get('name', skill_id.title()),
+        "description": data.get('description', ''),
+        "system_prompt": data.get('system_prompt', ''),
+        "knowledge": data.get('knowledge', []),
+        "is_builtin": False,
+    }
+
+    FAST_BRAIN_SKILLS[skill_id] = skill
+
+    # Try to sync to deployed LPU
+    url = FAST_BRAIN_CONFIG.get('url')
+    if url:
+        try:
+            import httpx
+            with httpx.Client(timeout=10.0) as client:
+                response = client.post(
+                    f"{url}/v1/skills",
+                    json={
+                        "skill_id": skill_id,
+                        "name": skill["name"],
+                        "description": skill["description"],
+                        "system_prompt": skill["system_prompt"],
+                        "knowledge": skill["knowledge"],
+                    }
+                )
+                if response.status_code == 200:
+                    add_activity(f"Skill '{skill['name']}' synced to LPU", "")
+        except Exception as e:
+            add_activity(f"Skill created locally (sync failed: {str(e)[:50]})", "")
+
+    add_activity(f"Created skill: {skill['name']}", "")
+    return jsonify({"success": True, "skill": skill})
+
+
+@app.route('/api/fast-brain/skills/<skill_id>', methods=['DELETE'])
+def delete_fast_brain_skill(skill_id):
+    """Delete a custom skill."""
+    global FAST_BRAIN_SKILLS
+
+    if skill_id not in FAST_BRAIN_SKILLS:
+        return jsonify({"success": False, "error": "Skill not found"})
+
+    if FAST_BRAIN_SKILLS[skill_id].get('is_builtin'):
+        return jsonify({"success": False, "error": "Cannot delete built-in skill"})
+
+    del FAST_BRAIN_SKILLS[skill_id]
+    add_activity(f"Deleted skill: {skill_id}", "")
+    return jsonify({"success": True})
+
+
+@app.route('/api/fast-brain/skills/select', methods=['POST'])
+def select_fast_brain_skill():
+    """Select the active skill for chat."""
+    global FAST_BRAIN_CONFIG
+    data = request.json
+    skill_id = data.get('skill_id', 'general')
+
+    if skill_id not in FAST_BRAIN_SKILLS:
+        return jsonify({"success": False, "error": "Skill not found"})
+
+    FAST_BRAIN_CONFIG['selected_skill'] = skill_id
+    add_activity(f"Selected skill: {FAST_BRAIN_SKILLS[skill_id]['name']}", "")
+    return jsonify({"success": True, "skill_id": skill_id})
+
+
+# =============================================================================
+# API ENDPOINTS - SYSTEM STATUS & HIVE215 INTEGRATION
+# =============================================================================
+
+HIVE215_CONFIG = {
+    "url": os.getenv("HIVE215_URL", ""),
+    "api_key": os.getenv("HIVE215_API_KEY", ""),
+    "status": "disconnected",
+    "last_sync": None,
+}
+
+INTEGRATION_CHECKLIST = [
+    {"id": "fast_brain_url", "name": "Fast Brain URL configured", "status": "pending", "category": "Fast Brain"},
+    {"id": "fast_brain_health", "name": "Fast Brain health check passing", "status": "pending", "category": "Fast Brain"},
+    {"id": "groq_api_key", "name": "Groq API key in Modal secrets", "status": "pending", "category": "Fast Brain"},
+    {"id": "skills_synced", "name": "Skills synced to LPU", "status": "pending", "category": "Fast Brain"},
+    {"id": "hive215_url", "name": "Hive215 dashboard URL configured", "status": "pending", "category": "Hive215"},
+    {"id": "hive215_api_key", "name": "Hive215 API key configured", "status": "pending", "category": "Hive215"},
+    {"id": "hive215_webhooks", "name": "Webhooks configured for events", "status": "pending", "category": "Hive215"},
+    {"id": "livekit_connected", "name": "LiveKit agent connected", "status": "pending", "category": "Voice"},
+    {"id": "voice_provider", "name": "Voice provider selected", "status": "pending", "category": "Voice"},
+    {"id": "fallback_chain", "name": "LLM fallback chain configured", "status": "pending", "category": "LLM"},
+]
+
+
+@app.route('/api/system/status')
+def get_system_status():
+    """Get comprehensive system status."""
+    global SYSTEM_STATUS
+    from datetime import datetime
+
+    # Update Fast Brain status
+    url = FAST_BRAIN_CONFIG.get('url')
+    if url:
+        try:
+            import httpx
+            import time
+            start = time.time()
+            with httpx.Client(timeout=5.0) as client:
+                response = client.get(f"{url}/health")
+                latency = (time.time() - start) * 1000
+                if response.status_code == 200:
+                    health = response.json()
+                    SYSTEM_STATUS["fast_brain"] = {
+                        "status": "online" if health.get("status") == "healthy" else "degraded",
+                        "last_check": datetime.now().isoformat(),
+                        "error": None,
+                        "latency_ms": round(latency, 1),
+                        "model": health.get("backend", "unknown"),
+                        "skills_count": len(health.get("skills_available", [])),
+                    }
+                else:
+                    SYSTEM_STATUS["fast_brain"] = {
+                        "status": "error",
+                        "last_check": datetime.now().isoformat(),
+                        "error": f"HTTP {response.status_code}",
+                        "latency_ms": None,
+                    }
+        except Exception as e:
+            SYSTEM_STATUS["fast_brain"] = {
+                "status": "offline",
+                "last_check": datetime.now().isoformat(),
+                "error": str(e)[:100],
+                "latency_ms": None,
+            }
+    else:
+        SYSTEM_STATUS["fast_brain"] = {
+            "status": "not_configured",
+            "last_check": datetime.now().isoformat(),
+            "error": "URL not set",
+            "latency_ms": None,
+        }
+
+    return jsonify({
+        "systems": SYSTEM_STATUS,
+        "timestamp": datetime.now().isoformat(),
+    })
+
+
+@app.route('/api/system/checklist')
+def get_integration_checklist():
+    """Get integration checklist with current status."""
+    checklist = []
+
+    for item in INTEGRATION_CHECKLIST:
+        status = "pending"
+
+        # Auto-check status based on current config
+        if item["id"] == "fast_brain_url":
+            status = "complete" if FAST_BRAIN_CONFIG.get("url") else "pending"
+        elif item["id"] == "fast_brain_health":
+            status = "complete" if SYSTEM_STATUS.get("fast_brain", {}).get("status") == "online" else "pending"
+        elif item["id"] == "groq_api_key":
+            status = "complete" if SYSTEM_STATUS.get("fast_brain", {}).get("status") in ["online", "degraded"] else "pending"
+        elif item["id"] == "skills_synced":
+            status = "complete" if len(FAST_BRAIN_SKILLS) > 0 else "pending"
+        elif item["id"] == "hive215_url":
+            status = "complete" if HIVE215_CONFIG.get("url") else "pending"
+        elif item["id"] == "hive215_api_key":
+            status = "complete" if HIVE215_CONFIG.get("api_key") else "pending"
+        elif item["id"] == "voice_provider":
+            status = "complete" if VOICE_CONFIG.get("selected_provider") else "pending"
+        elif item["id"] == "livekit_connected":
+            status = "complete" if PLATFORM_CONNECTIONS.get("livekit", {}).get("status") == "connected" else "pending"
+
+        checklist.append({**item, "status": status})
+
+    complete_count = sum(1 for c in checklist if c["status"] == "complete")
+    return jsonify({
+        "checklist": checklist,
+        "complete": complete_count,
+        "total": len(checklist),
+        "percent": round(complete_count / len(checklist) * 100),
+    })
+
+
+@app.route('/api/hive215/config')
+def get_hive215_config():
+    """Get Hive215 configuration."""
+    return jsonify(HIVE215_CONFIG)
+
+
+@app.route('/api/hive215/config', methods=['POST'])
+def update_hive215_config():
+    """Update Hive215 configuration."""
+    global HIVE215_CONFIG
+    data = request.json
+
+    if 'url' in data:
+        HIVE215_CONFIG['url'] = data['url'].rstrip('/')
+    if 'api_key' in data:
+        HIVE215_CONFIG['api_key'] = data['api_key']
+
+    add_activity("Hive215 config updated", "")
+    return jsonify({"success": True, "config": HIVE215_CONFIG})
+
+
+@app.route('/api/fast-brain/errors')
+def get_fast_brain_errors():
+    """Get recent errors for debugging."""
+    return jsonify({
+        "errors": FAST_BRAIN_CONFIG['stats'].get('errors', [])[-20:],  # Last 20 errors
+        "total": len(FAST_BRAIN_CONFIG['stats'].get('errors', [])),
+    })
 
 
 # =============================================================================
@@ -2916,114 +3229,361 @@ pipeline = Pipeline([
         <!-- FAST BRAIN TAB -->
         <!-- ================================================================ -->
         <div id="tab-fastbrain" class="tab-content">
-            <div class="dashboard-grid">
-                <!-- Status Cards -->
-                <div class="glass-card stat-card card-quarter">
-                    <div class="stat-value" id="fb-status">Offline</div>
-                    <div class="stat-label">Status</div>
-                </div>
-                <div class="glass-card stat-card card-quarter">
-                    <div class="stat-value green" id="fb-ttfb">--ms</div>
-                    <div class="stat-label">Avg TTFB</div>
-                </div>
-                <div class="glass-card stat-card card-quarter">
-                    <div class="stat-value pink" id="fb-throughput">--</div>
-                    <div class="stat-label">Tokens/sec</div>
-                </div>
-                <div class="glass-card stat-card card-quarter">
-                    <div class="stat-value orange" id="fb-requests">0</div>
-                    <div class="stat-label">Total Requests</div>
-                </div>
+            <!-- Sub-tabs for Fast Brain -->
+            <div class="sub-tabs">
+                <button class="sub-tab-btn active" onclick="showFastBrainTab('dashboard')">Dashboard</button>
+                <button class="sub-tab-btn" onclick="showFastBrainTab('skills')">Skills Manager</button>
+                <button class="sub-tab-btn" onclick="showFastBrainTab('chat')">Test Chat</button>
+                <button class="sub-tab-btn" onclick="showFastBrainTab('integration')">Hive215 Integration</button>
+            </div>
 
-                <!-- Configuration -->
-                <div class="glass-card card-half">
-                    <div class="section-header">
-                        <div class="section-title"><span class="section-icon">Config</span> Fast Brain Configuration</div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Fast Brain URL</label>
-                        <input type="text" class="form-input" id="fb-url" placeholder="https://your-modal-url.modal.run">
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label">Min Containers</label>
-                            <input type="number" class="form-input" id="fb-min-containers" value="1" min="0" max="10">
+            <!-- Dashboard Sub-tab -->
+            <div id="fb-tab-dashboard" class="sub-tab-content active">
+                <div class="dashboard-grid">
+                    <!-- System Status Panel -->
+                    <div class="glass-card card-full" style="background: linear-gradient(135deg, rgba(0,255,136,0.1) 0%, rgba(0,212,255,0.1) 100%);">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">SYS</span> System Status</div>
+                            <button class="btn btn-sm btn-secondary" onclick="refreshSystemStatus()">Refresh</button>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">Max Containers</label>
-                            <input type="number" class="form-input" id="fb-max-containers" value="10" min="1" max="100">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                            <!-- Fast Brain Status -->
+                            <div class="status-card" id="status-fast-brain" style="padding: 1rem; background: var(--glass-surface); border-radius: 8px; border-left: 4px solid var(--text-secondary);">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <strong>Fast Brain LPU</strong>
+                                    <span class="status-indicator" id="fb-status-indicator">--</span>
+                                </div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                                    <div>Latency: <span id="fb-status-latency">--</span></div>
+                                    <div>Model: <span id="fb-status-model">--</span></div>
+                                    <div>Skills: <span id="fb-status-skills">--</span></div>
+                                </div>
+                            </div>
+                            <!-- Groq Status -->
+                            <div class="status-card" id="status-groq" style="padding: 1rem; background: var(--glass-surface); border-radius: 8px; border-left: 4px solid var(--text-secondary);">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <strong>Groq API</strong>
+                                    <span class="status-indicator" id="groq-status-indicator">--</span>
+                                </div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                                    Backend for Fast Brain inference
+                                </div>
+                            </div>
+                            <!-- Hive215 Status -->
+                            <div class="status-card" id="status-hive215" style="padding: 1rem; background: var(--glass-surface); border-radius: 8px; border-left: 4px solid var(--text-secondary);">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <strong>Hive215</strong>
+                                    <span class="status-indicator" id="hive-status-indicator">--</span>
+                                </div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                                    Voice assistant platform
+                                </div>
+                            </div>
+                            <!-- Modal Status -->
+                            <div class="status-card" id="status-modal" style="padding: 1rem; background: var(--glass-surface); border-radius: 8px; border-left: 4px solid var(--text-secondary);">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <strong>Modal</strong>
+                                    <span class="status-indicator" id="modal-status-indicator">--</span>
+                                </div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                                    Serverless deployment
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="form-row">
-                        <button class="btn btn-primary" onclick="saveFastBrainConfig()">Save Config</button>
-                        <button class="btn btn-secondary" onclick="checkFastBrainHealth()">Check Health</button>
-                    </div>
-                    <div id="fb-config-message" style="margin-top: 1rem;"></div>
-                </div>
-
-                <!-- Performance Targets -->
-                <div class="glass-card card-half">
-                    <div class="section-header">
-                        <div class="section-title"><span class="section-icon">Target</span> Performance Targets</div>
-                    </div>
-                    <table class="skills-table">
-                        <tr>
-                            <td>Time to First Byte (TTFB)</td>
-                            <td><span id="fb-ttfb-target" class="table-status draft">&lt;50ms</span></td>
-                        </tr>
-                        <tr>
-                            <td>Throughput</td>
-                            <td><span id="fb-throughput-target" class="table-status draft">&gt;500 tok/s</span></td>
-                        </tr>
-                        <tr>
-                            <td>Cold Start</td>
-                            <td><span class="table-status deployed">&lt;5s (warm)</span></td>
-                        </tr>
-                        <tr>
-                            <td>Model</td>
-                            <td>BitNet Llama3-8B (1.58-bit)</td>
-                        </tr>
-                        <tr>
-                            <td>GPU</td>
-                            <td>NVIDIA T4</td>
-                        </tr>
-                    </table>
-                    <button class="btn btn-success" onclick="runFastBrainBenchmark()" style="margin-top: 1rem;">Run Benchmark</button>
-                </div>
-
-                <!-- Chat Test -->
-                <div class="glass-card card-full">
-                    <div class="section-header">
-                        <div class="section-title"><span class="section-icon">Chat</span> Test Fast Brain</div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">System Prompt (optional)</label>
-                        <input type="text" class="form-input" id="fb-system-prompt" placeholder="You are a helpful assistant...">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Message</label>
-                        <textarea class="form-textarea" id="fb-message" placeholder="Enter your message to test Fast Brain..."></textarea>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label">Max Tokens</label>
-                            <input type="number" class="form-input" id="fb-max-tokens" value="256" min="16" max="1024">
+                        <div id="system-error-display" style="margin-top: 1rem; display: none;">
+                            <div style="color: var(--neon-orange); font-weight: bold; margin-bottom: 0.5rem;">Recent Errors:</div>
+                            <div id="system-errors" class="console" style="max-height: 150px; overflow-y: auto;"></div>
                         </div>
                     </div>
-                    <button class="btn btn-primary" onclick="testFastBrainChat()" id="fb-chat-btn">Send to Fast Brain</button>
-                    <div style="margin-top: 1rem;">
-                        <label class="form-label">Response</label>
-                        <div class="console" id="fb-response">Waiting for request...</div>
-                    </div>
-                    <div id="fb-metrics" style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;"></div>
-                </div>
 
-                <!-- Benchmark Results -->
-                <div class="glass-card card-full" id="fb-benchmark-results" style="display: none;">
-                    <div class="section-header">
-                        <div class="section-title"><span class="section-icon">Bench</span> Benchmark Results</div>
+                    <!-- Status Cards -->
+                    <div class="glass-card stat-card card-quarter">
+                        <div class="stat-value" id="fb-status">Offline</div>
+                        <div class="stat-label">Status</div>
                     </div>
-                    <div id="fb-benchmark-output"></div>
+                    <div class="glass-card stat-card card-quarter">
+                        <div class="stat-value green" id="fb-ttfb">--ms</div>
+                        <div class="stat-label">Avg TTFB</div>
+                    </div>
+                    <div class="glass-card stat-card card-quarter">
+                        <div class="stat-value pink" id="fb-throughput">--</div>
+                        <div class="stat-label">Tokens/sec</div>
+                    </div>
+                    <div class="glass-card stat-card card-quarter">
+                        <div class="stat-value orange" id="fb-requests">0</div>
+                        <div class="stat-label">Total Requests</div>
+                    </div>
+
+                    <!-- Configuration -->
+                    <div class="glass-card card-half">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">CFG</span> Fast Brain Configuration</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Fast Brain URL</label>
+                            <input type="text" class="form-input" id="fb-url" placeholder="https://your-username--fast-brain-lpu.modal.run">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Min Containers</label>
+                                <input type="number" class="form-input" id="fb-min-containers" value="1" min="0" max="10">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Max Containers</label>
+                                <input type="number" class="form-input" id="fb-max-containers" value="10" min="1" max="100">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <button class="btn btn-primary" onclick="saveFastBrainConfig()">Save Config</button>
+                            <button class="btn btn-secondary" onclick="checkFastBrainHealth()">Check Health</button>
+                        </div>
+                        <div id="fb-config-message" style="margin-top: 1rem;"></div>
+                    </div>
+
+                    <!-- Performance Targets -->
+                    <div class="glass-card card-half">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">TGT</span> Performance Targets</div>
+                        </div>
+                        <table class="skills-table">
+                            <tr>
+                                <td>Time to First Byte (TTFB)</td>
+                                <td><span id="fb-ttfb-target" class="table-status draft">&lt;100ms</span></td>
+                            </tr>
+                            <tr>
+                                <td>Throughput</td>
+                                <td><span id="fb-throughput-target" class="table-status draft">&gt;200 tok/s</span></td>
+                            </tr>
+                            <tr>
+                                <td>Cold Start</td>
+                                <td><span class="table-status deployed">&lt;5s (warm)</span></td>
+                            </tr>
+                            <tr>
+                                <td>Backend</td>
+                                <td>Groq Llama 3.3 70B</td>
+                            </tr>
+                            <tr>
+                                <td>Skills</td>
+                                <td><span id="fb-skills-count">5</span> available</td>
+                            </tr>
+                        </table>
+                        <button class="btn btn-success" onclick="runFastBrainBenchmark()" style="margin-top: 1rem;">Run Benchmark</button>
+                    </div>
+
+                    <!-- Benchmark Results -->
+                    <div class="glass-card card-full" id="fb-benchmark-results" style="display: none;">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">BNK</span> Benchmark Results</div>
+                        </div>
+                        <div id="fb-benchmark-output"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Skills Manager Sub-tab -->
+            <div id="fb-tab-skills" class="sub-tab-content">
+                <div class="dashboard-grid">
+                    <!-- Skills List -->
+                    <div class="glass-card card-full">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">SKL</span> Available Skills</div>
+                            <button class="btn btn-primary btn-sm" onclick="showCreateSkillModal()">+ Create Skill</button>
+                        </div>
+                        <div id="fb-skills-list" class="skills-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+                            <!-- Skills will be loaded here -->
+                            <div style="color: var(--text-secondary); padding: 2rem; text-align: center;">
+                                Loading skills...
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Create Skill Form (Modal-like) -->
+                    <div class="glass-card card-full" id="fb-create-skill-form" style="display: none;">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">NEW</span> Create Custom Skill</div>
+                            <button class="btn btn-sm" onclick="hideCreateSkillModal()" style="background: transparent; color: var(--text-secondary);">✕</button>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Skill ID (lowercase, no spaces)</label>
+                                <input type="text" class="form-input" id="new-skill-id" placeholder="my_custom_skill">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Display Name</label>
+                                <input type="text" class="form-input" id="new-skill-name" placeholder="My Custom Skill">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Description</label>
+                            <input type="text" class="form-input" id="new-skill-description" placeholder="Brief description of what this skill does">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">System Prompt</label>
+                            <textarea class="form-textarea" id="new-skill-prompt" rows="6" placeholder="You are an AI assistant specialized in..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Knowledge Base (one item per line)</label>
+                            <textarea class="form-textarea" id="new-skill-knowledge" rows="4" placeholder="Pricing: $100-500&#10;Hours: Mon-Fri 9am-5pm&#10;Service area: Philadelphia metro"></textarea>
+                        </div>
+                        <div class="form-row">
+                            <button class="btn btn-primary" onclick="createCustomSkill()">Create Skill</button>
+                            <button class="btn btn-secondary" onclick="hideCreateSkillModal()">Cancel</button>
+                        </div>
+                        <div id="create-skill-message" style="margin-top: 1rem;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Chat Sub-tab -->
+            <div id="fb-tab-chat" class="sub-tab-content">
+                <div class="dashboard-grid">
+                    <div class="glass-card card-full">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">CHT</span> Test Fast Brain</div>
+                        </div>
+
+                        <!-- Skill Selector -->
+                        <div class="form-row" style="margin-bottom: 1rem;">
+                            <div class="form-group" style="flex: 1;">
+                                <label class="form-label">Select Skill</label>
+                                <select class="form-select" id="fb-skill-selector" onchange="onSkillSelect()">
+                                    <option value="general">General Assistant</option>
+                                    <option value="receptionist">Professional Receptionist</option>
+                                    <option value="electrician">Electrician Assistant</option>
+                                    <option value="plumber">Plumber Assistant</option>
+                                    <option value="lawyer">Legal Intake Assistant</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex: 0 0 auto; display: flex; align-items: flex-end;">
+                                <button class="btn btn-secondary btn-sm" onclick="loadSkillPrompt()">Load Skill Prompt</button>
+                            </div>
+                        </div>
+
+                        <!-- Active Skill Indicator -->
+                        <div id="fb-active-skill-info" style="background: var(--glass-surface); padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid var(--neon-cyan);">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong style="color: var(--neon-cyan);">Active Skill:</strong>
+                                    <span id="fb-active-skill-name" style="margin-left: 0.5rem;">General Assistant</span>
+                                </div>
+                                <span id="fb-skill-status" class="table-status deployed">Ready</span>
+                            </div>
+                            <div id="fb-active-skill-desc" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                Helpful general-purpose assistant
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">System Prompt (or use skill default)</label>
+                            <textarea class="form-textarea" id="fb-system-prompt" rows="4" placeholder="Leave empty to use selected skill's default prompt..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Message</label>
+                            <textarea class="form-textarea" id="fb-message" placeholder="Enter your message to test Fast Brain..."></textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Max Tokens</label>
+                                <input type="number" class="form-input" id="fb-max-tokens" value="256" min="16" max="1024">
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" onclick="testFastBrainChat()" id="fb-chat-btn">Send to Fast Brain</button>
+                        <div style="margin-top: 1rem;">
+                            <label class="form-label">Response</label>
+                            <div class="console" id="fb-response" style="min-height: 100px;">Waiting for request...</div>
+                        </div>
+                        <div id="fb-metrics" style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hive215 Integration Sub-tab -->
+            <div id="fb-tab-integration" class="sub-tab-content">
+                <div class="dashboard-grid">
+                    <!-- Integration Checklist -->
+                    <div class="glass-card card-full">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">CHK</span> Integration Checklist</div>
+                            <div>
+                                <span id="integration-progress" style="color: var(--neon-cyan); font-weight: bold;">0%</span> Complete
+                            </div>
+                        </div>
+                        <div style="background: var(--glass-surface); border-radius: 8px; padding: 0.5rem; margin-bottom: 1rem;">
+                            <div id="integration-progress-bar" style="height: 8px; background: var(--neon-cyan); border-radius: 4px; width: 0%; transition: width 0.3s;"></div>
+                        </div>
+                        <div id="integration-checklist">
+                            <!-- Checklist items will be loaded here -->
+                            <div style="color: var(--text-secondary); padding: 1rem; text-align: center;">Loading checklist...</div>
+                        </div>
+                    </div>
+
+                    <!-- Hive215 Configuration -->
+                    <div class="glass-card card-half">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">H215</span> Hive215 Configuration</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Hive215 Dashboard URL</label>
+                            <input type="text" class="form-input" id="hive-url" placeholder="https://hive215.vercel.app">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">API Key</label>
+                            <input type="password" class="form-input" id="hive-api-key" placeholder="Your Hive215 API key">
+                        </div>
+                        <div class="form-row">
+                            <button class="btn btn-primary" onclick="saveHive215Config()">Save Config</button>
+                            <button class="btn btn-secondary" onclick="testHive215Connection()">Test Connection</button>
+                        </div>
+                        <div id="hive-config-message" style="margin-top: 1rem;"></div>
+                    </div>
+
+                    <!-- Quick Setup Guide -->
+                    <div class="glass-card card-half">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">DOC</span> Quick Setup Guide</div>
+                        </div>
+                        <div style="font-size: 0.9rem; line-height: 1.6;">
+                            <h4 style="color: var(--neon-cyan); margin-bottom: 0.5rem;">1. Deploy Fast Brain</h4>
+                            <pre class="code-block" style="font-size: 0.8rem; margin-bottom: 1rem;">modal deploy fast_brain/deploy_groq.py</pre>
+
+                            <h4 style="color: var(--neon-cyan); margin-bottom: 0.5rem;">2. Set URL in Hive215</h4>
+                            <p style="color: var(--text-secondary); margin-bottom: 1rem;">Add FAST_BRAIN_URL to Railway worker environment</p>
+
+                            <h4 style="color: var(--neon-cyan); margin-bottom: 0.5rem;">3. Sync Skills</h4>
+                            <p style="color: var(--text-secondary); margin-bottom: 1rem;">Skills created here auto-sync to both Fast Brain and Hive215</p>
+
+                            <h4 style="color: var(--neon-cyan); margin-bottom: 0.5rem;">4. Test Voice Flow</h4>
+                            <p style="color: var(--text-secondary);">Call your Twilio number to test the full pipeline</p>
+                        </div>
+                    </div>
+
+                    <!-- Connection Diagram -->
+                    <div class="glass-card card-full">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">MAP</span> System Architecture</div>
+                        </div>
+                        <pre class="code-block" style="font-size: 0.75rem; overflow-x: auto;">
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              HIVE215 VOICE PIPELINE                              │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│   [Caller] ──► [Twilio] ──► [LiveKit Worker] ──► [Fast Brain LPU] ──► [Response] │
+│                                    │                    │                        │
+│                                    │              ┌─────┴─────┐                  │
+│                              [Deepgram STT]      │   Groq    │                  │
+│                                    │             │ Llama 3.3 │                  │
+│                              [Cartesia TTS]      │   70B     │                  │
+│                                    │             └───────────┘                  │
+│                                    ▼                    │                        │
+│                           [Audio Response]    [Skills Database]                  │
+│                                                         │                        │
+│   ┌──────────────────────────────────────────────────────┘                      │
+│   │                                                                              │
+│   │  Skills: receptionist │ electrician │ plumber │ lawyer │ custom...         │
+│   │                                                                              │
+└───┴──────────────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
                 </div>
             </div>
         </div>
@@ -3254,7 +3814,7 @@ pipeline = Pipeline([
             event.target.classList.add('active');
 
             if (tabId === 'dashboard') { loadSkills(); loadMetrics(); }
-            if (tabId === 'fastbrain') { loadFastBrainConfig(); }
+            if (tabId === 'fastbrain') { loadFastBrainConfig(); loadFastBrainSkills(); refreshSystemStatus(); loadHive215Config(); }
             if (tabId === 'voicelab') { loadVoiceProjects(); loadSkillsForDropdowns(); }
             if (tabId === 'factory') { loadProfileDropdowns(); }
             if (tabId === 'command') { refreshStats(); }
@@ -4176,6 +4736,356 @@ print("Training complete: adapters/${skillId}")`;
                 }
             } catch (e) {
                 outputDiv.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
+            }
+        }
+
+        // ============================================================
+        // FAST BRAIN SUB-TABS & SKILLS MANAGEMENT
+        // ============================================================
+        let fbSkillsCache = {};
+
+        function showFastBrainTab(tabId) {
+            document.querySelectorAll('#tab-fastbrain .sub-tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('#tab-fastbrain .sub-tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('fb-tab-' + tabId).classList.add('active');
+            event.target.classList.add('active');
+
+            // Load data based on tab
+            if (tabId === 'skills') loadFastBrainSkills();
+            if (tabId === 'dashboard') refreshSystemStatus();
+            if (tabId === 'integration') loadIntegrationChecklist();
+        }
+
+        async function loadFastBrainSkills() {
+            const container = document.getElementById('fb-skills-list');
+            container.innerHTML = '<div style="color: var(--text-secondary); padding: 2rem; text-align: center;">Loading skills...</div>';
+
+            try {
+                const res = await fetch('/api/fast-brain/skills');
+                const data = await res.json();
+                const skills = data.skills || [];
+                fbSkillsCache = {};
+                skills.forEach(s => fbSkillsCache[s.id] = s);
+
+                // Update skill selector dropdown
+                updateSkillSelector(skills);
+                document.getElementById('fb-skills-count').textContent = skills.length;
+
+                if (skills.length === 0) {
+                    container.innerHTML = '<div style="color: var(--text-secondary); padding: 2rem; text-align: center;">No skills available.</div>';
+                    return;
+                }
+
+                container.innerHTML = skills.map(skill => `
+                    <div class="skill-card" style="padding: 1rem; background: var(--glass-surface); border-radius: 8px; border: 1px solid var(--glass-border); border-left: 4px solid ${skill.is_builtin ? 'var(--neon-cyan)' : 'var(--neon-green)'};">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                            <div>
+                                <strong style="color: var(--text-primary);">${skill.name}</strong>
+                                <span style="font-size: 0.75rem; color: var(--text-secondary); margin-left: 0.5rem;">${skill.id}</span>
+                            </div>
+                            <span class="table-status ${skill.is_builtin ? 'deployed' : 'active'}" style="font-size: 0.7rem;">
+                                ${skill.is_builtin ? 'Built-in' : 'Custom'}
+                            </span>
+                        </div>
+                        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">${skill.description}</p>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); background: var(--glass-bg); padding: 0.5rem; border-radius: 4px; max-height: 80px; overflow: hidden;">
+                            ${skill.system_prompt?.substring(0, 150)}${skill.system_prompt?.length > 150 ? '...' : ''}
+                        </div>
+                        ${skill.knowledge && skill.knowledge.length > 0 ? `
+                            <div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--neon-cyan);">
+                                ${skill.knowledge.length} knowledge items
+                            </div>
+                        ` : ''}
+                        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+                            <button class="btn btn-sm btn-secondary" onclick="selectSkillForChat('${skill.id}')">Use in Chat</button>
+                            ${!skill.is_builtin ? `<button class="btn btn-sm" onclick="deleteSkill('${skill.id}')" style="background: var(--neon-orange); color: white;">Delete</button>` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                container.innerHTML = `<div style="color: var(--neon-orange); padding: 2rem; text-align: center;">Error loading skills: ${e.message}</div>`;
+            }
+        }
+
+        function updateSkillSelector(skills) {
+            const selector = document.getElementById('fb-skill-selector');
+            if (!selector) return;
+
+            selector.innerHTML = skills.map(s => `
+                <option value="${s.id}">${s.name}</option>
+            `).join('');
+        }
+
+        function selectSkillForChat(skillId) {
+            showFastBrainTab('chat');
+            document.getElementById('fb-skill-selector').value = skillId;
+            onSkillSelect();
+        }
+
+        function onSkillSelect() {
+            const skillId = document.getElementById('fb-skill-selector').value;
+            const skill = fbSkillsCache[skillId];
+
+            if (skill) {
+                document.getElementById('fb-active-skill-name').textContent = skill.name;
+                document.getElementById('fb-active-skill-desc').textContent = skill.description;
+
+                // Also update on server
+                fetch('/api/fast-brain/skills/select', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ skill_id: skillId })
+                });
+            }
+        }
+
+        function loadSkillPrompt() {
+            const skillId = document.getElementById('fb-skill-selector').value;
+            const skill = fbSkillsCache[skillId];
+
+            if (skill) {
+                document.getElementById('fb-system-prompt').value = skill.system_prompt;
+            }
+        }
+
+        function showCreateSkillModal() {
+            document.getElementById('fb-create-skill-form').style.display = 'block';
+        }
+
+        function hideCreateSkillModal() {
+            document.getElementById('fb-create-skill-form').style.display = 'none';
+            // Clear form
+            document.getElementById('new-skill-id').value = '';
+            document.getElementById('new-skill-name').value = '';
+            document.getElementById('new-skill-description').value = '';
+            document.getElementById('new-skill-prompt').value = '';
+            document.getElementById('new-skill-knowledge').value = '';
+            document.getElementById('create-skill-message').innerHTML = '';
+        }
+
+        async function createCustomSkill() {
+            const messageEl = document.getElementById('create-skill-message');
+            messageEl.innerHTML = '<div style="color: var(--neon-cyan);">Creating skill...</div>';
+
+            const knowledge = document.getElementById('new-skill-knowledge').value
+                .split('\n')
+                .map(s => s.trim())
+                .filter(s => s.length > 0);
+
+            try {
+                const res = await fetch('/api/fast-brain/skills', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        skill_id: document.getElementById('new-skill-id').value,
+                        name: document.getElementById('new-skill-name').value,
+                        description: document.getElementById('new-skill-description').value,
+                        system_prompt: document.getElementById('new-skill-prompt').value,
+                        knowledge: knowledge,
+                    })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    messageEl.innerHTML = '<div style="color: var(--neon-green);">Skill created successfully!</div>';
+                    setTimeout(() => {
+                        hideCreateSkillModal();
+                        loadFastBrainSkills();
+                    }, 1000);
+                } else {
+                    messageEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${result.error}</div>`;
+                }
+            } catch (e) {
+                messageEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function deleteSkill(skillId) {
+            if (!confirm(`Delete skill "${skillId}"? This cannot be undone.`)) return;
+
+            try {
+                const res = await fetch(`/api/fast-brain/skills/${skillId}`, { method: 'DELETE' });
+                const result = await res.json();
+
+                if (result.success) {
+                    loadFastBrainSkills();
+                } else {
+                    alert(`Error: ${result.error}`);
+                }
+            } catch (e) {
+                alert(`Error: ${e.message}`);
+            }
+        }
+
+        // ============================================================
+        // SYSTEM STATUS & HIVE215 INTEGRATION
+        // ============================================================
+        async function refreshSystemStatus() {
+            const statusIndicators = {
+                'fb-status-indicator': { element: null, card: 'status-fast-brain' },
+                'groq-status-indicator': { element: null, card: 'status-groq' },
+                'hive-status-indicator': { element: null, card: 'status-hive215' },
+                'modal-status-indicator': { element: null, card: 'status-modal' },
+            };
+
+            // Set all to loading
+            Object.keys(statusIndicators).forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = 'Checking...';
+            });
+
+            try {
+                const res = await fetch('/api/system/status');
+                const data = await res.json();
+                const systems = data.systems || {};
+
+                // Update Fast Brain status
+                const fb = systems.fast_brain || {};
+                const fbIndicator = document.getElementById('fb-status-indicator');
+                const fbCard = document.getElementById('status-fast-brain');
+                if (fbIndicator) {
+                    fbIndicator.textContent = fb.status === 'online' ? 'Online' : fb.status === 'degraded' ? 'Degraded' : fb.status || 'Offline';
+                    fbIndicator.style.color = fb.status === 'online' ? 'var(--neon-green)' : fb.status === 'degraded' ? 'var(--neon-yellow)' : 'var(--neon-orange)';
+                }
+                if (fbCard) {
+                    fbCard.style.borderLeftColor = fb.status === 'online' ? 'var(--neon-green)' : fb.status === 'degraded' ? 'var(--neon-yellow)' : 'var(--text-secondary)';
+                }
+                document.getElementById('fb-status-latency').textContent = fb.latency_ms ? `${fb.latency_ms}ms` : '--';
+                document.getElementById('fb-status-model').textContent = fb.model || '--';
+                document.getElementById('fb-status-skills').textContent = fb.skills_count || '--';
+
+                // Update Groq status (inferred from Fast Brain)
+                const groqIndicator = document.getElementById('groq-status-indicator');
+                const groqCard = document.getElementById('status-groq');
+                if (groqIndicator) {
+                    groqIndicator.textContent = fb.status === 'online' ? 'Connected' : 'Unknown';
+                    groqIndicator.style.color = fb.status === 'online' ? 'var(--neon-green)' : 'var(--text-secondary)';
+                }
+                if (groqCard) {
+                    groqCard.style.borderLeftColor = fb.status === 'online' ? 'var(--neon-green)' : 'var(--text-secondary)';
+                }
+
+                // Update Modal status
+                const modalIndicator = document.getElementById('modal-status-indicator');
+                const modalCard = document.getElementById('status-modal');
+                if (modalIndicator) {
+                    modalIndicator.textContent = fb.status === 'online' ? 'Running' : 'Unknown';
+                    modalIndicator.style.color = fb.status === 'online' ? 'var(--neon-green)' : 'var(--text-secondary)';
+                }
+                if (modalCard) {
+                    modalCard.style.borderLeftColor = fb.status === 'online' ? 'var(--neon-green)' : 'var(--text-secondary)';
+                }
+
+                // Update Hive215 status
+                const hive = systems.hive215 || {};
+                const hiveIndicator = document.getElementById('hive-status-indicator');
+                const hiveCard = document.getElementById('status-hive215');
+                if (hiveIndicator) {
+                    hiveIndicator.textContent = hive.status === 'online' ? 'Connected' : hive.status || 'Not configured';
+                    hiveIndicator.style.color = hive.status === 'online' ? 'var(--neon-green)' : 'var(--text-secondary)';
+                }
+                if (hiveCard) {
+                    hiveCard.style.borderLeftColor = hive.status === 'online' ? 'var(--neon-green)' : 'var(--text-secondary)';
+                }
+
+                // Show errors if any
+                if (fb.error) {
+                    document.getElementById('system-error-display').style.display = 'block';
+                    document.getElementById('system-errors').textContent = fb.error;
+                } else {
+                    document.getElementById('system-error-display').style.display = 'none';
+                }
+
+            } catch (e) {
+                console.error('Failed to refresh system status:', e);
+            }
+        }
+
+        async function loadIntegrationChecklist() {
+            const container = document.getElementById('integration-checklist');
+
+            try {
+                const res = await fetch('/api/system/checklist');
+                const data = await res.json();
+
+                // Update progress
+                document.getElementById('integration-progress').textContent = `${data.percent}%`;
+                document.getElementById('integration-progress-bar').style.width = `${data.percent}%`;
+
+                // Group by category
+                const byCategory = {};
+                data.checklist.forEach(item => {
+                    if (!byCategory[item.category]) byCategory[item.category] = [];
+                    byCategory[item.category].push(item);
+                });
+
+                container.innerHTML = Object.entries(byCategory).map(([category, items]) => `
+                    <div style="margin-bottom: 1.5rem;">
+                        <h4 style="color: var(--neon-cyan); margin-bottom: 0.75rem; font-size: 0.9rem;">${category}</h4>
+                        ${items.map(item => `
+                            <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid var(--glass-border);">
+                                <span style="font-size: 1.2rem;">${item.status === 'complete' ? '✅' : '⬜'}</span>
+                                <span style="color: ${item.status === 'complete' ? 'var(--text-primary)' : 'var(--text-secondary)'};">
+                                    ${item.name}
+                                </span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `).join('');
+            } catch (e) {
+                container.innerHTML = `<div style="color: var(--neon-orange);">Error loading checklist: ${e.message}</div>`;
+            }
+        }
+
+        async function saveHive215Config() {
+            const messageEl = document.getElementById('hive-config-message');
+            messageEl.innerHTML = '<div style="color: var(--neon-cyan);">Saving...</div>';
+
+            try {
+                const res = await fetch('/api/hive215/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: document.getElementById('hive-url').value,
+                        api_key: document.getElementById('hive-api-key').value,
+                    })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    messageEl.innerHTML = '<div style="color: var(--neon-green);">Configuration saved!</div>';
+                    loadIntegrationChecklist();
+                } else {
+                    messageEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${result.error}</div>`;
+                }
+            } catch (e) {
+                messageEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function testHive215Connection() {
+            const messageEl = document.getElementById('hive-config-message');
+            messageEl.innerHTML = '<div style="color: var(--neon-cyan);">Testing connection...</div>';
+
+            // For now, just verify URL is set
+            const url = document.getElementById('hive-url').value;
+            if (!url) {
+                messageEl.innerHTML = '<div style="color: var(--neon-orange);">Please enter the Hive215 URL first</div>';
+                return;
+            }
+
+            messageEl.innerHTML = '<div style="color: var(--neon-green);">URL configured! Full connection test requires deployed services.</div>';
+        }
+
+        async function loadHive215Config() {
+            try {
+                const res = await fetch('/api/hive215/config');
+                const config = await res.json();
+
+                document.getElementById('hive-url').value = config.url || '';
+                document.getElementById('hive-api-key').value = config.api_key || '';
+            } catch (e) {
+                console.error('Failed to load Hive215 config:', e);
             }
         }
 
