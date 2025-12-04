@@ -795,8 +795,10 @@ def update_fast_brain_config():
     data = request.json
 
     if 'url' in data:
-        FAST_BRAIN_CONFIG['url'] = data['url']
-        os.environ['FAST_BRAIN_URL'] = data['url']
+        # Strip trailing slash to avoid double-slash issues
+        clean_url = data['url'].rstrip('/')
+        FAST_BRAIN_CONFIG['url'] = clean_url
+        os.environ['FAST_BRAIN_URL'] = clean_url
 
     if 'min_containers' in data:
         FAST_BRAIN_CONFIG['min_containers'] = data['min_containers']
