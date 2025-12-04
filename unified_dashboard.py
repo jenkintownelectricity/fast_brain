@@ -881,6 +881,10 @@ def fast_brain_chat():
                     "max_tokens": max_tokens,
                 },
             )
+            # If 422, get the validation error details
+            if response.status_code == 422:
+                error_detail = response.json()
+                return jsonify({"success": False, "error": f"Validation error: {error_detail}"})
             response.raise_for_status()
             result = response.json()
 
