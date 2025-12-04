@@ -823,14 +823,14 @@ def fast_brain_health():
     try:
         import httpx
         with httpx.Client(timeout=5.0) as client:
-            response = client.get(f"{url}/health")
+            response = client.get(f"{url}/api/v1/health")
             if response.status_code == 200:
                 FAST_BRAIN_CONFIG['status'] = 'connected'
                 health_data = response.json()
                 return jsonify({
                     "status": "healthy",
-                    "model_loaded": health_data.get("model_loaded", False),
-                    "skills": health_data.get("skills_available", []),
+                    "model_loaded": health_data.get("status") == "healthy",
+                    "skills": health_data.get("skills", []),
                 })
     except Exception as e:
         FAST_BRAIN_CONFIG['status'] = 'error'
@@ -869,11 +869,11 @@ def fast_brain_chat():
 
         with httpx.Client(timeout=30.0) as client:
             response = client.post(
-                f"{url}/v1/chat/completions",
+                f"{url}/api/v1/think",
                 json={
-                    "messages": messages,
+                    "prompt": message,
+                    "system_prompt": system_prompt,
                     "max_tokens": max_tokens,
-                    "stream": False,
                 },
             )
             response.raise_for_status()
@@ -884,8 +884,8 @@ def fast_brain_chat():
         # Update stats
         FAST_BRAIN_CONFIG['stats']['total_requests'] += 1
 
-        content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
-        metrics = result.get('metrics', {})
+        content = result.get('response', result.get('text', ''))
+        metrics = result.get('metrics', {"ttfb_ms": elapsed_ms, "tokens_per_sec": 0})
 
         add_activity(f"Fast Brain chat: {message[:30]}...", "")
 
@@ -923,11 +923,10 @@ def fast_brain_benchmark():
             for i in range(num_requests):
                 start = time.time()
                 response = client.post(
-                    f"{url}/v1/chat/completions",
+                    f"{url}/api/v1/think",
                     json={
-                        "messages": [{"role": "user", "content": prompt}],
+                        "prompt": prompt,
                         "max_tokens": 50,
-                        "stream": False,
                     },
                 )
                 elapsed = (time.time() - start) * 1000
