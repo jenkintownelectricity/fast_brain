@@ -877,7 +877,7 @@ def fast_brain_chat():
             response = client.post(
                 f"{url}/api/v1/think",
                 json={
-                    "prompt": full_prompt,
+                    "user_input": full_prompt,
                     "max_tokens": max_tokens,
                 },
             )
@@ -936,7 +936,7 @@ def fast_brain_benchmark():
                 response = client.post(
                     f"{url}/api/v1/think",
                     json={
-                        "prompt": prompt,
+                        "user_input": prompt,
                         "max_tokens": 50,
                     },
                 )
