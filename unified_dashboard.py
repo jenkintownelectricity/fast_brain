@@ -777,6 +777,199 @@ def test_voice():
 
 
 # =============================================================================
+# API ENDPOINTS - GOLDEN PROMPTS
+# =============================================================================
+
+# In-memory storage for custom prompts (overrides defaults)
+CUSTOM_PROMPTS = {}
+
+@app.route('/api/golden-prompts')
+def get_golden_prompts_list():
+    """Get list of all available golden prompts."""
+    try:
+        import sys
+        sys.path.insert(0, '/root')
+        from golden_prompts import SKILL_MANUALS, TOKEN_ESTIMATES
+
+        prompts = []
+        for skill_id in SKILL_MANUALS.keys():
+            tokens = TOKEN_ESTIMATES.get(skill_id, 800)
+            prefill_ms = int((tokens / 6000) * 1000)
+            prompts.append({
+                "id": skill_id,
+                "name": skill_id.replace("_", " ").title(),
+                "tokens": tokens,
+                "prefill_ms": prefill_ms,
+                "is_custom": skill_id in CUSTOM_PROMPTS
+            })
+        return jsonify({"prompts": prompts})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/golden-prompts/<skill_id>')
+def get_golden_prompt(skill_id):
+    """Get a specific golden prompt with optional context substitution."""
+    try:
+        import sys
+        sys.path.insert(0, '/root')
+        from golden_prompts import SKILL_MANUALS, TOKEN_ESTIMATES, get_skill_prompt
+
+        # Check for custom override first
+        if skill_id in CUSTOM_PROMPTS:
+            content = CUSTOM_PROMPTS[skill_id]
+        elif skill_id in SKILL_MANUALS:
+            content = SKILL_MANUALS[skill_id]
+        else:
+            return jsonify({"error": f"Skill '{skill_id}' not found"}), 404
+
+        # Get context variables from query params
+        business_name = request.args.get('business_name', '{business_name}')
+        agent_name = request.args.get('agent_name', '{agent_name}')
+
+        # Substitute context variables
+        formatted = content.replace('{business_name}', business_name).replace('{agent_name}', agent_name)
+
+        tokens = TOKEN_ESTIMATES.get(skill_id, 800)
+        prefill_ms = int((tokens / 6000) * 1000)
+
+        return jsonify({
+            "skill_id": skill_id,
+            "content": content,
+            "formatted": formatted,
+            "tokens": tokens,
+            "prefill_ms": prefill_ms,
+            "is_custom": skill_id in CUSTOM_PROMPTS
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/golden-prompts/<skill_id>', methods=['POST'])
+def save_golden_prompt(skill_id):
+    """Save a custom golden prompt."""
+    global CUSTOM_PROMPTS
+
+    try:
+        data = request.json
+        content = data.get('content', '')
+
+        if not content.strip():
+            return jsonify({"error": "Prompt content cannot be empty"}), 400
+
+        CUSTOM_PROMPTS[skill_id] = content
+
+        # Estimate tokens (rough: ~4 chars per token)
+        tokens = len(content) // 4
+        prefill_ms = int((tokens / 6000) * 1000)
+
+        add_activity(f"Updated golden prompt: {skill_id}", "")
+
+        return jsonify({
+            "success": True,
+            "skill_id": skill_id,
+            "tokens": tokens,
+            "prefill_ms": prefill_ms,
+            "message": f"Prompt for '{skill_id}' saved successfully"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/golden-prompts/<skill_id>/reset', methods=['POST'])
+def reset_golden_prompt(skill_id):
+    """Reset a golden prompt to its default."""
+    global CUSTOM_PROMPTS
+
+    try:
+        if skill_id in CUSTOM_PROMPTS:
+            del CUSTOM_PROMPTS[skill_id]
+            add_activity(f"Reset golden prompt: {skill_id}", "")
+            return jsonify({"success": True, "message": f"Prompt for '{skill_id}' reset to default"})
+        else:
+            return jsonify({"success": True, "message": "Prompt was already at default"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/golden-prompts/export')
+def export_golden_prompts():
+    """Export all golden prompts (defaults + custom overrides)."""
+    try:
+        import sys
+        sys.path.insert(0, '/root')
+        from golden_prompts import SKILL_MANUALS
+
+        export_data = {}
+        for skill_id, content in SKILL_MANUALS.items():
+            # Use custom if available, otherwise default
+            export_data[skill_id] = CUSTOM_PROMPTS.get(skill_id, content)
+
+        return jsonify({
+            "prompts": export_data,
+            "custom_overrides": list(CUSTOM_PROMPTS.keys())
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/golden-prompts/test', methods=['POST'])
+def test_golden_prompt():
+    """Test a golden prompt with the Fast Brain API."""
+    try:
+        data = request.json
+        skill_id = data.get('skill_id', 'general')
+        test_message = data.get('message', 'Hello, I need some help.')
+        business_name = data.get('business_name', 'Test Business')
+        agent_name = data.get('agent_name', 'Assistant')
+
+        import sys
+        sys.path.insert(0, '/root')
+        from golden_prompts import get_skill_prompt, SKILL_MANUALS
+
+        # Get prompt (custom or default)
+        if skill_id in CUSTOM_PROMPTS:
+            system_prompt = CUSTOM_PROMPTS[skill_id]
+            system_prompt = system_prompt.replace('{business_name}', business_name).replace('{agent_name}', agent_name)
+        else:
+            system_prompt = get_skill_prompt(skill_id, business_name=business_name, agent_name=agent_name)
+
+        # Call Fast Brain API
+        import httpx
+        import os
+
+        fast_brain_url = os.environ.get('FAST_BRAIN_URL', '')
+        if not fast_brain_url:
+            return jsonify({"error": "Fast Brain URL not configured"}), 500
+
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(
+                f"{fast_brain_url}/v1/chat/completions",
+                json={
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": test_message}
+                    ],
+                    "max_tokens": 500
+                }
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                return jsonify({
+                    "success": True,
+                    "response": result.get("choices", [{}])[0].get("message", {}).get("content", ""),
+                    "system_used": result.get("system_used", "unknown"),
+                    "latency_ms": result.get("latency_ms", 0)
+                })
+            else:
+                return jsonify({"error": f"Fast Brain returned {response.status_code}"}), 500
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# =============================================================================
 # API ENDPOINTS - PLATFORM CONNECTIONS
 # =============================================================================
 
@@ -2541,6 +2734,7 @@ DASHBOARD_HTML = '''
         <div id="tab-factory" class="tab-content">
             <div class="sub-tabs">
                 <button class="sub-tab-btn active" onclick="showFactoryTab('profile')">Business Profile</button>
+                <button class="sub-tab-btn" onclick="showFactoryTab('golden')">Golden Prompts</button>
                 <button class="sub-tab-btn" onclick="showFactoryTab('documents')">Upload Documents</button>
                 <button class="sub-tab-btn" onclick="showFactoryTab('train')">Train Skill</button>
                 <button class="sub-tab-btn" onclick="showFactoryTab('manage')">Manage Skills</button>
@@ -2612,6 +2806,77 @@ DASHBOARD_HTML = '''
                             <button type="button" class="btn btn-success" onclick="generateFromProfile()">Generate Training Data</button>
                         </div>
                     </form>
+                </div>
+            </div>
+
+            <!-- Golden Prompts -->
+            <div id="factory-golden" class="sub-tab-content">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">Star</span> Golden Prompts</div>
+                        <button class="btn btn-secondary btn-sm" onclick="loadGoldenPrompts()">Refresh</button>
+                    </div>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Voice-optimized skill manuals for ultra-fast Groq inference. These prompts are designed to stay under 3k tokens for ~50-100ms prefill latency.</p>
+
+                    <div class="form-group">
+                        <label class="form-label">Select Skill</label>
+                        <select class="form-select" id="golden-skill-select" onchange="loadGoldenPrompt()">
+                            <option value="receptionist">Receptionist - Professional Call Handling</option>
+                            <option value="electrician">Electrician - Jenkintown Electricity</option>
+                            <option value="plumber">Plumber - Plumbing Services</option>
+                            <option value="lawyer">Lawyer - Legal Intake Specialist</option>
+                            <option value="solar">Solar - Solar Company Sales</option>
+                            <option value="general">General - Helpful Assistant</option>
+                        </select>
+                    </div>
+
+                    <div class="stats-row" style="margin-bottom: 1rem;">
+                        <div class="stat-item">
+                            <div class="stat-value" id="golden-tokens">~850</div>
+                            <div class="stat-label">Est. Tokens</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="golden-prefill">~14ms</div>
+                            <div class="stat-label">Prefill Time</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="golden-status">Ready</div>
+                            <div class="stat-label">Status</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Context Variables (optional)</label>
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 1;">
+                                <input type="text" class="form-input" id="golden-business-name" placeholder="Business Name" value="Jenkintown Electricity">
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <input type="text" class="form-input" id="golden-agent-name" placeholder="Agent Name" value="Sarah">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Prompt Content</label>
+                        <textarea class="form-textarea" id="golden-prompt-content" style="min-height: 400px; font-family: monospace; font-size: 0.85rem;" placeholder="Loading prompt..."></textarea>
+                    </div>
+
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="saveGoldenPrompt()">Save Changes</button>
+                        <button class="btn btn-secondary" onclick="resetGoldenPrompt()">Reset to Default</button>
+                        <button class="btn btn-success" onclick="testGoldenPrompt()">Test Prompt</button>
+                        <button class="btn btn-secondary" onclick="copyGoldenPrompt()">Copy to Clipboard</button>
+                        <button class="btn btn-secondary" onclick="exportGoldenPrompts()">Export All</button>
+                    </div>
+
+                    <div id="golden-message" style="margin-top: 1rem;"></div>
+
+                    <!-- Test Output -->
+                    <div id="golden-test-output" style="margin-top: 1rem; display: none;">
+                        <label class="form-label">Test Response</label>
+                        <div class="code-block" id="golden-test-response" style="max-height: 300px; overflow-y: auto;"></div>
+                    </div>
                 </div>
             </div>
 
@@ -3941,6 +4206,7 @@ pipeline = Pipeline([
             event.target.classList.add('active');
 
             if (tabId === 'manage') loadSkillsTable();
+            if (tabId === 'golden') loadGoldenPrompt();
         }
 
         function showCommandTab(tabId) {
@@ -4055,6 +4321,165 @@ pipeline = Pipeline([
         // ============================================================
         // SKILL FACTORY
         // ============================================================
+
+        // Golden Prompts Functions
+        let goldenPromptsCache = {};
+
+        async function loadGoldenPrompts() {
+            try {
+                const res = await fetch('/api/golden-prompts');
+                const data = await res.json();
+                if (data.prompts) {
+                    goldenPromptsCache = data.prompts;
+                }
+                loadGoldenPrompt();
+            } catch (e) {
+                console.error('Error loading golden prompts:', e);
+            }
+        }
+
+        async function loadGoldenPrompt() {
+            const skillId = document.getElementById('golden-skill-select').value;
+            const businessName = document.getElementById('golden-business-name').value || '{business_name}';
+            const agentName = document.getElementById('golden-agent-name').value || '{agent_name}';
+
+            try {
+                const res = await fetch(`/api/golden-prompts/${skillId}?business_name=${encodeURIComponent(businessName)}&agent_name=${encodeURIComponent(agentName)}`);
+                const data = await res.json();
+
+                if (data.content) {
+                    document.getElementById('golden-prompt-content').value = data.content;
+                    document.getElementById('golden-tokens').textContent = '~' + data.tokens;
+                    document.getElementById('golden-prefill').textContent = '~' + data.prefill_ms + 'ms';
+                    document.getElementById('golden-status').textContent = data.is_custom ? 'Custom' : 'Default';
+                    document.getElementById('golden-status').style.color = data.is_custom ? 'var(--warning)' : 'var(--success)';
+                }
+            } catch (e) {
+                console.error('Error loading prompt:', e);
+                showGoldenMessage('Error loading prompt: ' + e.message, 'error');
+            }
+        }
+
+        async function saveGoldenPrompt() {
+            const skillId = document.getElementById('golden-skill-select').value;
+            const content = document.getElementById('golden-prompt-content').value;
+
+            try {
+                const res = await fetch(`/api/golden-prompts/${skillId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    showGoldenMessage(data.message, 'success');
+                    document.getElementById('golden-tokens').textContent = '~' + data.tokens;
+                    document.getElementById('golden-prefill').textContent = '~' + data.prefill_ms + 'ms';
+                    document.getElementById('golden-status').textContent = 'Custom';
+                    document.getElementById('golden-status').style.color = 'var(--warning)';
+                } else {
+                    showGoldenMessage(data.error || 'Save failed', 'error');
+                }
+            } catch (e) {
+                showGoldenMessage('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function resetGoldenPrompt() {
+            const skillId = document.getElementById('golden-skill-select').value;
+
+            if (!confirm(`Reset "${skillId}" prompt to default? Your customizations will be lost.`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/golden-prompts/${skillId}/reset`, { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success) {
+                    showGoldenMessage(data.message, 'success');
+                    loadGoldenPrompt();
+                } else {
+                    showGoldenMessage(data.error || 'Reset failed', 'error');
+                }
+            } catch (e) {
+                showGoldenMessage('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function testGoldenPrompt() {
+            const skillId = document.getElementById('golden-skill-select').value;
+            const businessName = document.getElementById('golden-business-name').value || 'Test Business';
+            const agentName = document.getElementById('golden-agent-name').value || 'Assistant';
+
+            const testMessage = prompt('Enter a test message:', 'Hello, I need some help with my electrical issue.');
+            if (!testMessage) return;
+
+            showGoldenMessage('Testing prompt with Fast Brain...', 'info');
+
+            try {
+                const res = await fetch('/api/golden-prompts/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        skill_id: skillId,
+                        message: testMessage,
+                        business_name: businessName,
+                        agent_name: agentName
+                    })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    document.getElementById('golden-test-output').style.display = 'block';
+                    document.getElementById('golden-test-response').innerHTML = `
+                        <strong>User:</strong> ${testMessage}\\n\\n
+                        <strong>Response (${data.system_used}, ${data.latency_ms}ms):</strong>\\n${data.response}
+                    `;
+                    showGoldenMessage('Test completed successfully!', 'success');
+                } else {
+                    showGoldenMessage('Test failed: ' + data.error, 'error');
+                }
+            } catch (e) {
+                showGoldenMessage('Error: ' + e.message, 'error');
+            }
+        }
+
+        function copyGoldenPrompt() {
+            const content = document.getElementById('golden-prompt-content').value;
+            navigator.clipboard.writeText(content).then(() => {
+                showGoldenMessage('Copied to clipboard!', 'success');
+            }).catch(() => {
+                showGoldenMessage('Failed to copy', 'error');
+            });
+        }
+
+        async function exportGoldenPrompts() {
+            try {
+                const res = await fetch('/api/golden-prompts/export');
+                const data = await res.json();
+
+                const blob = new Blob([JSON.stringify(data.prompts, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'golden_prompts_export.json';
+                a.click();
+                URL.revokeObjectURL(url);
+
+                showGoldenMessage(`Exported ${Object.keys(data.prompts).length} prompts (${data.custom_overrides.length} custom)`, 'success');
+            } catch (e) {
+                showGoldenMessage('Export failed: ' + e.message, 'error');
+            }
+        }
+
+        function showGoldenMessage(msg, type) {
+            const el = document.getElementById('golden-message');
+            el.innerHTML = `<div class="message ${type}">${msg}</div>`;
+            setTimeout(() => { el.innerHTML = ''; }, 5000);
+        }
+
         async function loadProfileDropdowns() {
             try {
                 const res = await fetch('/api/skills');

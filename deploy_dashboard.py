@@ -25,6 +25,7 @@ image = (
         "gTTS>=2.3.0",  # Google TTS (HTTP-based, more reliable)
     )
     .add_local_file("unified_dashboard.py", "/root/unified_dashboard.py")
+    .add_local_file("golden_prompts.py", "/root/golden_prompts.py")
 )
 
 
