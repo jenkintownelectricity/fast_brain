@@ -188,7 +188,7 @@ def detect_emotion_from_context(
 # =============================================================================
 
 # Modal app for Parler-TTS
-parler_app = modal.App("hive215-parler-tts")
+app = modal.App("hive215-parler-tts")
 
 # Create image with Parler-TTS dependencies
 parler_image = modal.Image.debian_slim(python_version="3.11").pip_install(
@@ -200,11 +200,10 @@ parler_image = modal.Image.debian_slim(python_version="3.11").pip_install(
 )
 
 
-@parler_app.cls(
+@app.cls(
     image=parler_image,
     gpu="T4",  # Parler-TTS runs well on T4
-    container_idle_timeout=300,  # Keep warm for 5 minutes
-    allow_concurrent_inputs=10,
+    scaledown_window=300,  # Keep warm for 5 minutes
 )
 class ParlerTTSModel:
     """
