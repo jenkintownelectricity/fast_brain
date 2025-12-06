@@ -4868,7 +4868,7 @@ print("Training complete: adapters/${skillId}")`;
             messageEl.innerHTML = '<div style="color: var(--neon-cyan);">Creating skill...</div>';
 
             const knowledge = document.getElementById('new-skill-knowledge').value
-                .split('\n')
+                .split('\\n')
                 .map(s => s.trim())
                 .filter(s => s.length > 0);
 
