@@ -2890,8 +2890,9 @@ DASHBOARD_HTML = '''
                             <select class="form-select" id="voice-provider" onchange="loadProviderVoices()">
                                 <option value="">Select a provider...</option>
                                 <optgroup label="Free / Open Source">
+                                    <option value="edge_tts">Edge TTS (Microsoft - Free)</option>
+                                    <option value="kokoro">Kokoro (Ultra-fast Local)</option>
                                     <option value="chatterbox">Chatterbox (Resemble AI)</option>
-                                    <option value="kokoro">Kokoro (Ultra-fast)</option>
                                     <option value="xtts">XTTS-v2 (Coqui AI)</option>
                                     <option value="openvoice">OpenVoice (MyShell)</option>
                                 </optgroup>
