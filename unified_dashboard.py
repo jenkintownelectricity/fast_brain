@@ -741,43 +741,56 @@ def test_voice():
                 "error": str(e)
             }), 500
 
-    # Kokoro TTS - Free local voices
+    # Kokoro TTS - Falls back to Edge TTS on Modal (no local models)
     elif provider == 'kokoro' or voice_id.startswith('af_') or voice_id.startswith('am_') or voice_id.startswith('bf_') or voice_id.startswith('bm_'):
+        # Map Kokoro voices to Edge TTS equivalents
+        kokoro_to_edge = {
+            'af_bella': 'en-US-JennyNeural',
+            'af_nicole': 'en-US-AriaNeural',
+            'af_sarah': 'en-US-SaraNeural',
+            'af_sky': 'en-US-AnaNeural',
+            'am_adam': 'en-US-GuyNeural',
+            'am_michael': 'en-US-DavisNeural',
+            'bf_emma': 'en-GB-SoniaNeural',
+            'bf_isabella': 'en-GB-SoniaNeural',
+            'bm_george': 'en-GB-RyanNeural',
+            'bm_lewis': 'en-GB-RyanNeural',
+        }
+
+        # Use Edge TTS as fallback (Kokoro requires local model files)
+        edge_voice = kokoro_to_edge.get(voice_id, 'en-US-JennyNeural')
+
         try:
-            from kokoro_onnx import Kokoro
-            import soundfile as sf
+            import edge_tts
 
-            kokoro = Kokoro('kokoro-v1.0.onnx', 'voices-v1.0.bin')
-            samples, sr = kokoro.create(text, voice=voice_id)
+            async def generate_edge_audio():
+                communicate = edge_tts.Communicate(text, edge_voice)
+                audio_data = b""
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        audio_data += chunk["data"]
+                return audio_data
 
-            # Convert to WAV bytes
-            buffer = io.BytesIO()
-            sf.write(buffer, samples, sr, format='WAV')
-            audio_bytes = buffer.getvalue()
+            audio_bytes = asyncio.run(generate_edge_audio())
             duration_ms = int((time.time() - start_time) * 1000)
 
             audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
 
-            add_activity(f"Voice test: {voice_id} ({duration_ms}ms)", "")
+            add_activity(f"Voice test: {voice_id} -> {edge_voice} ({duration_ms}ms)", "")
             return jsonify({
                 "success": True,
                 "voice_id": voice_id,
-                "provider": "kokoro",
+                "provider": "kokoro (via Edge TTS)",
                 "text": text,
                 "duration_ms": duration_ms,
                 "audio_base64": audio_base64,
-                "audio_format": "audio/wav",
-                "message": f"Generated audio with Kokoro voice '{voice_id}'"
+                "audio_format": "audio/mpeg",
+                "message": f"Kokoro '{voice_id}' mapped to Edge TTS '{edge_voice}' (cloud fallback)"
             })
-        except ImportError:
-            return jsonify({
-                "success": False,
-                "error": "kokoro-onnx not installed. Run: pip install kokoro-onnx soundfile"
-            }), 500
         except Exception as e:
             return jsonify({
                 "success": False,
-                "error": str(e)
+                "error": f"Kokoro fallback failed: {str(e)}"
             }), 500
 
     # Fallback for other providers (simulated)
@@ -2891,7 +2904,7 @@ DASHBOARD_HTML = '''
                                 <option value="">Select a provider...</option>
                                 <optgroup label="Free / Open Source">
                                     <option value="edge_tts">Edge TTS (Microsoft - Free)</option>
-                                    <option value="kokoro">Kokoro (Ultra-fast Local)</option>
+                                    <option value="kokoro">Kokoro (Edge TTS Fallback)</option>
                                     <option value="chatterbox">Chatterbox (Resemble AI)</option>
                                     <option value="xtts">XTTS-v2 (Coqui AI)</option>
                                     <option value="openvoice">OpenVoice (MyShell)</option>
@@ -3762,7 +3775,7 @@ pipeline = Pipeline([
                                 <select class="form-select" id="vl-provider" onchange="loadVLProviderVoices()">
                                     <optgroup label="Free / Open Source">
                                         <option value="edge_tts">Edge TTS (Microsoft - Free)</option>
-                                        <option value="kokoro">Kokoro (Ultra-fast Local)</option>
+                                        <option value="kokoro">Kokoro (Edge TTS Fallback)</option>
                                         <option value="chatterbox">Chatterbox</option>
                                         <option value="xtts">XTTS-v2 (Coqui)</option>
                                         <option value="openvoice">OpenVoice</option>
