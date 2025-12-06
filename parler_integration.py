@@ -303,12 +303,21 @@ class ParlerTTSModel:
         """
         # Get voice persona
         persona = VOICE_PERSONAS.get(skill_id, VOICE_PERSONAS["general"])
-        
-        # Determine emotion
-        if emotion == "auto" and user_context:
+
+        # Clean and determine emotion
+        emotion_clean = emotion.strip().strip('"').strip("'").lower()
+
+        if emotion_clean == "auto" and user_context:
             detected_emotion = detect_emotion_from_context(user_context, text, skill_id)
+        elif emotion_clean == "neutral" or not emotion_clean:
+            detected_emotion = Emotion.NEUTRAL
         else:
-            detected_emotion = Emotion[emotion.upper()] if emotion != "neutral" else Emotion.NEUTRAL
+            # Try to match emotion enum
+            try:
+                detected_emotion = Emotion[emotion_clean.upper()]
+            except KeyError:
+                # Fallback to neutral if invalid emotion
+                detected_emotion = Emotion.NEUTRAL
         
         # Build description
         description = persona.get_description(detected_emotion)
