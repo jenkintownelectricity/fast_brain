@@ -44,8 +44,8 @@ ACTIVITY_LOG = []
 
 # Voice configuration and platform connections
 VOICE_CONFIG = {
-    "selected_voice": "chatterbox_default",
-    "selected_provider": "chatterbox",
+    "selected_voice": "en-US-JennyNeural",
+    "selected_provider": "edge_tts",
     "voice_settings": {
         "speed": 1.0,
         "pitch": 1.0,
@@ -54,6 +54,40 @@ VOICE_CONFIG = {
 }
 
 VOICE_CHOICES = {
+    "edge_tts": {
+        "name": "Edge TTS",
+        "provider": "Microsoft (Free)",
+        "voices": [
+            {"id": "en-US-JennyNeural", "name": "Jenny", "gender": "female", "style": "friendly"},
+            {"id": "en-US-AriaNeural", "name": "Aria", "gender": "female", "style": "professional"},
+            {"id": "en-US-SaraNeural", "name": "Sara", "gender": "female", "style": "warm"},
+            {"id": "en-US-AnaNeural", "name": "Ana", "gender": "female", "style": "youthful"},
+            {"id": "en-US-GuyNeural", "name": "Guy", "gender": "male", "style": "conversational"},
+            {"id": "en-US-DavisNeural", "name": "Davis", "gender": "male", "style": "confident"},
+            {"id": "en-US-TonyNeural", "name": "Tony", "gender": "male", "style": "friendly"},
+            {"id": "en-US-JasonNeural", "name": "Jason", "gender": "male", "style": "neutral"},
+            {"id": "en-GB-SoniaNeural", "name": "Sonia (UK)", "gender": "female", "style": "british"},
+            {"id": "en-GB-RyanNeural", "name": "Ryan (UK)", "gender": "male", "style": "british"},
+            {"id": "en-AU-NatashaNeural", "name": "Natasha (AU)", "gender": "female", "style": "australian"},
+            {"id": "en-AU-WilliamNeural", "name": "William (AU)", "gender": "male", "style": "australian"},
+        ]
+    },
+    "kokoro": {
+        "name": "Kokoro",
+        "provider": "Kokoro TTS (Free)",
+        "voices": [
+            {"id": "af_bella", "name": "Bella", "gender": "female", "style": "american"},
+            {"id": "af_nicole", "name": "Nicole", "gender": "female", "style": "american"},
+            {"id": "af_sarah", "name": "Sarah", "gender": "female", "style": "american"},
+            {"id": "af_sky", "name": "Sky", "gender": "female", "style": "american"},
+            {"id": "am_adam", "name": "Adam", "gender": "male", "style": "american"},
+            {"id": "am_michael", "name": "Michael", "gender": "male", "style": "american"},
+            {"id": "bf_emma", "name": "Emma", "gender": "female", "style": "british"},
+            {"id": "bf_isabella", "name": "Isabella", "gender": "female", "style": "british"},
+            {"id": "bm_george", "name": "George", "gender": "male", "style": "british"},
+            {"id": "bm_lewis", "name": "Lewis", "gender": "male", "style": "british"},
+        ]
+    },
     "chatterbox": {
         "name": "Chatterbox",
         "provider": "Resemble AI",
@@ -653,20 +687,111 @@ def save_voice_config():
 
 @app.route('/api/voice/test', methods=['POST'])
 def test_voice():
-    """Test a voice with sample text."""
-    data = request.json
-    voice_id = data.get('voice_id', 'chatterbox_default')
-    text = data.get('text', 'Hello! This is a test of the voice synthesis system.')
+    """Test a voice with sample text - generates real audio with Edge TTS."""
+    import asyncio
+    import base64
+    import io
+    import time
 
-    # Simulated test response
-    add_activity(f"Voice test: {voice_id}", "")
-    return jsonify({
-        "success": True,
-        "voice_id": voice_id,
-        "text": text,
-        "duration_ms": random.randint(800, 2000),
-        "message": f"Voice '{voice_id}' tested successfully"
-    })
+    data = request.json
+    voice_id = data.get('voice_id', 'en-US-JennyNeural')
+    text = data.get('text', 'Hello! This is a test of the voice synthesis system.')
+    provider = data.get('provider', 'edge_tts')
+
+    start_time = time.time()
+
+    # Edge TTS - Free Microsoft voices
+    if provider == 'edge_tts' or voice_id.startswith('en-'):
+        try:
+            import edge_tts
+
+            async def generate_edge_audio():
+                communicate = edge_tts.Communicate(text, voice_id)
+                audio_data = b""
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        audio_data += chunk["data"]
+                return audio_data
+
+            audio_bytes = asyncio.run(generate_edge_audio())
+            duration_ms = int((time.time() - start_time) * 1000)
+
+            # Return base64 encoded audio
+            audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+            add_activity(f"Voice test: {voice_id} ({duration_ms}ms)", "")
+            return jsonify({
+                "success": True,
+                "voice_id": voice_id,
+                "provider": "edge_tts",
+                "text": text,
+                "duration_ms": duration_ms,
+                "audio_base64": audio_base64,
+                "audio_format": "audio/mpeg",
+                "message": f"Generated audio with Edge TTS voice '{voice_id}'"
+            })
+        except ImportError:
+            return jsonify({
+                "success": False,
+                "error": "edge-tts not installed. Run: pip install edge-tts"
+            }), 500
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "error": str(e)
+            }), 500
+
+    # Kokoro TTS - Free local voices
+    elif provider == 'kokoro' or voice_id.startswith('af_') or voice_id.startswith('am_') or voice_id.startswith('bf_') or voice_id.startswith('bm_'):
+        try:
+            from kokoro_onnx import Kokoro
+            import soundfile as sf
+
+            kokoro = Kokoro('kokoro-v1.0.onnx', 'voices-v1.0.bin')
+            samples, sr = kokoro.create(text, voice=voice_id)
+
+            # Convert to WAV bytes
+            buffer = io.BytesIO()
+            sf.write(buffer, samples, sr, format='WAV')
+            audio_bytes = buffer.getvalue()
+            duration_ms = int((time.time() - start_time) * 1000)
+
+            audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+            add_activity(f"Voice test: {voice_id} ({duration_ms}ms)", "")
+            return jsonify({
+                "success": True,
+                "voice_id": voice_id,
+                "provider": "kokoro",
+                "text": text,
+                "duration_ms": duration_ms,
+                "audio_base64": audio_base64,
+                "audio_format": "audio/wav",
+                "message": f"Generated audio with Kokoro voice '{voice_id}'"
+            })
+        except ImportError:
+            return jsonify({
+                "success": False,
+                "error": "kokoro-onnx not installed. Run: pip install kokoro-onnx soundfile"
+            }), 500
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "error": str(e)
+            }), 500
+
+    # Fallback for other providers (simulated)
+    else:
+        add_activity(f"Voice test (simulated): {voice_id}", "")
+        return jsonify({
+            "success": True,
+            "voice_id": voice_id,
+            "provider": provider,
+            "text": text,
+            "duration_ms": random.randint(800, 2000),
+            "audio_base64": None,
+            "message": f"Voice '{voice_id}' tested (simulated - provider not configured)"
+        })
 
 
 # =============================================================================
