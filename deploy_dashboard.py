@@ -22,7 +22,6 @@ image = (
         "flask-cors>=4.0.0",
     )
     .add_local_file("unified_dashboard.py", "/root/unified_dashboard.py")
-    .add_local_dir("business_profiles", "/root/business_profiles", condition=lambda pth: pth.exists())
 )
 
 
