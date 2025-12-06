@@ -5,6 +5,7 @@ livekit-plugins-deepgram>=0.6.0
 livekit-plugins-silero>=0.6.0
 livekit-plugins-cartesia>=0.4.0
 livekit-plugins-openai>=0.8.0
+livekit-plugins-turn-detector>=0.2.0  # Context-aware turn detection (FREE, runs locally)
 
 # HTTP client for Fast Brain
 httpx>=0.25.0

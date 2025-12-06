@@ -1,99 +1,123 @@
 # Fast Brain LPU
 
-**Ultra-fast inference engine for HIVE215 Voice Assistants**
+**Hybrid Voice AI Engine for HIVE215 - "Thinking, Fast and Slow"**
 
-Fast Brain is a custom Language Processing Unit (LPU) designed to make AI voice agents experts in their fields through a skills system, powered by Groq's lightning-fast inference (~80ms TTFB, 200+ tok/s).
-
----
-
-## Vision
-
-> "I want to make the brain a place where my agents are experts in their perspective fields using skills builder. Can I not upload a lot of info to make them smart and then the LPU will make it fast?"
-
-**Answer: YES.** Fast Brain combines:
-- **Skills Database** - Domain-specific system prompts + knowledge bases
-- **Groq Backend** - Llama 3.3 70B at 800 tok/s native speed
-- **Modal Deployment** - Serverless, auto-scaling, always warm
+Fast Brain is a dual-system inference engine inspired by Daniel Kahneman's cognitive model. It combines ultra-fast Groq inference (~80ms) for routine questions with Claude's deep reasoning (~2s) for complex analysis - all while maintaining a natural conversational experience through intelligent filler phrases.
 
 ---
 
-## Architecture
+## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              FAST BRAIN LPU                                      │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                  │
-│   [User Query] ──► [Skill Selector] ──► [System Prompt Builder] ──► [Groq API]  │
-│                           │                      │                      │        │
-│                           ▼                      ▼                      ▼        │
-│                    ┌─────────────┐        ┌───────────┐         ┌───────────┐   │
-│                    │   Skills    │        │ Knowledge │         │  Llama    │   │
-│                    │  Database   │   +    │   Base    │   =     │ 3.3 70B   │   │
-│                    └─────────────┘        └───────────┘         └───────────┘   │
-│                                                                        │        │
-│                                                                        ▼        │
-│                                                              [Fast Response]    │
-│                                                              ~80ms TTFB         │
-│                                                              200+ tok/s         │
-└─────────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     SYSTEM 1 + SYSTEM 2 HYBRID                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   User: "Can you analyze my bill and predict next month's cost?"            │
+│            │                                                                 │
+│            ▼                                                                 │
+│   ┌─────────────────┐                                                        │
+│   │  🚀 SYSTEM 1    │  Groq + Llama 3.3 70B                                  │
+│   │  (Fast Brain)   │  ~80ms, handles 90% of calls                          │
+│   │                 │                                                        │
+│   │  Decision:      │  "This needs complex reasoning..."                     │
+│   └────────┬────────┘                                                        │
+│            │                                                                 │
+│     ┌──────┴──────┐                                                          │
+│     │             │                                                          │
+│     ▼             ▼                                                          │
+│  [SIMPLE]      [COMPLEX]                                                     │
+│     │             │                                                          │
+│     ▼             ▼                                                          │
+│  Answer       ┌─────────────────┐                                            │
+│  Directly     │  Output A:      │  "Let me pull that up for you..."         │
+│  (~80ms)      │  FILLER PHRASE  │  (Plays while Claude thinks)              │
+│               └────────┬────────┘                                            │
+│                        │                                                     │
+│                        ▼                                                     │
+│               ┌─────────────────┐                                            │
+│               │  🧠 SYSTEM 2    │  Claude 3.5 Sonnet                         │
+│               │  (Deep Brain)   │  ~2s, complex reasoning                    │
+│               └────────┬────────┘                                            │
+│                        │                                                     │
+│                        ▼                                                     │
+│               [Real Answer]  ← Arrives just as filler finishes!             │
+│                                                                              │
+│   User Perception: ZERO LATENCY. Agent feels human.                         │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Features
+## What's Implemented
 
 ### Core Features
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Groq Backend | ✅ Live | Llama 3.3 70B via Groq API |
-| Skills System | ✅ Live | Built-in + custom skills |
-| Knowledge Base | ✅ Live | Per-skill knowledge items |
-| OpenAI-Compatible API | ✅ Live | Drop-in replacement |
-| Modal Deployment | ✅ Live | Serverless on Modal |
-| Dashboard Integration | ✅ Live | Full management UI |
+| **Hybrid Architecture** | ✅ Live | System 1 (Groq) + System 2 (Claude) |
+| **Filler Phrase Strategy** | ✅ Live | Hide Claude's latency with natural phrases |
+| **LiveKit Turn Detector** | ✅ Live | Context-aware turn detection (FREE, local) |
+| **Skills System** | ✅ Live | Domain-specific prompts and behaviors |
+| **Voice-Optimized Output** | ✅ Live | Contractions, short sentences, no markdown |
+| **Modal Deployment** | ✅ Live | Serverless, auto-scaling, always warm |
+| **Logic-Based Skill Routing** | ✅ Live | Route by phone number (~0ms, not LLM) |
+
+### Performance Metrics
+
+| System | Latency | Use Case | % of Calls |
+|--------|---------|----------|------------|
+| **System 1 (Groq)** | ~80ms | Simple questions, greetings, intake | ~90% |
+| **System 2 (Claude)** | ~2000ms | Analysis, calculations, complex advice | ~10% |
+| **Turn Detector** | ~10-25ms | End-of-utterance detection | Every turn |
+| **Filler Phrases** | ~1500ms spoken | Covers Claude's thinking time | When needed |
 
 ### Built-in Skills
 
-| Skill ID | Name | Use Case |
+| Skill ID | Name | Best For |
 |----------|------|----------|
 | `general` | General Assistant | Default helpful assistant |
-| `receptionist` | Professional Receptionist | Phone answering, call handling |
-| `electrician` | Electrician Assistant | Electrical services, scheduling |
-| `plumber` | Plumber Assistant | Plumbing services, emergencies |
-| `lawyer` | Legal Intake Assistant | Legal intake, confidential |
-
-### Dashboard Features
-
-| Feature | Tab | Description |
-|---------|-----|-------------|
-| System Status | Dashboard | Real-time status for Fast Brain, Groq, Hive215, Modal |
-| Skills Manager | Skills Manager | List, create, delete skills |
-| Skill Selector | Test Chat | Dropdown to select active skill |
-| Integration Checklist | Hive215 Integration | Step-by-step progress tracker |
-| Architecture Diagram | Hive215 Integration | Visual pipeline documentation |
+| `receptionist` | Professional Receptionist | Call handling, message taking |
+| `electrician` | Electrician Service Intake | Jenkintown Electricity |
+| `plumber` | Plumber Service Intake | Emergency/routine plumbing |
+| `lawyer` | Legal Intake Specialist | Confidential legal intake |
+| `solar` | Solar Company Receptionist | Solar qualification |
 
 ---
 
-## Performance
+## File Structure
 
-### Current Metrics (Groq Backend)
+```
+fast_brain/
+├── deploy_groq.py          # Main deployment (v3.0 Hybrid) ← USE THIS
+├── skills.py               # Skills definitions
+├── config.py               # Configuration dataclasses
+├── client.py               # Python client library
+├── __init__.py             # Package exports
+├── deploy_bitnet.py        # BitNet attempt (archived)
+├── deploy_simple.py        # Simple stub (testing)
+├── deploy.py               # Original design (archived)
+└── model.py                # BitNet model wrapper (archived)
 
-| Metric | Target | Actual | Status |
-|--------|--------|--------|--------|
-| TTFB | <100ms | ~80ms | ✅ Met |
-| Throughput | >200 tok/s | ~200 tok/s | ✅ Met |
-| Cold Start | <5s | ~3s | ✅ Met |
+worker/
+├── voice_agent.py          # LiveKit voice agent with turn detector
+├── requirements.txt        # Worker dependencies
+├── __init__.py
+└── test_fast_brain.py      # Test client
 
-### Comparison
+# Documentation
+README.md                   # This file
+HIVE215_INTEGRATION.md      # Integration guide
+FASTBRAIN_MODAL_DEPLOY.md   # Deployment documentation
+hive215-architecture-overview.html  # Visual architecture
 
-| Provider | TTFB | Throughput | Cost |
-|----------|------|------------|------|
-| **Fast Brain (Groq)** | ~80ms | 200 tok/s | Free tier available |
-| OpenAI GPT-4 | ~500ms | 50 tok/s | $$$$ |
-| Anthropic Claude | ~400ms | 80 tok/s | $$$ |
-| Local BitNet | ~10s+ | 5 tok/s | CPU only |
+# Utilities
+unified_dashboard.py        # Management dashboard
+skill_factory.py            # Skill creation utilities
+skill_command_center.py     # Command center UI
+turn_taking.py              # Turn detection experiments
+```
 
 ---
 
@@ -113,68 +137,129 @@ GET /health
 Response:
 {
   "status": "healthy",
-  "model_loaded": true,
-  "skills_available": ["general", "receptionist", "electrician", "plumber", "lawyer"],
-  "version": "2.0.0",
-  "backend": "groq-llama-3.3-70b"
+  "architecture": "System 1 + System 2 Hybrid",
+  "system1": {"model": "llama-3.3-70b-versatile", "latency": "~80ms"},
+  "system2": {"model": "claude-3-5-sonnet-20241022", "latency": "~2000ms"},
+  "skills": ["general", "receptionist", "electrician", "plumber", "lawyer", "solar"]
 }
+```
+
+#### Hybrid Chat (Recommended)
+```bash
+POST /v1/chat/hybrid
+Content-Type: application/json
+
+{
+  "messages": [{"role": "user", "content": "Can you analyze my electricity bill?"}],
+  "skill": "electrician",
+  "user_context": {"business_name": "Jenkintown Electricity"}
+}
+
+Response (simple question):
+{
+  "content": "I'd be happy to help! What's your address?",
+  "filler": null,
+  "system_used": "fast",
+  "fast_latency_ms": 85,
+  "total_latency_ms": 85
+}
+
+Response (complex question):
+{
+  "content": "Based on your usage of 850 kWh at $0.12/kWh...",
+  "filler": "Let me pull up your information and analyze that for you...",
+  "system_used": "deep",
+  "fast_latency_ms": 85,
+  "deep_latency_ms": 1950,
+  "total_latency_ms": 2035
+}
+```
+
+#### Voice Chat (with TTS hints)
+```bash
+POST /v1/chat/voice
+
+Response:
+{
+  "text": "Based on your usage...",
+  "voice": "A patient, clear female voice. Teacher-like.",
+  "filler_text": "Let me look into that...",
+  "filler_voice": "A thoughtful, measured female voice.",
+  "system_used": "deep"
+}
+```
+
+#### Standard Chat (System 1 only)
+```bash
+POST /v1/chat/completions
 ```
 
 #### List Skills
 ```bash
 GET /v1/skills
-
-Response:
-{
-  "skills": [
-    {"id": "receptionist", "name": "Professional Receptionist", "description": "..."},
-    ...
-  ]
-}
 ```
 
-#### Create Custom Skill
+#### Get Greeting
 ```bash
-POST /v1/skills
-Content-Type: application/json
-
-{
-  "skill_id": "my_business",
-  "name": "My Business Assistant",
-  "description": "Expert in my business services",
-  "system_prompt": "You are an AI assistant for My Business...",
-  "knowledge": ["Pricing: $100-500", "Hours: 9am-5pm", "Service area: Philadelphia"]
-}
+GET /v1/greeting/{skill_id}
 ```
 
-#### Chat Completion (OpenAI-compatible)
-```bash
-POST /v1/chat/completions
-Content-Type: application/json
+---
 
-{
-  "messages": [
-    {"role": "system", "content": "You are a helpful assistant"},
-    {"role": "user", "content": "Hello!"}
-  ],
-  "max_tokens": 256,
-  "temperature": 0.7,
-  "skill": "receptionist",
-  "user_profile": "Acme Electric - Licensed electrician in Philadelphia"
-}
+## Voice Agent (LiveKit)
 
-Response:
-{
-  "id": "chatcmpl-...",
-  "choices": [{"message": {"role": "assistant", "content": "..."}}],
-  "metrics": {
-    "ttfb_ms": 79.7,
-    "total_time_ms": 557.2,
-    "tokens_per_sec": 213.2
-  },
-  "skill_used": "receptionist"
-}
+The voice agent (`worker/voice_agent.py`) integrates with LiveKit Cloud:
+
+### Pipeline
 ```
+Phone Call → LiveKit Cloud → Deepgram STT → Turn Detector → Fast Brain
+                │                                              │
+                │ (noise cancellation FREE)             ┌──────┴──────┐
+                │                                    [SIMPLE]     [COMPLEX]
+                │                                       │             │
+                └──────────────────────────────────  Answer     Filler + Claude
+                                                     (~80ms)       (~2s hidden)
+                                                        │             │
+                                                        └──────┬──────┘
+                                                               │
+                                                        Cartesia TTS → Audio
+```
+
+### Key Components
+
+| Component | Provider | Cost | Notes |
+|-----------|----------|------|-------|
+| **STT** | Deepgram Nova-3 | ~$0.006/min | YOUR API key |
+| **TTS** | Cartesia Sonic | ~$0.0225/min | YOUR API key |
+| **VAD** | Silero | FREE | Runs locally |
+| **Turn Detector** | LiveKit Plugin | FREE | Runs locally, ~200MB |
+| **Noise Cancellation** | LiveKit Cloud | FREE | Standard tier |
+
+### Turn Detector
+
+Uses `livekit-plugins-turn-detector` with `EOUModel()`:
+
+```python
+from livekit.plugins.turn_detector import EOUModel
+
+turn_detector = EOUModel()
+
+agent = VoicePipelineAgent(
+    vad=vad,
+    stt=stt,
+    llm=llm_adapter,
+    tts=tts,
+    turn_detector=turn_detector,  # Context-aware!
+    min_endpointing_delay=0.5,
+    max_endpointing_delay=6.0,
+)
+```
+
+**Benefits over basic VAD:**
+- Understands linguistic context (vs. just silence detection)
+- Knows when user is mid-sentence vs. done speaking
+- Reduces interruptions and awkward pauses
+- ~10-25ms inference, runs locally
 
 ---
 
@@ -183,120 +268,84 @@ Response:
 ### Prerequisites
 - Modal account (free tier works)
 - Groq API key (free at console.groq.com)
-- Python 3.11
+- Anthropic API key
+- Python 3.11+
 
 ### Deploy to Modal
 
-1. **Install Modal CLI**
 ```bash
+# 1. Install Modal CLI
 pip install modal
 modal token new
-```
 
-2. **Set up Groq API key as Modal secret**
-```bash
-modal secret create groq-api-key GROQ_API_KEY=your_key_here
-```
+# 2. Set up secrets
+modal secret create groq-api-key GROQ_API_KEY=gsk_your_key
+modal secret create anthropic-api-key ANTHROPIC_API_KEY=sk-ant-your_key
 
-3. **Deploy**
-```bash
+# 3. Deploy
 modal deploy fast_brain/deploy_groq.py
+
+# 4. Get your URL
+# https://[your-username]--fast-brain-lpu.modal.run
 ```
 
-4. **Get your URL**
-```
-https://[your-username]--fast-brain-lpu.modal.run
-```
-
-### Local Testing
+### Deploy Voice Agent
 
 ```bash
-# Set Groq API key
-export GROQ_API_KEY=your_key_here
+# Set environment variables
+export FAST_BRAIN_URL=https://your-username--fast-brain-lpu.modal.run
+export LIVEKIT_URL=wss://your-project.livekit.cloud
+export LIVEKIT_API_KEY=your_key
+export LIVEKIT_API_SECRET=your_secret
+export DEEPGRAM_API_KEY=your_deepgram_key
+export CARTESIA_API_KEY=your_cartesia_key
 
-# Run locally
-python fast_brain/deploy_groq.py
-# Server at http://localhost:8000
+# Install dependencies
+pip install -r worker/requirements.txt
+
+# Run agent
+python -m worker.voice_agent dev
 ```
+
+### Cost Estimates (per minute of voice)
+
+| Component | Cost/min | Notes |
+|-----------|----------|-------|
+| Deepgram STT | ~$0.006 | Nova-3 streaming |
+| Cartesia TTS | ~$0.023 | Sonic English |
+| Groq (System 1) | ~$0.0001 | Free tier: 14,400 req/day |
+| Claude (System 2) | ~$0.003 | Only ~10% of calls |
+| LiveKit Cloud | ~$0.004 | Ship plan: 5,000 min |
+| **Total** | ~$0.036/min | ~$2.16/hour |
 
 ---
 
-## Files
+## Future Roadmap
 
-```
-fast_brain/
-├── deploy_groq.py      # Main deployment (Groq backend) ← USE THIS
-├── deploy_bitnet.py    # BitNet attempt (CPU too slow)
-├── deploy_simple.py    # Stub for testing
-├── deploy.py           # Original BitNet design
-├── model.py            # BitNet model wrapper
-├── client.py           # Python client
-├── config.py           # Configuration
-└── requirements.txt    # Dependencies
+### In Progress
 
-unified_dashboard.py    # Full management dashboard
-README.md               # This file
-HIVE215_INTEGRATION.md  # Integration guide for Hive215 team
-```
+- [ ] Streaming responses (SSE) for faster perceived latency
+- [ ] Multi-turn conversation memory with context window management
+- [ ] A/B testing framework for skill prompt optimization
 
----
+### Planned
 
-## Dashboard
-
-### Running the Dashboard
-
-```bash
-pip install flask flask-cors httpx
-python unified_dashboard.py
-# Opens at http://localhost:5000
-```
-
-### Fast Brain Tab
-
-The dashboard has a dedicated **Fast Brain** tab with sub-tabs:
-
-1. **Dashboard** - System status, metrics, configuration
-2. **Skills Manager** - Create/edit/delete skills
-3. **Test Chat** - Test with skill selector
-4. **Hive215 Integration** - Checklist and setup guide
-
----
-
-## Roadmap
-
-### Completed ✅
-
-- [x] Groq backend integration
-- [x] Skills database with built-in skills
-- [x] Custom skill creation
-- [x] Knowledge base per skill
-- [x] OpenAI-compatible API
-- [x] Modal serverless deployment
-- [x] Dashboard with skills management
-- [x] System status indicators
-- [x] Hive215 integration checklist
-
-### In Progress 🔄
-
-- [ ] Streaming responses (SSE)
-- [ ] Skill training from documents
-- [ ] Voice-specific optimizations
-
-### Planned 📋
-
-- [ ] RAG with vector embeddings
-- [ ] Multi-turn conversation memory
-- [ ] A/B testing for skill prompts
-- [ ] Analytics dashboard
-- [ ] Webhook notifications
+- [ ] RAG with vector embeddings for business-specific knowledge
+- [ ] Real-time analytics dashboard
+- [ ] Webhook notifications for call events
 - [ ] Direct Supabase skill sync
+- [ ] Custom skill creation API
+- [ ] Multi-language support (turn detector has `MultilingualModel()`)
 
-### Future Ideas 💡
+### Future Ideas
 
-- [ ] Fine-tuned models per skill
-- [ ] Voice cloning integration
-- [ ] Real-time skill switching mid-call
-- [ ] Sentiment-based skill adaptation
+- [ ] Fine-tuned models per skill domain
+- [ ] Voice cloning integration (ElevenLabs/PlayHT)
+- [ ] Real-time skill switching mid-call based on topic
+- [ ] Sentiment-based response adaptation
+- [ ] Call recording and transcription storage
+- [ ] CRM integrations (HubSpot, Salesforce)
+- [ ] Warm transfer to human agents with context handoff
 
 ---
 
@@ -304,23 +353,24 @@ The dashboard has a dedicated **Fast Brain** tab with sub-tabs:
 
 ### Current Branch
 ```
-claude/fast-brain-streaming-018wsUb2vztjfkc8EGVQ9t8j
+claude/implement-new-vision-01FkwcnCFbicK9uG2QrB8FSf
 ```
 
 ### Recent Commits
 ```
-fc4edbf Add skills management UI, status indicators, and Hive215 integration
-b63d07f Add Groq-powered Fast Brain with Skills Layer
-8c156ec Disable CUDA completely to fix BitNet inference
-00874e2 Add real BitNet LPU deployment with HuggingFace transformers
-940782d Update dashboard to use fast-brain-lpu endpoints
+e40cf25 Add LiveKit turn detector plugin for context-aware turn detection
+b672881 Implement hybrid System 1 + System 2 architecture (v3.0)
 ```
 
-### Merge to Main
+### Local Testing
+
 ```bash
-git checkout main
-git merge claude/fast-brain-streaming-018wsUb2vztjfkc8EGVQ9t8j
-git push origin main
+# Set API keys
+export GROQ_API_KEY=your_key
+export ANTHROPIC_API_KEY=your_key
+
+# Run local test
+python fast_brain/deploy_groq.py
 ```
 
 ---
@@ -329,20 +379,23 @@ git push origin main
 
 ### "503 Service Unavailable"
 - Check Modal deployment: `modal app list`
-- Verify Groq API key is set in Modal secrets
+- Verify secrets are set: `modal secret list`
+- Check logs: `modal app logs fast-brain-lpu`
 
-### "Groq client not initialized"
-- Ensure `groq-api-key` secret exists in Modal
-- Check Modal logs: `modal app logs fast-brain-lpu`
+### Slow first response
+- First request warms container (~3s)
+- Subsequent requests: ~80ms (System 1) or ~2s (System 2)
+- Set `keep_warm=1` in deploy for always-warm containers
 
-### Slow responses
-- First request warms the container (~3s)
-- Subsequent requests should be ~80ms TTFB
+### Turn detector not working
+- Ensure `livekit-plugins-turn-detector` is installed
+- Check it's passed to `VoicePipelineAgent`
+- Model downloads on first use (~200MB)
 
-### Skills not syncing
-- Dashboard creates skills locally first
-- Skills sync to LPU on next request
-- Check LPU health endpoint for skill count
+### Claude not being triggered
+- Check if skill's system prompt includes `ask_expert` tool instructions
+- Verify `anthropic-api-key` secret exists in Modal
+- Look for "System used: deep" in logs
 
 ---
 
@@ -354,6 +407,7 @@ MIT
 
 ## Contact
 
-Part of the HIVE215 project - AI Phone Assistant Platform
+**HIVE215** - AI Phone Assistant Platform
+**Jenkintown Electricity** - Primary deployment
 
-Built with Groq, Modal, and Claude Code
+Built with Groq, Claude, LiveKit, Modal, and Claude Code
