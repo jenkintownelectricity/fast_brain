@@ -688,9 +688,7 @@ def save_voice_config():
 @app.route('/api/voice/test', methods=['POST'])
 def test_voice():
     """Test a voice with sample text - generates real audio with Edge TTS."""
-    import asyncio
     import base64
-    import io
     import time
 
     data = request.json
@@ -707,21 +705,28 @@ def test_voice():
             text = "Hello! This is a voice test."
 
         try:
-            import edge_tts
+            import subprocess
             import tempfile
 
-            async def generate_edge_audio():
-                communicate = edge_tts.Communicate(text, voice_id)
-                # Use temp file approach for reliability
-                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp:
-                    tmp_path = tmp.name
-                await communicate.save(tmp_path)
-                with open(tmp_path, 'rb') as f:
-                    audio_data = f.read()
-                os.unlink(tmp_path)
-                return audio_data
+            # Create temp file for output
+            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp:
+                tmp_path = tmp.name
 
-            audio_bytes = asyncio.run(generate_edge_audio())
+            # Call edge-tts CLI (more reliable than async in Flask)
+            result = subprocess.run(
+                ['python', '-m', 'edge_tts', '--voice', voice_id, '--text', text, '--write-media', tmp_path],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode != 0:
+                raise Exception(f"edge-tts failed: {result.stderr}")
+
+            # Read the audio file
+            with open(tmp_path, 'rb') as f:
+                audio_bytes = f.read()
+            os.unlink(tmp_path)
 
             if not audio_bytes:
                 raise Exception("No audio generated")
@@ -740,10 +745,10 @@ def test_voice():
                 "audio_format": "audio/mpeg",
                 "message": f"Generated audio with Edge TTS voice '{voice_id}'"
             })
-        except ImportError:
+        except subprocess.TimeoutExpired:
             return jsonify({
                 "success": False,
-                "error": "edge-tts not installed. Run: pip install edge-tts"
+                "error": "Edge TTS timeout - try shorter text"
             }), 500
         except Exception as e:
             return jsonify({
@@ -775,23 +780,28 @@ def test_voice():
             text = "Hello! This is a voice test."
 
         try:
-            import edge_tts
+            import subprocess
             import tempfile
 
-            async def generate_edge_audio():
-                communicate = edge_tts.Communicate(text, edge_voice)
-                # Use a temp file approach which is more reliable
-                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp:
-                    tmp_path = tmp.name
-                await communicate.save(tmp_path)
-                with open(tmp_path, 'rb') as f:
-                    audio_data = f.read()
-                os.unlink(tmp_path)
-                return audio_data
+            # Use subprocess to avoid async issues in Flask context
+            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp:
+                tmp_path = tmp.name
 
-            audio_bytes = asyncio.run(generate_edge_audio())
+            result = subprocess.run(
+                ['python', '-m', 'edge_tts', '--voice', edge_voice, '--text', text, '--write-media', tmp_path],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
 
-            if not audio_bytes:
+            if result.returncode != 0:
+                raise Exception(f"edge-tts failed: {result.stderr}")
+
+            with open(tmp_path, 'rb') as f:
+                audio_bytes = f.read()
+            os.unlink(tmp_path)
+
+            if not audio_bytes or len(audio_bytes) == 0:
                 raise Exception("No audio generated")
 
             duration_ms = int((time.time() - start_time) * 1000)
