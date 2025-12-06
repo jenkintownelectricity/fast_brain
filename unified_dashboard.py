@@ -54,6 +54,18 @@ VOICE_CONFIG = {
 }
 
 VOICE_CHOICES = {
+    "parler_tts": {
+        "name": "Parler TTS",
+        "provider": "Parler (GPU - Expressive)",
+        "voices": [
+            {"id": "receptionist", "name": "Sarah (Receptionist)", "gender": "female", "style": "professional warm"},
+            {"id": "electrician", "name": "Mike (Electrician)", "gender": "male", "style": "friendly knowledgeable"},
+            {"id": "plumber", "name": "Tom (Plumber)", "gender": "male", "style": "reassuring calm"},
+            {"id": "lawyer", "name": "Jennifer (Lawyer)", "gender": "female", "style": "professional articulate"},
+            {"id": "solar", "name": "Alex (Solar)", "gender": "neutral", "style": "enthusiastic energetic"},
+            {"id": "general", "name": "Jordan (General)", "gender": "neutral", "style": "warm natural"},
+        ]
+    },
     "edge_tts": {
         "name": "Edge TTS",
         "provider": "Microsoft (Free)",
@@ -687,7 +699,7 @@ def save_voice_config():
 
 @app.route('/api/voice/test', methods=['POST'])
 def test_voice():
-    """Test a voice with sample text - generates real audio with Edge TTS."""
+    """Test a voice with sample text - generates real audio."""
     import base64
     import time
 
@@ -695,8 +707,69 @@ def test_voice():
     voice_id = data.get('voice_id', 'en-US-JennyNeural')
     text = data.get('text', 'Hello! This is a test of the voice synthesis system.')
     provider = data.get('provider', 'edge_tts')
+    emotion = data.get('emotion', 'neutral')
+    skill_id = data.get('skill_id', 'general')
 
     start_time = time.time()
+
+    # Parler TTS - Expressive voices via Modal GPU
+    if provider == 'parler_tts':
+        if not text or len(text.strip()) == 0:
+            text = "Hello! This is a voice test."
+        text = text.strip()[:500]
+
+        try:
+            import httpx
+
+            # Call Parler TTS Modal function
+            parler_url = "https://jenkintownelectricity--hive215-parler-tts-parlerttsmodel-synthesize-with-emotion.modal.run"
+
+            with httpx.Client(timeout=120.0) as client:  # Long timeout for cold start
+                response = client.post(
+                    parler_url,
+                    json={
+                        "text": text,
+                        "skill_id": skill_id,
+                        "emotion": emotion
+                    }
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    # Result is [audio_bytes, description]
+                    if isinstance(result, list) and len(result) >= 2:
+                        audio_bytes = bytes(result[0]) if isinstance(result[0], list) else result[0]
+                        description = result[1]
+
+                        duration_ms = int((time.time() - start_time) * 1000)
+                        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8') if isinstance(audio_bytes, bytes) else result[0]
+
+                        add_activity(f"Parler TTS: {skill_id}/{emotion} ({duration_ms}ms)", "")
+                        return jsonify({
+                            "success": True,
+                            "voice_id": f"{skill_id}_{emotion}",
+                            "provider": "parler_tts",
+                            "text": text,
+                            "duration_ms": duration_ms,
+                            "audio_base64": audio_base64,
+                            "audio_format": "audio/wav",
+                            "message": f"Generated with Parler TTS: {description}"
+                        })
+                    else:
+                        raise Exception(f"Unexpected response format: {type(result)}")
+                else:
+                    raise Exception(f"Parler TTS returned {response.status_code}: {response.text[:200]}")
+
+        except httpx.TimeoutException:
+            return jsonify({
+                "success": False,
+                "error": "Parler TTS timeout (GPU may be cold starting - try again in 30s)"
+            }), 500
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "error": f"Parler TTS failed: {str(e)}"
+            }), 500
 
     # Map voice IDs to gTTS language/accent codes
     VOICE_TO_GTTS = {
@@ -3137,6 +3210,7 @@ DASHBOARD_HTML = '''
                             <select class="form-select" id="voice-provider" onchange="loadProviderVoices()">
                                 <option value="">Select a provider...</option>
                                 <optgroup label="Free / Open Source">
+                                    <option value="parler_tts">Parler TTS (Expressive - GPU)</option>
                                     <option value="edge_tts">Edge TTS (Microsoft - Free)</option>
                                     <option value="kokoro">Kokoro (Edge TTS Fallback)</option>
                                     <option value="chatterbox">Chatterbox (Resemble AI)</option>
@@ -3173,6 +3247,21 @@ DASHBOARD_HTML = '''
                         <div class="form-group" style="flex: 2;">
                             <label class="form-label">Test Text</label>
                             <input type="text" class="form-input" id="voice-test-text" value="Hello! How can I help you today?" placeholder="Enter text to test...">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label class="form-label">Emotion (Parler)</label>
+                            <select class="form-select" id="voice-emotion">
+                                <option value="neutral">Neutral</option>
+                                <option value="warm" selected>Warm</option>
+                                <option value="excited">Excited</option>
+                                <option value="calm">Calm</option>
+                                <option value="concerned">Concerned</option>
+                                <option value="apologetic">Apologetic</option>
+                                <option value="confident">Confident</option>
+                                <option value="empathetic">Empathetic</option>
+                                <option value="urgent">Urgent</option>
+                                <option value="cheerful">Cheerful</option>
+                            </select>
                         </div>
                         <div class="form-group" style="flex: 1;">
                             <label class="form-label">Speed</label>
@@ -4008,6 +4097,7 @@ pipeline = Pipeline([
                                 <label class="form-label">Base Voice Provider</label>
                                 <select class="form-select" id="vl-provider" onchange="loadVLProviderVoices()">
                                     <optgroup label="Free / Open Source">
+                                        <option value="parler_tts">Parler TTS (Expressive - GPU)</option>
                                         <option value="edge_tts">Edge TTS (Microsoft - Free)</option>
                                         <option value="kokoro">Kokoro (Edge TTS Fallback)</option>
                                         <option value="chatterbox">Chatterbox</option>
@@ -4047,11 +4137,15 @@ pipeline = Pipeline([
                             <label class="form-label">Emotion</label>
                             <select class="form-select" id="vl-emotion">
                                 <option value="neutral">Neutral</option>
-                                <option value="happy">Happy</option>
-                                <option value="sad">Sad</option>
-                                <option value="angry">Angry</option>
+                                <option value="warm">Warm</option>
                                 <option value="excited">Excited</option>
                                 <option value="calm">Calm</option>
+                                <option value="concerned">Concerned</option>
+                                <option value="apologetic">Apologetic</option>
+                                <option value="confident">Confident</option>
+                                <option value="empathetic">Empathetic</option>
+                                <option value="urgent">Urgent</option>
+                                <option value="cheerful">Cheerful</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -4885,13 +4979,28 @@ print("Training complete: adapters/${skillId}")`;
                 return;
             }
 
-            resultEl.innerHTML = '<div style="color: var(--neon-cyan);">Generating audio with Edge TTS...</div>';
+            // For Parler TTS, voiceId is the skill_id
+            const isParler = provider === 'parler_tts';
+            const emotionEl = document.getElementById('voice-emotion');
+            const emotion = emotionEl ? emotionEl.value : 'neutral';
+
+            if (isParler) {
+                resultEl.innerHTML = '<div style="color: var(--neon-cyan);">Generating audio with Parler TTS (GPU)... May take 30-60s on cold start</div>';
+            } else {
+                resultEl.innerHTML = '<div style="color: var(--neon-cyan);">Generating audio...</div>';
+            }
 
             try {
                 const res = await fetch('/api/voice/test', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ voice_id: voiceId, text, provider })
+                    body: JSON.stringify({
+                        voice_id: voiceId,
+                        text,
+                        provider,
+                        emotion: emotion,
+                        skill_id: isParler ? voiceId : 'general'
+                    })
                 });
                 const result = await res.json();
 
