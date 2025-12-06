@@ -4468,9 +4468,9 @@ print("Training complete: adapters/${skillId}")`;
         }
 
         async function testVoice() {
+            const provider = document.getElementById('voice-provider').value;
             const voiceId = document.getElementById('voice-select').value;
-            const text = document.getElementById('voice-test-text').value;
-            const speed = document.getElementById('voice-speed').value;
+            const text = document.getElementById('voice-test-text').value || 'Hello! This is a test of the voice synthesis system.';
             const resultEl = document.getElementById('voice-test-result');
 
             if (!voiceId) {
@@ -4478,61 +4478,34 @@ print("Training complete: adapters/${skillId}")`;
                 return;
             }
 
-            resultEl.innerHTML = '<div style="color: var(--neon-cyan);">Testing voice...</div>';
+            resultEl.innerHTML = '<div style="color: var(--neon-cyan);">Generating audio with Edge TTS...</div>';
 
-            // Use browser Speech Synthesis API for demo playback
-            if ('speechSynthesis' in window) {
-                // Cancel any ongoing speech
-                window.speechSynthesis.cancel();
+            try {
+                const res = await fetch('/api/voice/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ voice_id: voiceId, text, provider })
+                });
+                const result = await res.json();
 
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.rate = parseFloat(speed);
-
-                // Try to find a matching voice
-                const voices = window.speechSynthesis.getVoices();
-                if (voices.length > 0) {
-                    // Pick a voice based on the selected voice characteristics
-                    const voiceName = document.getElementById('voice-select').selectedOptions[0]?.text || '';
-                    if (voiceName.toLowerCase().includes('female')) {
-                        const femaleVoice = voices.find(v => v.name.toLowerCase().includes('female') || v.name.includes('Samantha') || v.name.includes('Victoria'));
-                        if (femaleVoice) utterance.voice = femaleVoice;
-                    } else if (voiceName.toLowerCase().includes('male')) {
-                        const maleVoice = voices.find(v => v.name.toLowerCase().includes('male') || v.name.includes('Daniel') || v.name.includes('Alex'));
-                        if (maleVoice) utterance.voice = maleVoice;
-                    }
+                if (result.success && result.audio_base64) {
+                    // Create audio element and play
+                    const audio = new Audio('data:' + result.audio_format + ';base64,' + result.audio_base64);
+                    audio.onended = () => {
+                        resultEl.innerHTML = `<div style="color: var(--neon-green);">&#9658; Audio played! (${result.duration_ms}ms to generate)</div>`;
+                    };
+                    audio.onerror = (e) => {
+                        resultEl.innerHTML = `<div style="color: var(--neon-orange);">Playback error</div>`;
+                    };
+                    audio.play();
+                    resultEl.innerHTML = `<div style="color: var(--neon-cyan);">&#9658; Playing ${result.provider} audio...</div>`;
+                } else if (result.success) {
+                    resultEl.innerHTML = `<div style="color: var(--neon-green);">Voice test completed in ${result.duration_ms}ms</div>`;
+                } else {
+                    resultEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${result.error || result.message}</div>`;
                 }
-
-                const startTime = Date.now();
-
-                utterance.onend = () => {
-                    const duration = Date.now() - startTime;
-                    resultEl.innerHTML = `<div style="color: var(--neon-green);">&#9658; Voice played successfully (${duration}ms)</div>`;
-                };
-
-                utterance.onerror = (e) => {
-                    resultEl.innerHTML = `<div style="color: var(--neon-orange);">Playback error: ${e.error}</div>`;
-                };
-
-                window.speechSynthesis.speak(utterance);
-                resultEl.innerHTML = '<div style="color: var(--neon-cyan);">&#9658; Playing voice...</div>';
-            } else {
-                // Fallback to API call if Speech Synthesis not available
-                try {
-                    const res = await fetch('/api/voice/test', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ voice_id: voiceId, text, speed: parseFloat(speed) })
-                    });
-                    const result = await res.json();
-
-                    if (result.success) {
-                        resultEl.innerHTML = `<div style="color: var(--neon-green);">Voice test completed in ${result.duration_ms}ms (audio not available in this browser)</div>`;
-                    } else {
-                        resultEl.innerHTML = `<div style="color: var(--neon-orange);">Test failed: ${result.message}</div>`;
-                    }
-                } catch (e) {
-                    resultEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
-                }
+            } catch (e) {
+                resultEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
             }
         }
 
