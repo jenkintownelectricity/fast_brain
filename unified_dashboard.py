@@ -702,21 +702,31 @@ def test_voice():
 
     # Edge TTS - Free Microsoft voices
     if provider == 'edge_tts' or voice_id.startswith('en-'):
+        # Ensure text is not empty
+        if not text or len(text.strip()) == 0:
+            text = "Hello! This is a voice test."
+
         try:
             import edge_tts
+            import tempfile
 
             async def generate_edge_audio():
                 communicate = edge_tts.Communicate(text, voice_id)
-                audio_data = b""
-                async for chunk in communicate.stream():
-                    if chunk["type"] == "audio":
-                        audio_data += chunk["data"]
+                # Use temp file approach for reliability
+                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp:
+                    tmp_path = tmp.name
+                await communicate.save(tmp_path)
+                with open(tmp_path, 'rb') as f:
+                    audio_data = f.read()
+                os.unlink(tmp_path)
                 return audio_data
 
             audio_bytes = asyncio.run(generate_edge_audio())
-            duration_ms = int((time.time() - start_time) * 1000)
 
-            # Return base64 encoded audio
+            if not audio_bytes:
+                raise Exception("No audio generated")
+
+            duration_ms = int((time.time() - start_time) * 1000)
             audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
 
             add_activity(f"Voice test: {voice_id} ({duration_ms}ms)", "")
@@ -760,20 +770,31 @@ def test_voice():
         # Use Edge TTS as fallback (Kokoro requires local model files)
         edge_voice = kokoro_to_edge.get(voice_id, 'en-US-JennyNeural')
 
+        # Ensure text is not empty
+        if not text or len(text.strip()) == 0:
+            text = "Hello! This is a voice test."
+
         try:
             import edge_tts
+            import tempfile
 
             async def generate_edge_audio():
                 communicate = edge_tts.Communicate(text, edge_voice)
-                audio_data = b""
-                async for chunk in communicate.stream():
-                    if chunk["type"] == "audio":
-                        audio_data += chunk["data"]
+                # Use a temp file approach which is more reliable
+                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp:
+                    tmp_path = tmp.name
+                await communicate.save(tmp_path)
+                with open(tmp_path, 'rb') as f:
+                    audio_data = f.read()
+                os.unlink(tmp_path)
                 return audio_data
 
             audio_bytes = asyncio.run(generate_edge_audio())
-            duration_ms = int((time.time() - start_time) * 1000)
 
+            if not audio_bytes:
+                raise Exception("No audio generated")
+
+            duration_ms = int((time.time() - start_time) * 1000)
             audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
 
             add_activity(f"Voice test: {voice_id} -> {edge_voice} ({duration_ms}ms)", "")
