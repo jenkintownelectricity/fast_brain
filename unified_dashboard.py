@@ -44,8 +44,8 @@ ACTIVITY_LOG = []
 
 # Voice configuration and platform connections
 VOICE_CONFIG = {
-    "selected_voice": "chatterbox_default",
-    "selected_provider": "chatterbox",
+    "selected_voice": "en-US-JennyNeural",
+    "selected_provider": "edge_tts",
     "voice_settings": {
         "speed": 1.0,
         "pitch": 1.0,
@@ -54,6 +54,40 @@ VOICE_CONFIG = {
 }
 
 VOICE_CHOICES = {
+    "edge_tts": {
+        "name": "Edge TTS",
+        "provider": "Microsoft (Free)",
+        "voices": [
+            {"id": "en-US-JennyNeural", "name": "Jenny", "gender": "female", "style": "friendly"},
+            {"id": "en-US-AriaNeural", "name": "Aria", "gender": "female", "style": "professional"},
+            {"id": "en-US-SaraNeural", "name": "Sara", "gender": "female", "style": "warm"},
+            {"id": "en-US-AnaNeural", "name": "Ana", "gender": "female", "style": "youthful"},
+            {"id": "en-US-GuyNeural", "name": "Guy", "gender": "male", "style": "conversational"},
+            {"id": "en-US-DavisNeural", "name": "Davis", "gender": "male", "style": "confident"},
+            {"id": "en-US-TonyNeural", "name": "Tony", "gender": "male", "style": "friendly"},
+            {"id": "en-US-JasonNeural", "name": "Jason", "gender": "male", "style": "neutral"},
+            {"id": "en-GB-SoniaNeural", "name": "Sonia (UK)", "gender": "female", "style": "british"},
+            {"id": "en-GB-RyanNeural", "name": "Ryan (UK)", "gender": "male", "style": "british"},
+            {"id": "en-AU-NatashaNeural", "name": "Natasha (AU)", "gender": "female", "style": "australian"},
+            {"id": "en-AU-WilliamNeural", "name": "William (AU)", "gender": "male", "style": "australian"},
+        ]
+    },
+    "kokoro": {
+        "name": "Kokoro",
+        "provider": "Kokoro TTS (Free)",
+        "voices": [
+            {"id": "af_bella", "name": "Bella", "gender": "female", "style": "american"},
+            {"id": "af_nicole", "name": "Nicole", "gender": "female", "style": "american"},
+            {"id": "af_sarah", "name": "Sarah", "gender": "female", "style": "american"},
+            {"id": "af_sky", "name": "Sky", "gender": "female", "style": "american"},
+            {"id": "am_adam", "name": "Adam", "gender": "male", "style": "american"},
+            {"id": "am_michael", "name": "Michael", "gender": "male", "style": "american"},
+            {"id": "bf_emma", "name": "Emma", "gender": "female", "style": "british"},
+            {"id": "bf_isabella", "name": "Isabella", "gender": "female", "style": "british"},
+            {"id": "bm_george", "name": "George", "gender": "male", "style": "british"},
+            {"id": "bm_lewis", "name": "Lewis", "gender": "male", "style": "british"},
+        ]
+    },
     "chatterbox": {
         "name": "Chatterbox",
         "provider": "Resemble AI",
@@ -653,20 +687,93 @@ def save_voice_config():
 
 @app.route('/api/voice/test', methods=['POST'])
 def test_voice():
-    """Test a voice with sample text."""
-    data = request.json
-    voice_id = data.get('voice_id', 'chatterbox_default')
-    text = data.get('text', 'Hello! This is a test of the voice synthesis system.')
+    """Test a voice with sample text - generates real audio with Edge TTS."""
+    import base64
+    import time
 
-    # Simulated test response
-    add_activity(f"Voice test: {voice_id}", "")
-    return jsonify({
-        "success": True,
-        "voice_id": voice_id,
-        "text": text,
-        "duration_ms": random.randint(800, 2000),
-        "message": f"Voice '{voice_id}' tested successfully"
-    })
+    data = request.json
+    voice_id = data.get('voice_id', 'en-US-JennyNeural')
+    text = data.get('text', 'Hello! This is a test of the voice synthesis system.')
+    provider = data.get('provider', 'edge_tts')
+
+    start_time = time.time()
+
+    # Map voice IDs to gTTS language/accent codes
+    VOICE_TO_GTTS = {
+        # Edge TTS voices -> gTTS (all use 'en' but we track the original)
+        'en-US-JennyNeural': ('en', 'com'),
+        'en-US-AriaNeural': ('en', 'com'),
+        'en-US-GuyNeural': ('en', 'com'),
+        'en-US-DavisNeural': ('en', 'com'),
+        'en-US-SaraNeural': ('en', 'com'),
+        'en-US-AnaNeural': ('en', 'com'),
+        'en-GB-SoniaNeural': ('en', 'co.uk'),
+        'en-GB-RyanNeural': ('en', 'co.uk'),
+        'en-GB-LibbyNeural': ('en', 'co.uk'),
+        'en-AU-NatashaNeural': ('en', 'com.au'),
+        'en-AU-WilliamNeural': ('en', 'com.au'),
+        # Kokoro voices -> gTTS
+        'af_bella': ('en', 'com'),
+        'af_nicole': ('en', 'com'),
+        'af_sarah': ('en', 'com'),
+        'af_sky': ('en', 'com'),
+        'am_adam': ('en', 'com'),
+        'am_michael': ('en', 'com'),
+        'bf_emma': ('en', 'co.uk'),
+        'bf_isabella': ('en', 'co.uk'),
+        'bm_george': ('en', 'co.uk'),
+        'bm_lewis': ('en', 'co.uk'),
+    }
+
+    # Use gTTS for all voices (HTTP-based, works reliably from Modal)
+    # Ensure text is not empty and clean it
+    if not text or len(text.strip()) == 0:
+        text = "Hello! This is a voice test."
+    text = text.strip()[:500]  # Limit length
+
+    try:
+        from gtts import gTTS
+        import io
+
+        # Get language settings for this voice
+        lang, tld = VOICE_TO_GTTS.get(voice_id, ('en', 'com'))
+
+        # Generate audio with gTTS
+        tts = gTTS(text=text, lang=lang, tld=tld)
+        audio_buffer = io.BytesIO()
+        tts.write_to_fp(audio_buffer)
+        audio_bytes = audio_buffer.getvalue()
+
+        if not audio_bytes:
+            raise Exception("No audio generated")
+
+        duration_ms = int((time.time() - start_time) * 1000)
+        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+        # Determine display provider name
+        if voice_id.startswith('af_') or voice_id.startswith('am_') or voice_id.startswith('bf_') or voice_id.startswith('bm_'):
+            display_provider = f"kokoro (via Google TTS)"
+            message = f"Kokoro '{voice_id}' using Google TTS ({tld})"
+        else:
+            display_provider = "google_tts"
+            message = f"Generated audio with Google TTS ({tld})"
+
+        add_activity(f"Voice test: {voice_id} ({duration_ms}ms)", "")
+        return jsonify({
+            "success": True,
+            "voice_id": voice_id,
+            "provider": display_provider,
+            "text": text,
+            "duration_ms": duration_ms,
+            "audio_base64": audio_base64,
+            "audio_format": "audio/mpeg",
+            "message": message
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"TTS failed: {str(e)}"
+        }), 500
 
 
 # =============================================================================
@@ -2765,8 +2872,9 @@ DASHBOARD_HTML = '''
                             <select class="form-select" id="voice-provider" onchange="loadProviderVoices()">
                                 <option value="">Select a provider...</option>
                                 <optgroup label="Free / Open Source">
+                                    <option value="edge_tts">Edge TTS (Microsoft - Free)</option>
+                                    <option value="kokoro">Kokoro (Edge TTS Fallback)</option>
                                     <option value="chatterbox">Chatterbox (Resemble AI)</option>
-                                    <option value="kokoro">Kokoro (Ultra-fast)</option>
                                     <option value="xtts">XTTS-v2 (Coqui AI)</option>
                                     <option value="openvoice">OpenVoice (MyShell)</option>
                                 </optgroup>
@@ -3633,12 +3741,18 @@ pipeline = Pipeline([
                         <div class="form-row">
                             <div class="form-group">
                                 <label class="form-label">Base Voice Provider</label>
-                                <select class="form-select" id="vl-provider">
-                                    <option value="chatterbox">Chatterbox</option>
-                                    <option value="xtts">XTTS-v2 (Coqui)</option>
-                                    <option value="openvoice">OpenVoice</option>
-                                    <option value="elevenlabs">ElevenLabs</option>
-                                    <option value="cartesia">Cartesia</option>
+                                <select class="form-select" id="vl-provider" onchange="loadVLProviderVoices()">
+                                    <optgroup label="Free / Open Source">
+                                        <option value="edge_tts">Edge TTS (Microsoft - Free)</option>
+                                        <option value="kokoro">Kokoro (Edge TTS Fallback)</option>
+                                        <option value="chatterbox">Chatterbox</option>
+                                        <option value="xtts">XTTS-v2 (Coqui)</option>
+                                        <option value="openvoice">OpenVoice</option>
+                                    </optgroup>
+                                    <optgroup label="Paid Services">
+                                        <option value="elevenlabs">ElevenLabs</option>
+                                        <option value="cartesia">Cartesia</option>
+                                    </optgroup>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -4336,9 +4450,9 @@ print("Training complete: adapters/${skillId}")`;
         }
 
         async function testVoice() {
+            const provider = document.getElementById('voice-provider').value;
             const voiceId = document.getElementById('voice-select').value;
-            const text = document.getElementById('voice-test-text').value;
-            const speed = document.getElementById('voice-speed').value;
+            const text = document.getElementById('voice-test-text').value || 'Hello! This is a test of the voice synthesis system.';
             const resultEl = document.getElementById('voice-test-result');
 
             if (!voiceId) {
@@ -4346,61 +4460,34 @@ print("Training complete: adapters/${skillId}")`;
                 return;
             }
 
-            resultEl.innerHTML = '<div style="color: var(--neon-cyan);">Testing voice...</div>';
+            resultEl.innerHTML = '<div style="color: var(--neon-cyan);">Generating audio with Edge TTS...</div>';
 
-            // Use browser Speech Synthesis API for demo playback
-            if ('speechSynthesis' in window) {
-                // Cancel any ongoing speech
-                window.speechSynthesis.cancel();
+            try {
+                const res = await fetch('/api/voice/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ voice_id: voiceId, text, provider })
+                });
+                const result = await res.json();
 
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.rate = parseFloat(speed);
-
-                // Try to find a matching voice
-                const voices = window.speechSynthesis.getVoices();
-                if (voices.length > 0) {
-                    // Pick a voice based on the selected voice characteristics
-                    const voiceName = document.getElementById('voice-select').selectedOptions[0]?.text || '';
-                    if (voiceName.toLowerCase().includes('female')) {
-                        const femaleVoice = voices.find(v => v.name.toLowerCase().includes('female') || v.name.includes('Samantha') || v.name.includes('Victoria'));
-                        if (femaleVoice) utterance.voice = femaleVoice;
-                    } else if (voiceName.toLowerCase().includes('male')) {
-                        const maleVoice = voices.find(v => v.name.toLowerCase().includes('male') || v.name.includes('Daniel') || v.name.includes('Alex'));
-                        if (maleVoice) utterance.voice = maleVoice;
-                    }
+                if (result.success && result.audio_base64) {
+                    // Create audio element and play
+                    const audio = new Audio('data:' + result.audio_format + ';base64,' + result.audio_base64);
+                    audio.onended = () => {
+                        resultEl.innerHTML = `<div style="color: var(--neon-green);">&#9658; Audio played! (${result.duration_ms}ms to generate)</div>`;
+                    };
+                    audio.onerror = (e) => {
+                        resultEl.innerHTML = `<div style="color: var(--neon-orange);">Playback error</div>`;
+                    };
+                    audio.play();
+                    resultEl.innerHTML = `<div style="color: var(--neon-cyan);">&#9658; Playing ${result.provider} audio...</div>`;
+                } else if (result.success) {
+                    resultEl.innerHTML = `<div style="color: var(--neon-green);">Voice test completed in ${result.duration_ms}ms</div>`;
+                } else {
+                    resultEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${result.error || result.message}</div>`;
                 }
-
-                const startTime = Date.now();
-
-                utterance.onend = () => {
-                    const duration = Date.now() - startTime;
-                    resultEl.innerHTML = `<div style="color: var(--neon-green);">&#9658; Voice played successfully (${duration}ms)</div>`;
-                };
-
-                utterance.onerror = (e) => {
-                    resultEl.innerHTML = `<div style="color: var(--neon-orange);">Playback error: ${e.error}</div>`;
-                };
-
-                window.speechSynthesis.speak(utterance);
-                resultEl.innerHTML = '<div style="color: var(--neon-cyan);">&#9658; Playing voice...</div>';
-            } else {
-                // Fallback to API call if Speech Synthesis not available
-                try {
-                    const res = await fetch('/api/voice/test', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ voice_id: voiceId, text, speed: parseFloat(speed) })
-                    });
-                    const result = await res.json();
-
-                    if (result.success) {
-                        resultEl.innerHTML = `<div style="color: var(--neon-green);">Voice test completed in ${result.duration_ms}ms (audio not available in this browser)</div>`;
-                    } else {
-                        resultEl.innerHTML = `<div style="color: var(--neon-orange);">Test failed: ${result.message}</div>`;
-                    }
-                } catch (e) {
-                    resultEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
-                }
+            } catch (e) {
+                resultEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
             }
         }
 
@@ -4868,7 +4955,7 @@ print("Training complete: adapters/${skillId}")`;
             messageEl.innerHTML = '<div style="color: var(--neon-cyan);">Creating skill...</div>';
 
             const knowledge = document.getElementById('new-skill-knowledge').value
-                .split('\n')
+                .split('\\n')
                 .map(s => s.trim())
                 .filter(s => s.length > 0);
 
@@ -5138,6 +5225,35 @@ print("Training complete: adapters/${skillId}")`;
             } catch (e) {
                 console.error('Failed to load voice projects:', e);
             }
+        }
+
+        // Voice Lab - Load provider voices for dropdown
+        function loadVLProviderVoices() {
+            const provider = document.getElementById('vl-provider').value;
+            const voiceSelect = document.getElementById('vl-base-voice');
+            voiceSelect.innerHTML = '<option value="">Select a voice...</option>';
+
+            if (!provider || !voiceProviders[provider]) {
+                // Load providers if not already loaded
+                fetch('/api/voice/providers').then(r => r.json()).then(data => {
+                    voiceProviders = data;
+                    populateVLVoices(provider);
+                });
+                return;
+            }
+            populateVLVoices(provider);
+        }
+
+        function populateVLVoices(provider) {
+            const voiceSelect = document.getElementById('vl-base-voice');
+            if (!voiceProviders[provider]) return;
+
+            voiceProviders[provider].voices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.id;
+                option.textContent = `${voice.name} (${voice.gender}, ${voice.style})`;
+                voiceSelect.appendChild(option);
+            });
         }
 
         async function createVoiceProject() {
