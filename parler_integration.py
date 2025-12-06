@@ -233,9 +233,43 @@ class ParlerTTSModel:
         self.model = ParlerTTSForConditionalGeneration.from_pretrained(model_name).to(device)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.device = device
-        
+
         print(f"Parler-TTS loaded on {device}")
-    
+
+    def _synthesize_internal(
+        self,
+        text: str,
+        description: str,
+        output_format: str = "wav"
+    ) -> bytes:
+        """Internal synthesis method - not exposed as Modal endpoint."""
+        import torch
+        import soundfile as sf
+        import numpy as np
+
+        # Tokenize inputs
+        input_ids = self.tokenizer(description, return_tensors="pt").input_ids.to(self.device)
+        prompt_input_ids = self.tokenizer(text, return_tensors="pt").input_ids.to(self.device)
+
+        # Generate audio
+        with torch.no_grad():
+            generation = self.model.generate(
+                input_ids=input_ids,
+                prompt_input_ids=prompt_input_ids,
+                do_sample=True,
+                temperature=1.0,
+            )
+
+        # Convert to audio
+        audio_arr = generation.cpu().numpy().squeeze()
+
+        # Write to buffer
+        buffer = io.BytesIO()
+        sf.write(buffer, audio_arr, samplerate=self.model.config.sampling_rate, format=output_format.upper())
+        buffer.seek(0)
+
+        return buffer.read()
+
     @modal.method()
     def synthesize(
         self,
@@ -245,41 +279,16 @@ class ParlerTTSModel:
     ) -> bytes:
         """
         Synthesize speech from text with voice description.
-        
+
         Args:
             text: The text to speak
             description: Natural language description of the voice
             output_format: "wav" or "mp3"
-            
+
         Returns:
             Audio bytes
         """
-        import torch
-        import soundfile as sf
-        import numpy as np
-        
-        # Tokenize inputs
-        input_ids = self.tokenizer(description, return_tensors="pt").input_ids.to(self.device)
-        prompt_input_ids = self.tokenizer(text, return_tensors="pt").input_ids.to(self.device)
-        
-        # Generate audio
-        with torch.no_grad():
-            generation = self.model.generate(
-                input_ids=input_ids,
-                prompt_input_ids=prompt_input_ids,
-                do_sample=True,
-                temperature=1.0,
-            )
-        
-        # Convert to audio
-        audio_arr = generation.cpu().numpy().squeeze()
-        
-        # Write to buffer
-        buffer = io.BytesIO()
-        sf.write(buffer, audio_arr, samplerate=self.model.config.sampling_rate, format=output_format.upper())
-        buffer.seek(0)
-        
-        return buffer.read()
+        return self._synthesize_internal(text, description, output_format)
     
     @modal.method()
     def synthesize_with_emotion(
@@ -321,10 +330,10 @@ class ParlerTTSModel:
         
         # Build description
         description = persona.get_description(detected_emotion)
-        
-        # Synthesize
-        audio = self.synthesize(text, description)
-        
+
+        # Synthesize using internal method
+        audio = self._synthesize_internal(text, description)
+
         return audio, description
 
 
