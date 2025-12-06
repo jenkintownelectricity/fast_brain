@@ -22,8 +22,7 @@ image = (
         "flask-cors>=4.0.0",
         "httpx>=0.25.0",  # For Fast Brain API calls
         "requests>=2.31.0",  # HTTP requests
-        "edge-tts>=6.1.0",  # Free Microsoft TTS voices
-        "aiohttp>=3.8.0",  # Required for edge-tts
+        "gTTS>=2.3.0",  # Google TTS (HTTP-based, more reliable)
     )
     .add_local_file("unified_dashboard.py", "/root/unified_dashboard.py")
 )

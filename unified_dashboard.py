@@ -698,144 +698,82 @@ def test_voice():
 
     start_time = time.time()
 
-    # Edge TTS - Free Microsoft voices
-    if provider == 'edge_tts' or voice_id.startswith('en-'):
-        # Ensure text is not empty
-        if not text or len(text.strip()) == 0:
-            text = "Hello! This is a voice test."
+    # Map voice IDs to gTTS language/accent codes
+    VOICE_TO_GTTS = {
+        # Edge TTS voices -> gTTS (all use 'en' but we track the original)
+        'en-US-JennyNeural': ('en', 'com'),
+        'en-US-AriaNeural': ('en', 'com'),
+        'en-US-GuyNeural': ('en', 'com'),
+        'en-US-DavisNeural': ('en', 'com'),
+        'en-US-SaraNeural': ('en', 'com'),
+        'en-US-AnaNeural': ('en', 'com'),
+        'en-GB-SoniaNeural': ('en', 'co.uk'),
+        'en-GB-RyanNeural': ('en', 'co.uk'),
+        'en-GB-LibbyNeural': ('en', 'co.uk'),
+        'en-AU-NatashaNeural': ('en', 'com.au'),
+        'en-AU-WilliamNeural': ('en', 'com.au'),
+        # Kokoro voices -> gTTS
+        'af_bella': ('en', 'com'),
+        'af_nicole': ('en', 'com'),
+        'af_sarah': ('en', 'com'),
+        'af_sky': ('en', 'com'),
+        'am_adam': ('en', 'com'),
+        'am_michael': ('en', 'com'),
+        'bf_emma': ('en', 'co.uk'),
+        'bf_isabella': ('en', 'co.uk'),
+        'bm_george': ('en', 'co.uk'),
+        'bm_lewis': ('en', 'co.uk'),
+    }
 
-        try:
-            import subprocess
-            import tempfile
+    # Use gTTS for all voices (HTTP-based, works reliably from Modal)
+    # Ensure text is not empty and clean it
+    if not text or len(text.strip()) == 0:
+        text = "Hello! This is a voice test."
+    text = text.strip()[:500]  # Limit length
 
-            # Create temp file for output
-            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp:
-                tmp_path = tmp.name
+    try:
+        from gtts import gTTS
+        import io
 
-            # Call edge-tts CLI (more reliable than async in Flask)
-            result = subprocess.run(
-                ['python', '-m', 'edge_tts', '--voice', voice_id, '--text', text, '--write-media', tmp_path],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
+        # Get language settings for this voice
+        lang, tld = VOICE_TO_GTTS.get(voice_id, ('en', 'com'))
 
-            if result.returncode != 0:
-                raise Exception(f"edge-tts failed: {result.stderr}")
+        # Generate audio with gTTS
+        tts = gTTS(text=text, lang=lang, tld=tld)
+        audio_buffer = io.BytesIO()
+        tts.write_to_fp(audio_buffer)
+        audio_bytes = audio_buffer.getvalue()
 
-            # Read the audio file
-            with open(tmp_path, 'rb') as f:
-                audio_bytes = f.read()
-            os.unlink(tmp_path)
+        if not audio_bytes:
+            raise Exception("No audio generated")
 
-            if not audio_bytes:
-                raise Exception("No audio generated")
+        duration_ms = int((time.time() - start_time) * 1000)
+        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
 
-            duration_ms = int((time.time() - start_time) * 1000)
-            audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+        # Determine display provider name
+        if voice_id.startswith('af_') or voice_id.startswith('am_') or voice_id.startswith('bf_') or voice_id.startswith('bm_'):
+            display_provider = f"kokoro (via Google TTS)"
+            message = f"Kokoro '{voice_id}' using Google TTS ({tld})"
+        else:
+            display_provider = "google_tts"
+            message = f"Generated audio with Google TTS ({tld})"
 
-            add_activity(f"Voice test: {voice_id} ({duration_ms}ms)", "")
-            return jsonify({
-                "success": True,
-                "voice_id": voice_id,
-                "provider": "edge_tts",
-                "text": text,
-                "duration_ms": duration_ms,
-                "audio_base64": audio_base64,
-                "audio_format": "audio/mpeg",
-                "message": f"Generated audio with Edge TTS voice '{voice_id}'"
-            })
-        except subprocess.TimeoutExpired:
-            return jsonify({
-                "success": False,
-                "error": "Edge TTS timeout - try shorter text"
-            }), 500
-        except Exception as e:
-            return jsonify({
-                "success": False,
-                "error": str(e)
-            }), 500
-
-    # Kokoro TTS - Falls back to Edge TTS on Modal (no local models)
-    elif provider == 'kokoro' or voice_id.startswith('af_') or voice_id.startswith('am_') or voice_id.startswith('bf_') or voice_id.startswith('bm_'):
-        # Map Kokoro voices to Edge TTS equivalents
-        kokoro_to_edge = {
-            'af_bella': 'en-US-JennyNeural',
-            'af_nicole': 'en-US-AriaNeural',
-            'af_sarah': 'en-US-SaraNeural',
-            'af_sky': 'en-US-AnaNeural',
-            'am_adam': 'en-US-GuyNeural',
-            'am_michael': 'en-US-DavisNeural',
-            'bf_emma': 'en-GB-SoniaNeural',
-            'bf_isabella': 'en-GB-SoniaNeural',
-            'bm_george': 'en-GB-RyanNeural',
-            'bm_lewis': 'en-GB-RyanNeural',
-        }
-
-        # Use Edge TTS as fallback (Kokoro requires local model files)
-        edge_voice = kokoro_to_edge.get(voice_id, 'en-US-JennyNeural')
-
-        # Ensure text is not empty
-        if not text or len(text.strip()) == 0:
-            text = "Hello! This is a voice test."
-
-        try:
-            import subprocess
-            import tempfile
-
-            # Use subprocess to avoid async issues in Flask context
-            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp:
-                tmp_path = tmp.name
-
-            result = subprocess.run(
-                ['python', '-m', 'edge_tts', '--voice', edge_voice, '--text', text, '--write-media', tmp_path],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-
-            if result.returncode != 0:
-                raise Exception(f"edge-tts failed: {result.stderr}")
-
-            with open(tmp_path, 'rb') as f:
-                audio_bytes = f.read()
-            os.unlink(tmp_path)
-
-            if not audio_bytes or len(audio_bytes) == 0:
-                raise Exception("No audio generated")
-
-            duration_ms = int((time.time() - start_time) * 1000)
-            audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
-
-            add_activity(f"Voice test: {voice_id} -> {edge_voice} ({duration_ms}ms)", "")
-            return jsonify({
-                "success": True,
-                "voice_id": voice_id,
-                "provider": "kokoro (via Edge TTS)",
-                "text": text,
-                "duration_ms": duration_ms,
-                "audio_base64": audio_base64,
-                "audio_format": "audio/mpeg",
-                "message": f"Kokoro '{voice_id}' mapped to Edge TTS '{edge_voice}' (cloud fallback)"
-            })
-        except Exception as e:
-            return jsonify({
-                "success": False,
-                "error": f"Kokoro fallback failed: {str(e)}"
-            }), 500
-
-    # Fallback for other providers (simulated)
-    else:
-        add_activity(f"Voice test (simulated): {voice_id}", "")
+        add_activity(f"Voice test: {voice_id} ({duration_ms}ms)", "")
         return jsonify({
             "success": True,
             "voice_id": voice_id,
-            "provider": provider,
+            "provider": display_provider,
             "text": text,
-            "duration_ms": random.randint(800, 2000),
-            "audio_base64": None,
-            "message": f"Voice '{voice_id}' tested (simulated - provider not configured)"
+            "duration_ms": duration_ms,
+            "audio_base64": audio_base64,
+            "audio_format": "audio/mpeg",
+            "message": message
         })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"TTS failed: {str(e)}"
+        }), 500
 
 
 # =============================================================================
