@@ -3759,12 +3759,18 @@ pipeline = Pipeline([
                         <div class="form-row">
                             <div class="form-group">
                                 <label class="form-label">Base Voice Provider</label>
-                                <select class="form-select" id="vl-provider">
-                                    <option value="chatterbox">Chatterbox</option>
-                                    <option value="xtts">XTTS-v2 (Coqui)</option>
-                                    <option value="openvoice">OpenVoice</option>
-                                    <option value="elevenlabs">ElevenLabs</option>
-                                    <option value="cartesia">Cartesia</option>
+                                <select class="form-select" id="vl-provider" onchange="loadVLProviderVoices()">
+                                    <optgroup label="Free / Open Source">
+                                        <option value="edge_tts">Edge TTS (Microsoft - Free)</option>
+                                        <option value="kokoro">Kokoro (Ultra-fast Local)</option>
+                                        <option value="chatterbox">Chatterbox</option>
+                                        <option value="xtts">XTTS-v2 (Coqui)</option>
+                                        <option value="openvoice">OpenVoice</option>
+                                    </optgroup>
+                                    <optgroup label="Paid Services">
+                                        <option value="elevenlabs">ElevenLabs</option>
+                                        <option value="cartesia">Cartesia</option>
+                                    </optgroup>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -5264,6 +5270,35 @@ print("Training complete: adapters/${skillId}")`;
             } catch (e) {
                 console.error('Failed to load voice projects:', e);
             }
+        }
+
+        // Voice Lab - Load provider voices for dropdown
+        function loadVLProviderVoices() {
+            const provider = document.getElementById('vl-provider').value;
+            const voiceSelect = document.getElementById('vl-base-voice');
+            voiceSelect.innerHTML = '<option value="">Select a voice...</option>';
+
+            if (!provider || !voiceProviders[provider]) {
+                // Load providers if not already loaded
+                fetch('/api/voice/providers').then(r => r.json()).then(data => {
+                    voiceProviders = data;
+                    populateVLVoices(provider);
+                });
+                return;
+            }
+            populateVLVoices(provider);
+        }
+
+        function populateVLVoices(provider) {
+            const voiceSelect = document.getElementById('vl-base-voice');
+            if (!voiceProviders[provider]) return;
+
+            voiceProviders[provider].voices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.id;
+                option.textContent = `${voice.name} (${voice.gender}, ${voice.style})`;
+                voiceSelect.appendChild(option);
+            });
         }
 
         async function createVoiceProject() {
