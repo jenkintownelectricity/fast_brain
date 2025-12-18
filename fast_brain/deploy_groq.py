@@ -209,6 +209,7 @@ VOICE_CONTEXTS = {
 BUILT_IN_SKILLS = {
     "general": {
         "name": "General Assistant",
+        "description": "General-purpose voice assistant",
         "system_prompt": f"""You are a helpful voice assistant. Be conversational and natural.
 
 For simple questions (greetings, basic info, scheduling), answer directly.
@@ -217,10 +218,12 @@ For complex questions (analysis, calculations, detailed advice), use the ask_exp
 {VOICE_RULES}""",
         "greeting": "Hey there! How can I help you today?",
         "voice": VOICE_CONTEXTS["default"],
+        "version": "1.0",
     },
 
     "receptionist": {
         "name": "Professional Receptionist",
+        "description": "Business receptionist for call handling",
         "system_prompt": f"""You are a professional receptionist. Your job is to:
 - Answer calls warmly and professionally
 - Collect caller's name and reason for calling
@@ -232,10 +235,12 @@ For complex questions about billing, technical issues, or detailed analysis, use
 {VOICE_RULES}""",
         "greeting": "Thanks for calling! How can I help you today?",
         "voice": VOICE_CONTEXTS["greeting"],
+        "version": "1.0",
     },
 
     "electrician": {
         "name": "Electrician Service Intake",
+        "description": "Intake specialist for electrical service companies",
         "system_prompt": f"""You are Sparky, a friendly receptionist for an electrical contracting company.
 
 HANDLE DIRECTLY (System 1):
@@ -260,10 +265,12 @@ IMPORTANT:
 {VOICE_RULES}""",
         "greeting": "Thanks for calling! Are you having an electrical issue I can help with?",
         "voice": "A friendly, professional female voice. Clear and efficient.",
+        "version": "1.0",
     },
 
     "plumber": {
         "name": "Plumber Service Intake",
+        "description": "Intake specialist for plumbing companies",
         "system_prompt": f"""You are a receptionist for a plumbing company.
 
 HANDLE DIRECTLY (System 1):
@@ -284,10 +291,12 @@ For emergencies, get their info FAST.
 {VOICE_RULES}""",
         "greeting": "Thanks for calling! Do you have a plumbing issue I can help with?",
         "voice": "A friendly, down-to-earth male voice. Conversational.",
+        "version": "1.0",
     },
 
     "lawyer": {
         "name": "Legal Intake Specialist",
+        "description": "Intake specialist for law firms",
         "system_prompt": f"""You are an intake specialist for a law firm.
 
 HANDLE DIRECTLY (System 1):
@@ -308,10 +317,12 @@ Always say "I can't give legal advice, but let me check with our team" and use a
 {VOICE_RULES}""",
         "greeting": "Thanks for calling the law office. How can I help you today?",
         "voice": "A calm, professional female voice with gravitas.",
+        "version": "1.0",
     },
 
     "solar": {
         "name": "Solar Company Receptionist",
+        "description": "Receptionist for solar installation companies",
         "system_prompt": f"""You are a receptionist for a solar installation company.
 
 HANDLE DIRECTLY (System 1):
@@ -330,18 +341,119 @@ USE ask_expert TOOL FOR (System 2):
 {VOICE_RULES}""",
         "greeting": "Thanks for calling! Are you interested in solar for your home?",
         "voice": "A bright, enthusiastic voice. Energetic.",
+        "version": "1.0",
+    },
+
+    "default": {
+        "name": "Default Assistant",
+        "description": "General-purpose voice assistant",
+        "system_prompt": f"""You are a helpful, friendly voice assistant.
+
+Guidelines:
+- Keep responses concise and conversational (1-2 sentences when possible)
+- Be natural and engaging, like talking to a friend
+- Ask clarifying questions when needed
+- If you don't know something, say so honestly
+- Match the user's energy and communication style
+
+{VOICE_RULES}""",
+        "greeting": "Hello! How can I help you today?",
+        "voice": VOICE_CONTEXTS["default"],
+        "version": "1.0",
+    },
+
+    "tara-sales": {
+        "name": "Tara's Sales Assistant",
+        "description": "Sales assistant for TheDashTool demos",
+        "system_prompt": """You are Tara, the founder of The Dash (TheDashTool.com). You're a workflow optimization expert who has helped nearly 200 companies improve their operational efficiency since 2015.
+
+## Your Personality
+- Warm, friendly, and genuinely curious about businesses
+- Confident but not pushy - you ask questions and listen
+- You speak conversationally, not like a salesperson reading a script
+- You understand the pain of data chaos because you've seen it hundreds of times
+- You're enthusiastic about helping businesses get clarity
+
+## About The Dash
+The Dash is a complete BI dashboard service (not just software) that:
+- Connects ALL your business tools into one unified dashboard
+- Provides AI-powered insights that anticipate what's next
+- Is fully custom-built for each business - no one-size-fits-all
+- Does all the technical work FOR the client
+
+## Key Differentiators
+1. "We do the work FOR you" - Unlike other tools, clients don't figure things out themselves
+2. "Built to grow with you" - Ongoing support, dashboards evolve with the business
+3. "We understand business, not just technology" - We speak their language
+4. "No data science degree required" - Clarity without complexity
+
+## The Process
+1. Map Your Business - Learn goals, team, tools, what matters most
+2. Connect Your Tools - CRM, accounting, project management, marketing, ticketing - everything
+3. Design Your Dashboards - Custom metrics, uncover what's missing, visualize the gaps
+4. AI Insights - Anticipate patterns, predict risks, highlight opportunities
+
+## Pricing Approach
+- Don't quote specific prices (pricing is custom based on complexity)
+- If asked, say: "Pricing depends on how many tools you're connecting and the complexity of your dashboards. The best way to get a clear picture is to book a quick demo where we can learn about your specific situation."
+
+## Your Goal
+Help prospects understand how The Dash can give them clarity, and guide them to book a free demo.
+
+## Demo Booking
+When interested, say: "That's great! The easiest next step is to book a free demo. You can do that at thedashtool.com, or I can have someone from the team reach out to you directly. Which would you prefer?"
+
+## Handling Objections
+- "We already use [tool]": "That's actually perfect - The Dash connects TO those tools. We don't replace them, we unify them."
+- "We don't have time": "That's exactly why we do the work for you. Our team handles all the setup."
+- "We're too small": "We work with businesses of all sizes. Getting clarity early helps you scale smarter."
+- "It sounds expensive": "I understand. That's why we do a free demo first - so you can see exactly what you'd get."
+
+## Response Style
+- Keep responses conversational and concise (2-3 sentences usually)
+- Ask follow-up questions to understand their situation
+- Use "you" and "your business" - make it personal
+- Avoid jargon - speak plainly
+- Sound like you're having a friendly conversation, not giving a presentation
+- Use contractions (I'm, you're, we'll, don't, can't)
+- Keep sentences under 20 words
+- No markdown, bullets, numbered lists, or formatting
+- No emojis or special characters""",
+        "greeting": "Hey there! I'm Tara from The Dash. What kind of business are you running?",
+        "voice": "A warm, friendly female voice. Confident and conversational, like talking to a trusted advisor.",
+        "version": "1.0",
+        "knowledge": [
+            "TheDashTool.com is the website. Email is info@thedashtool.com",
+            "Tara Horn is the founder and workflow optimization expert since 2015",
+            "The Dash has helped nearly 200 companies improve operational efficiency",
+            "Industries served: Finance & Banking, Healthcare, Retail, Manufacturing, Professional Services",
+            "The Dash integrates with: CRM systems, accounting software, project management tools, marketing platforms, ticketing systems",
+            "Demo booking: Free demo available at thedashtool.com or by phone",
+            "Operating hours: Mon-Fri 9:00AM - 5:00PM, Sat-Sun 10:00AM - 6:00PM",
+            "YouTube channel: youtube.com/@thedashtool"
+        ],
     },
 }
 
+# Runtime skill storage (populated via POST /v1/skills API)
+RUNTIME_SKILLS = {}
+
 
 def get_skill(skill_id: str) -> dict:
-    """Get skill by ID with fallback to general."""
-    return BUILT_IN_SKILLS.get(skill_id, BUILT_IN_SKILLS["general"])
+    """Get skill by ID with fallback to default."""
+    # Check runtime skills first (allows overriding built-in)
+    if skill_id in RUNTIME_SKILLS:
+        return RUNTIME_SKILLS[skill_id]
+    # Then check built-in skills
+    if skill_id in BUILT_IN_SKILLS:
+        return BUILT_IN_SKILLS[skill_id]
+    # Fallback to default
+    return BUILT_IN_SKILLS.get("default", BUILT_IN_SKILLS["general"])
 
 
 def list_skills() -> list[str]:
-    """List all skill IDs."""
-    return list(BUILT_IN_SKILLS.keys())
+    """List all skill IDs (built-in + runtime)."""
+    return list(BUILT_IN_SKILLS.keys()) + list(RUNTIME_SKILLS.keys())
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -725,7 +837,9 @@ IMPORTANT FOR VOICE:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+import uuid
+import time
 
 web_app = FastAPI(
     title="Fast Brain LPU",
@@ -734,19 +848,71 @@ web_app = FastAPI(
 )
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# REQUEST/RESPONSE MODELS (OpenAI-Compatible)
+# ═══════════════════════════════════════════════════════════════════════════════
+
 class ChatRequest(BaseModel):
+    """OpenAI-compatible chat request with skill extension."""
     messages: list[dict]
-    skill: str = "general"
-    user_context: Optional[dict] = None
+    skill: str = "default"  # Fast Brain extension
+    model: Optional[str] = None  # Ignored, but accepted for compatibility
+    max_tokens: int = 256
+    temperature: float = 0.7
+    user_profile: Optional[str] = None  # Optional business context
+    user_context: Optional[dict] = None  # Legacy support
 
 
-class ChatResponse(BaseModel):
+class OpenAIMessage(BaseModel):
+    role: str
     content: str
-    skill: str
-    model: str
-    system: str
-    latency_ms: int
-    usage: Optional[dict] = None
+
+
+class OpenAIChoice(BaseModel):
+    index: int = 0
+    message: OpenAIMessage
+    finish_reason: str = "stop"
+
+
+class OpenAIUsage(BaseModel):
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+
+class MetricsExtension(BaseModel):
+    """Fast Brain-specific performance metrics."""
+    ttfb_ms: int
+    tokens_per_sec: Optional[float] = None
+
+
+class OpenAIChatResponse(BaseModel):
+    """OpenAI-compatible chat completion response."""
+    id: str = Field(default_factory=lambda: f"chatcmpl-{uuid.uuid4().hex[:12]}")
+    object: str = "chat.completion"
+    created: int = Field(default_factory=lambda: int(time.time()))
+    choices: list[OpenAIChoice]
+    usage: OpenAIUsage
+    skill_used: str  # Fast Brain extension
+    metrics: Optional[MetricsExtension] = None  # Fast Brain extension
+
+
+class SkillRequest(BaseModel):
+    """Request to create a new skill."""
+    skill_id: str
+    name: str
+    description: str
+    system_prompt: str
+    knowledge: list[str] = []
+    greeting: Optional[str] = None
+    voice: Optional[str] = None
+
+
+class SkillResponse(BaseModel):
+    """Response for skill operations."""
+    success: bool
+    skill_id: str
+    message: str
 
 
 class HybridChatResponse(BaseModel):
@@ -774,37 +940,113 @@ class VoiceChatResponse(BaseModel):
     total_latency_ms: int
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# HEALTH CHECK ENDPOINT
+# ═══════════════════════════════════════════════════════════════════════════════
+
 @web_app.get("/health")
 async def health():
-    """Health check showing hybrid architecture status."""
-    brain = FastBrain()
-    return brain.health_check.remote()
+    """
+    Health check endpoint (HIVE215-compatible format).
 
+    Returns:
+        status: "healthy"
+        backend: Model identifier
+        skills_available: List of skill IDs
+        version: API version
+    """
+    all_skills = list(BUILT_IN_SKILLS.keys()) + list(RUNTIME_SKILLS.keys())
+    return {
+        "status": "healthy",
+        "backend": f"groq-{FAST_MODEL}",
+        "skills_available": all_skills,
+        "version": "1.0.0",
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SKILLS ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @web_app.get("/v1/skills")
 async def get_all_skills():
-    """List all available skills."""
-    return {
-        "skills": [
-            {"id": k, "name": v["name"]}
-            for k, v in BUILT_IN_SKILLS.items()
-        ],
-        "count": len(BUILT_IN_SKILLS),
+    """
+    List all available skills (HIVE215-compatible).
+
+    Returns skills with id, name, description, and version.
+    """
+    skills = []
+
+    # Add built-in skills
+    for skill_id, skill in BUILT_IN_SKILLS.items():
+        skills.append({
+            "id": skill_id,
+            "name": skill.get("name", skill_id),
+            "description": skill.get("description", ""),
+            "version": skill.get("version", "1.0"),
+        })
+
+    # Add runtime skills
+    for skill_id, skill in RUNTIME_SKILLS.items():
+        skills.append({
+            "id": skill_id,
+            "name": skill.get("name", skill_id),
+            "description": skill.get("description", ""),
+            "version": skill.get("version", "1.0"),
+        })
+
+    return {"skills": skills}
+
+
+@web_app.post("/v1/skills")
+async def create_skill(request: SkillRequest):
+    """
+    Create a new skill dynamically.
+
+    This allows HIVE215 to register custom skills at runtime.
+    """
+    # Build knowledge section if provided
+    knowledge_text = ""
+    if request.knowledge:
+        knowledge_text = "\n\n## Quick Reference\n" + "\n".join(f"- {k}" for k in request.knowledge)
+
+    # Create the skill
+    skill = {
+        "name": request.name,
+        "description": request.description,
+        "system_prompt": request.system_prompt + knowledge_text,
+        "greeting": request.greeting or f"Hello! I'm {request.name}. How can I help?",
+        "voice": request.voice or VOICE_CONTEXTS["default"],
+        "version": "1.0",
+        "knowledge": request.knowledge,
     }
+
+    # Store in runtime skills
+    RUNTIME_SKILLS[request.skill_id] = skill
+
+    return SkillResponse(
+        success=True,
+        skill_id=request.skill_id,
+        message="Skill created successfully"
+    )
 
 
 @web_app.get("/v1/skills/{skill_id}")
 async def get_skill_detail(skill_id: str):
     """Get details for a specific skill."""
-    if skill_id not in BUILT_IN_SKILLS:
+    # Check both built-in and runtime skills
+    skill = BUILT_IN_SKILLS.get(skill_id) or RUNTIME_SKILLS.get(skill_id)
+
+    if not skill:
         raise HTTPException(404, f"Skill '{skill_id}' not found")
 
-    skill = BUILT_IN_SKILLS[skill_id]
     return {
         "id": skill_id,
-        "name": skill["name"],
-        "greeting": skill["greeting"],
+        "name": skill.get("name", skill_id),
+        "description": skill.get("description", ""),
+        "greeting": skill.get("greeting", "Hello!"),
         "voice": skill.get("voice", VOICE_CONTEXTS["default"]),
+        "version": skill.get("version", "1.0"),
     }
 
 
@@ -815,14 +1057,84 @@ async def get_greeting(skill_id: str):
     return brain.get_greeting.remote(skill_id)
 
 
-@web_app.post("/v1/chat/completions", response_model=ChatResponse)
+# ═══════════════════════════════════════════════════════════════════════════════
+# CHAT COMPLETIONS ENDPOINT (OpenAI-Compatible)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def get_all_skills_dict() -> dict:
+    """Get combined built-in and runtime skills."""
+    combined = dict(BUILT_IN_SKILLS)
+    combined.update(RUNTIME_SKILLS)
+    return combined
+
+
+@web_app.post("/v1/chat/completions", response_model=OpenAIChatResponse)
 async def chat_completion(request: ChatRequest):
-    """Standard System 1 only chat (backwards compatible)."""
+    """
+    OpenAI-compatible chat completions endpoint.
+
+    Accepts standard OpenAI format plus:
+    - skill: Selects which system prompt to use
+    - user_profile: Optional business context
+
+    Returns OpenAI-compatible response with:
+    - skill_used: Which skill handled the request
+    - metrics: Performance metrics (ttfb_ms, tokens_per_sec)
+    """
+    import time as time_module
+    start_time = time_module.perf_counter()
+
     brain = FastBrain()
-    return brain.think.remote(
+
+    # Build user context from profile if provided
+    user_context = request.user_context or {}
+    if request.user_profile:
+        user_context["profile"] = request.user_profile
+
+    # Get the skill (check runtime skills first, then built-in)
+    skill_id = request.skill
+    all_skills = get_all_skills_dict()
+    if skill_id not in all_skills:
+        skill_id = "default"  # Fallback to default
+
+    # Call the brain
+    result = brain.think.remote(
         messages=request.messages,
-        skill=request.skill,
-        user_context=request.user_context,
+        skill=skill_id,
+        user_context=user_context if user_context else None,
+    )
+
+    # Calculate metrics
+    total_time_ms = int((time_module.perf_counter() - start_time) * 1000)
+    ttfb_ms = result.get("latency_ms", total_time_ms)
+
+    # Estimate tokens per second
+    usage = result.get("usage", {})
+    completion_tokens = usage.get("completion_tokens", 0)
+    tokens_per_sec = None
+    if completion_tokens > 0 and ttfb_ms > 0:
+        tokens_per_sec = round((completion_tokens / ttfb_ms) * 1000, 1)
+
+    # Build OpenAI-compatible response
+    return OpenAIChatResponse(
+        choices=[
+            OpenAIChoice(
+                message=OpenAIMessage(
+                    role="assistant",
+                    content=result["content"]
+                )
+            )
+        ],
+        usage=OpenAIUsage(
+            prompt_tokens=usage.get("prompt_tokens", 0),
+            completion_tokens=usage.get("completion_tokens", 0),
+            total_tokens=usage.get("prompt_tokens", 0) + usage.get("completion_tokens", 0),
+        ),
+        skill_used=skill_id,
+        metrics=MetricsExtension(
+            ttfb_ms=ttfb_ms,
+            tokens_per_sec=tokens_per_sec,
+        ),
     )
 
 
