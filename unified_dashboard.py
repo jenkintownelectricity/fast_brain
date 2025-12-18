@@ -2471,24 +2471,37 @@ def test_voice_project_endpoint(project_id):
             # Use free TTS for testing (gTTS fallback)
             audio_data = _synthesize_edge_tts(project.get('base_voice', 'en-US-JennyNeural'), text)
 
-        if audio_data:
+        if audio_data and len(audio_data) > 100:
             # Save to temporary file and return URL
             audio_filename = f"test_{project_id}_{datetime.now().strftime('%H%M%S')}.mp3"
             audio_path = VOICE_SAMPLES_DIR / audio_filename
             with open(audio_path, 'wb') as f:
                 f.write(audio_data)
+
+            # Verify file was written
+            if not audio_path.exists() or audio_path.stat().st_size < 100:
+                return jsonify({
+                    "success": False,
+                    "error": "Audio file could not be saved. Check server logs."
+                }), 500
+
             audio_url = f"/api/voice-lab/audio/{audio_filename}"
+            audio_size = len(audio_data)
 
             add_activity(f"Voice test: {project['name']}", "", "voice")
+
+            # Estimate duration: MP3 at ~128kbps = ~16KB per second
+            estimated_duration_ms = int((audio_size / 16000) * 1000)
 
             return jsonify({
                 "success": True,
                 "project_id": project_id,
                 "text": text,
-                "duration_ms": len(text) * 80,
+                "duration_ms": estimated_duration_ms,
+                "audio_size_bytes": audio_size,
                 "audio_url": audio_url,
                 "provider": provider,
-                "message": f"Voice '{project['name']}' synthesized successfully"
+                "message": f"Voice '{project['name']}' synthesized successfully ({audio_size:,} bytes)"
             })
         else:
             # No audio generated
@@ -2564,23 +2577,52 @@ def _synthesize_edge_tts(voice, text):
         from gtts import gTTS
         import io
 
-        tts = gTTS(text=text, lang='en')
+        # Ensure text is valid
+        if not text or not text.strip():
+            print("gTTS error: Empty text provided")
+            return None
+
+        clean_text = text.strip()[:500]  # Limit length to avoid issues
+        print(f"gTTS: Synthesizing {len(clean_text)} chars...")
+
+        tts = gTTS(text=clean_text, lang='en')
         audio_buffer = io.BytesIO()
         tts.write_to_fp(audio_buffer)
-        audio_buffer.seek(0)
-        return audio_buffer.read()
+        audio_bytes = audio_buffer.getvalue()
+
+        # Validate we got audio data
+        if not audio_bytes or len(audio_bytes) < 100:
+            print(f"gTTS error: Audio too short ({len(audio_bytes) if audio_bytes else 0} bytes)")
+            return None
+
+        print(f"gTTS: Generated {len(audio_bytes)} bytes of audio")
+        return audio_bytes
     except Exception as e:
         print(f"gTTS error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
 @app.route('/api/voice-lab/audio/<filename>')
 def serve_voice_audio(filename):
     """Serve generated voice audio files."""
-    file_path = VOICE_SAMPLES_DIR / filename
-    if file_path.exists():
-        return send_file(str(file_path), mimetype='audio/mpeg')
-    return jsonify({"error": "File not found"}), 404
+    # Security: sanitize filename to prevent path traversal
+    safe_filename = filename.replace('..', '').replace('/', '').replace('\\', '')
+    file_path = VOICE_SAMPLES_DIR / safe_filename
+
+    if file_path.exists() and file_path.stat().st_size > 0:
+        response = send_file(
+            str(file_path),
+            mimetype='audio/mpeg',
+            as_attachment=False
+        )
+        # Add headers for audio streaming
+        response.headers['Accept-Ranges'] = 'bytes'
+        response.headers['Cache-Control'] = 'no-cache'
+        return response
+
+    return jsonify({"error": "File not found or empty"}), 404
 
 
 @app.route('/api/voice-lab/training-status')
@@ -8088,10 +8130,28 @@ print("Training complete! Adapter saved to adapters/${skill}")
                 if (result.success && result.audio_url) {
                     const audioPlayer = document.getElementById('vl-edit-audio-player');
                     const audio = document.getElementById('vl-edit-audio');
+
+                    // Clear old handlers
+                    audio.oncanplaythrough = null;
+                    audio.onerror = null;
+
+                    // Set up new handlers before loading
+                    audio.oncanplaythrough = function() {
+                        audio.play().catch(e => {
+                            showEditMessage('Playback blocked. Click the audio player to play.', 'info');
+                        });
+                    };
+                    audio.onerror = function() {
+                        showEditMessage('Audio failed to load. Try again.', 'error');
+                    };
+
+                    // Set source and load
                     audio.src = result.audio_url;
+                    audio.load();
                     audioPlayer.style.display = 'block';
-                    audio.play();
-                    showEditMessage(result.message || 'Audio generated!', 'success');
+
+                    const sizeInfo = result.audio_size_bytes ? ` (${(result.audio_size_bytes / 1024).toFixed(1)} KB)` : '';
+                    showEditMessage((result.message || 'Audio generated!') + sizeInfo, 'success');
                 } else {
                     showEditMessage(result.error || 'Could not generate audio', 'error');
                 }

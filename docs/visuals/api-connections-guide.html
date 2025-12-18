@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Outgoing API Connections Guide | HIVE215</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #e6edf3;
+            line-height: 1.6;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 40px;
+            text-align: center;
+            border-bottom: 1px solid #30363d;
+        }
+        .date-badge {
+            display: inline-block;
+            background: rgba(255, 0, 136, 0.15);
+            color: #ff0088;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+            font-family: monospace;
+        }
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #ff0088, #00d9ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #8b949e;
+            font-size: 1.1rem;
+        }
+        .nav {
+            background: #161b22;
+            padding: 16px 40px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+        .nav a {
+            color: #8b949e;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+        .nav a:hover, .nav a.active {
+            color: #ff0088;
+        }
+        .content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+        .section {
+            margin-bottom: 60px;
+        }
+        .section-title {
+            font-size: 1.8rem;
+            color: #ff0088;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 28px;
+            background: linear-gradient(180deg, #ff0088, #00d9ff);
+            border-radius: 2px;
+        }
+
+        /* Use Case Cards */
+        .use-cases {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+        .use-case {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.3s;
+        }
+        .use-case:hover {
+            border-color: #ff0088;
+            transform: translateY(-4px);
+        }
+        .use-case-icon {
+            font-size: 2rem;
+            margin-bottom: 16px;
+        }
+        .use-case-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .use-case-desc {
+            color: #8b949e;
+            font-size: 0.9rem;
+        }
+
+        /* Auth Types */
+        .auth-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 24px;
+        }
+        .auth-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .auth-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .auth-name {
+            font-weight: 600;
+            color: #00d9ff;
+        }
+        .auth-example {
+            background: #21262d;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+            font-size: 0.8rem;
+            color: #8b949e;
+            overflow-x: auto;
+        }
+
+        /* Quick Start */
+        .quick-start {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 24px;
+        }
+        .quick-start h4 {
+            color: #00d9ff;
+            margin-bottom: 16px;
+        }
+        .quick-start ol {
+            margin-left: 24px;
+        }
+        .quick-start li {
+            margin-bottom: 12px;
+            color: #8b949e;
+        }
+        .quick-start li strong {
+            color: #fff;
+        }
+
+        /* Code Block */
+        code {
+            background: #21262d;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+            font-size: 0.85rem;
+            color: #ff7b72;
+        }
+        pre {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+            overflow-x: auto;
+            margin: 16px 0;
+        }
+        pre code {
+            background: none;
+            padding: 0;
+            color: #8b949e;
+        }
+        .code-comment {
+            color: #6e7681;
+        }
+        .code-key {
+            color: #ff7b72;
+        }
+        .code-string {
+            color: #a5d6ff;
+        }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #30363d;
+        }
+        th {
+            background: #161b22;
+            color: #00d9ff;
+            font-weight: 600;
+        }
+        td {
+            color: #8b949e;
+        }
+
+        /* Status Indicators */
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+        }
+        .status-connected {
+            background: rgba(0, 255, 136, 0.15);
+            color: #00ff88;
+        }
+        .status-error {
+            background: rgba(255, 0, 0, 0.15);
+            color: #ff4444;
+        }
+        .status-unknown {
+            background: rgba(255, 255, 255, 0.1);
+            color: #8b949e;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px;
+            color: #8b949e;
+            border-top: 1px solid #30363d;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="date-badge">API Integration Guide</div>
+        <h1>Outgoing API Connections</h1>
+        <p class="subtitle">Connect your AI agents to external REST APIs and services</p>
+    </div>
+
+    <nav class="nav">
+        <a href="index.html">← Back to Docs</a>
+        <a href="#use-cases">Use Cases</a>
+        <a href="#auth-types">Authentication</a>
+        <a href="#quick-start">Quick Start</a>
+        <a href="#testing">Testing</a>
+        <a href="#webhooks">Webhooks</a>
+    </nav>
+
+    <div class="content">
+        <section id="use-cases" class="section">
+            <h2 class="section-title">Common Use Cases</h2>
+            <div class="use-cases">
+                <div class="use-case">
+                    <div class="use-case-icon">📅</div>
+                    <div class="use-case-title">Calendar Booking</div>
+                    <div class="use-case-desc">Connect to Calendly, Cal.com, or Google Calendar to schedule appointments during calls</div>
+                </div>
+                <div class="use-case">
+                    <div class="use-case-icon">📝</div>
+                    <div class="use-case-title">CRM Integration</div>
+                    <div class="use-case-desc">Push leads to Salesforce, HubSpot, or custom CRMs after qualification</div>
+                </div>
+                <div class="use-case">
+                    <div class="use-case-icon">💳</div>
+                    <div class="use-case-title">Payment Processing</div>
+                    <div class="use-case-desc">Create payment links with Stripe or process orders via e-commerce APIs</div>
+                </div>
+                <div class="use-case">
+                    <div class="use-case-icon">📧</div>
+                    <div class="use-case-title">Email/SMS Notifications</div>
+                    <div class="use-case-desc">Trigger confirmation emails via SendGrid or SMS via Twilio</div>
+                </div>
+                <div class="use-case">
+                    <div class="use-case-icon">🔍</div>
+                    <div class="use-case-title">Data Lookup</div>
+                    <div class="use-case-desc">Fetch customer data, order status, or inventory in real-time</div>
+                </div>
+                <div class="use-case">
+                    <div class="use-case-icon">🤖</div>
+                    <div class="use-case-title">AI Enhancement</div>
+                    <div class="use-case-desc">Call other AI services for specialized tasks or knowledge retrieval</div>
+                </div>
+            </div>
+        </section>
+
+        <section id="auth-types" class="section">
+            <h2 class="section-title">Authentication Types</h2>
+            <div class="auth-grid">
+                <div class="auth-card">
+                    <div class="auth-header">
+                        <span class="auth-name">Bearer Token</span>
+                    </div>
+                    <p style="color: #8b949e; font-size: 0.9rem; margin-bottom: 12px;">Standard OAuth2 bearer token authentication</p>
+                    <div class="auth-example">
+                        Authorization: Bearer sk_live_xxx...
+                    </div>
+                </div>
+
+                <div class="auth-card">
+                    <div class="auth-header">
+                        <span class="auth-name">X-API-Key</span>
+                    </div>
+                    <p style="color: #8b949e; font-size: 0.9rem; margin-bottom: 12px;">API key in custom header (common for many services)</p>
+                    <div class="auth-example">
+                        X-API-Key: your_api_key_here
+                    </div>
+                </div>
+
+                <div class="auth-card">
+                    <div class="auth-header">
+                        <span class="auth-name">Basic Auth</span>
+                    </div>
+                    <p style="color: #8b949e; font-size: 0.9rem; margin-bottom: 12px;">Username:password encoded in base64</p>
+                    <div class="auth-example">
+                        Authorization: Basic dXNlcjpwYXNz...
+                    </div>
+                </div>
+
+                <div class="auth-card">
+                    <div class="auth-header">
+                        <span class="auth-name">None</span>
+                    </div>
+                    <p style="color: #8b949e; font-size: 0.9rem; margin-bottom: 12px;">Public APIs or internal services with IP allowlisting</p>
+                    <div class="auth-example">
+                        No authentication header
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="quick-start" class="section">
+            <h2 class="section-title">Quick Start</h2>
+            <div class="quick-start">
+                <h4>Adding an API Connection</h4>
+                <ol>
+                    <li><strong>Go to Skills Tab → Outgoing API</strong> in the dashboard</li>
+                    <li><strong>Click "Add Connection"</strong></li>
+                    <li><strong>Enter connection details:</strong>
+                        <ul style="margin-top: 8px; margin-left: 20px;">
+                            <li>Name: A friendly name (e.g., "Calendly Booking")</li>
+                            <li>URL: Base URL of the API (e.g., "https://api.calendly.com")</li>
+                            <li>Auth Type: Select authentication method</li>
+                            <li>API Key: Your secret key (stored securely)</li>
+                        </ul>
+                    </li>
+                    <li><strong>Click "Save"</strong></li>
+                    <li><strong>Click "Test Connection"</strong> to verify it works</li>
+                </ol>
+            </div>
+
+            <div class="quick-start" style="margin-top: 24px;">
+                <h4>Example: Connecting to a Webhook</h4>
+                <pre><code><span class="code-comment">// Connection Settings</span>
+<span class="code-key">Name:</span> <span class="code-string">"Lead Webhook"</span>
+<span class="code-key">URL:</span> <span class="code-string">"https://hooks.zapier.com/hooks/catch/123456/abcdef"</span>
+<span class="code-key">Auth Type:</span> <span class="code-string">"None"</span>
+
+<span class="code-comment">// Test with POST request</span>
+<span class="code-key">Method:</span> <span class="code-string">"POST"</span>
+<span class="code-key">Path:</span> <span class="code-string">"/"</span>
+<span class="code-key">Body:</span>
+{
+  <span class="code-string">"name"</span>: <span class="code-string">"John Doe"</span>,
+  <span class="code-string">"phone"</span>: <span class="code-string">"+1-555-123-4567"</span>,
+  <span class="code-string">"interest"</span>: <span class="code-string">"Solar Installation"</span>
+}</code></pre>
+            </div>
+        </section>
+
+        <section id="testing" class="section">
+            <h2 class="section-title">Testing Connections</h2>
+            <p style="color: #8b949e; margin-bottom: 24px;">Use the built-in request tester to verify your API connections work correctly.</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>HTTP Method</th>
+                        <th>Use Case</th>
+                        <th>Example</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>GET</strong></td>
+                        <td>Fetch data, check availability</td>
+                        <td>Get calendar slots, check order status</td>
+                    </tr>
+                    <tr>
+                        <td><strong>POST</strong></td>
+                        <td>Create resources, submit data</td>
+                        <td>Create booking, submit lead, send notification</td>
+                    </tr>
+                    <tr>
+                        <td><strong>PUT</strong></td>
+                        <td>Update existing resources</td>
+                        <td>Update customer record, modify booking</td>
+                    </tr>
+                    <tr>
+                        <td><strong>DELETE</strong></td>
+                        <td>Remove resources</td>
+                        <td>Cancel booking, unsubscribe</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div style="margin-top: 24px;">
+                <h4 style="color: #00d9ff; margin-bottom: 16px;">Status Indicators</h4>
+                <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+                    <span class="status status-connected">● Connected</span>
+                    <span class="status status-error">● Error</span>
+                    <span class="status status-unknown">● Not Tested</span>
+                </div>
+            </div>
+        </section>
+
+        <section id="webhooks" class="section">
+            <h2 class="section-title">Receiving Webhooks</h2>
+            <p style="color: #8b949e; margin-bottom: 24px;">Configure webhook URLs to receive callbacks from external services.</p>
+
+            <div class="quick-start">
+                <h4>Webhook Configuration</h4>
+                <ol>
+                    <li><strong>Webhook URL:</strong> URL that external services will call</li>
+                    <li><strong>Webhook Secret:</strong> Shared secret for signature verification</li>
+                    <li><strong>Use your dashboard URL + path:</strong>
+                        <pre style="margin: 12px 0;"><code>https://jenkintownelectricity--hive215-dashboard-flask-app.modal.run/api/webhook/your-connection-id</code></pre>
+                    </li>
+                </ol>
+            </div>
+
+            <table style="margin-top: 24px;">
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Description</th>
+                        <th>Required</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Connection Name</strong></td>
+                        <td>Friendly identifier for the connection</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Base URL</strong></td>
+                        <td>API endpoint (https://api.example.com)</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><strong>API Key</strong></td>
+                        <td>Authentication credential</td>
+                        <td>Depends on auth type</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Custom Headers</strong></td>
+                        <td>Additional HTTP headers (JSON object)</td>
+                        <td>No</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Webhook URL</strong></td>
+                        <td>URL for receiving callbacks</td>
+                        <td>No</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <footer>
+        <p>HIVE215 Voice Platform | Fast Brain LPU</p>
+        <p style="margin-top: 8px;">Last updated: December 2024</p>
+    </footer>
+</body>
+</html>
