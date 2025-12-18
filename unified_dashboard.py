@@ -1754,15 +1754,293 @@ def get_integration_checklist():
     })
 
 
+# =============================================================================
+# API ENDPOINTS - OUTGOING API CONNECTIONS
+# =============================================================================
+
+@app.route('/api/connections')
+def get_api_connections():
+    """Get all outgoing API connections."""
+    try:
+        if USE_DATABASE:
+            db.init_db()  # Ensure table exists
+            connections = db.get_all_api_connections()
+            return jsonify(connections)
+        return jsonify([])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/connections/<connection_id>')
+def get_api_connection(connection_id):
+    """Get a single API connection."""
+    try:
+        if USE_DATABASE:
+            conn = db.get_api_connection(connection_id)
+            if conn:
+                return jsonify(conn)
+            return jsonify({"error": "Connection not found"}), 404
+        return jsonify({"error": "Database not available"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/connections', methods=['POST'])
+def create_api_connection():
+    """Create a new API connection."""
+    try:
+        data = request.json
+        connection_id = data.get('id') or f"conn_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000,9999)}"
+
+        if USE_DATABASE:
+            db.create_api_connection(
+                connection_id=connection_id,
+                name=data.get('name', 'New Connection'),
+                url=data.get('url', ''),
+                api_key=data.get('api_key'),
+                headers=data.get('headers'),
+                auth_type=data.get('auth_type', 'bearer'),
+                webhook_url=data.get('webhook_url'),
+                webhook_secret=data.get('webhook_secret'),
+                settings=data.get('settings')
+            )
+            add_activity(f"API connection created: {data.get('name')}", "", "integration")
+            return jsonify({"success": True, "id": connection_id})
+        return jsonify({"error": "Database not available"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/connections/<connection_id>', methods=['PUT'])
+def update_api_connection_endpoint(connection_id):
+    """Update an API connection."""
+    try:
+        data = request.json
+        if USE_DATABASE:
+            db.update_api_connection(connection_id, **data)
+            add_activity(f"API connection updated: {connection_id}", "", "integration")
+            return jsonify({"success": True})
+        return jsonify({"error": "Database not available"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/connections/<connection_id>', methods=['DELETE'])
+def delete_api_connection_endpoint(connection_id):
+    """Delete an API connection."""
+    try:
+        if USE_DATABASE:
+            conn = db.get_api_connection(connection_id)
+            db.delete_api_connection(connection_id)
+            add_activity(f"API connection deleted: {conn.get('name') if conn else connection_id}", "", "integration")
+            return jsonify({"success": True})
+        return jsonify({"error": "Database not available"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/connections/<connection_id>/test', methods=['POST'])
+def test_api_connection(connection_id):
+    """Test an API connection with actual HTTP request."""
+    try:
+        import httpx
+        import time
+
+        if USE_DATABASE:
+            conn = db.get_api_connection(connection_id)
+            if not conn:
+                return jsonify({"success": False, "error": "Connection not found"}), 404
+
+            url = conn.get('url', '')
+            if not url:
+                return jsonify({"success": False, "error": "No URL configured"})
+
+            # Build headers
+            headers = {}
+            if conn.get('headers'):
+                try:
+                    headers = json.loads(conn['headers']) if isinstance(conn['headers'], str) else conn['headers']
+                except:
+                    pass
+
+            # Add authentication
+            auth_type = conn.get('auth_type', 'bearer')
+            api_key = conn.get('api_key', '')
+
+            if auth_type == 'bearer' and api_key:
+                headers['Authorization'] = f'Bearer {api_key}'
+            elif auth_type == 'api_key' and api_key:
+                headers['X-API-Key'] = api_key
+
+            # Make test request
+            start = time.time()
+            try:
+                response = httpx.get(url, headers=headers, timeout=10, follow_redirects=True)
+                latency_ms = int((time.time() - start) * 1000)
+
+                status = 'connected' if response.status_code < 400 else 'error'
+                error = None if status == 'connected' else f"HTTP {response.status_code}"
+
+                # Update connection status
+                db.update_api_connection_status(connection_id, status, error)
+
+                # Return detailed response
+                response_preview = response.text[:500] if response.text else "(empty response)"
+
+                add_activity(f"API test: {conn.get('name')} - {status}", "", "integration")
+
+                return jsonify({
+                    "success": status == 'connected',
+                    "status": status,
+                    "status_code": response.status_code,
+                    "latency_ms": latency_ms,
+                    "response_preview": response_preview,
+                    "headers": dict(response.headers),
+                    "error": error
+                })
+
+            except httpx.TimeoutException:
+                db.update_api_connection_status(connection_id, 'timeout', 'Request timed out')
+                return jsonify({
+                    "success": False,
+                    "status": "timeout",
+                    "error": "Request timed out after 10 seconds"
+                })
+            except httpx.RequestError as e:
+                db.update_api_connection_status(connection_id, 'error', str(e))
+                return jsonify({
+                    "success": False,
+                    "status": "error",
+                    "error": str(e)
+                })
+
+        return jsonify({"error": "Database not available"}), 500
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/connections/<connection_id>/send', methods=['POST'])
+def send_to_api_connection(connection_id):
+    """Send a custom request to an API connection for testing/troubleshooting."""
+    try:
+        import httpx
+        import time
+
+        data = request.json
+        method = data.get('method', 'GET').upper()
+        path = data.get('path', '')
+        body = data.get('body')
+        custom_headers = data.get('headers', {})
+
+        if USE_DATABASE:
+            conn = db.get_api_connection(connection_id)
+            if not conn:
+                return jsonify({"success": False, "error": "Connection not found"}), 404
+
+            base_url = conn.get('url', '').rstrip('/')
+            full_url = f"{base_url}/{path.lstrip('/')}" if path else base_url
+
+            # Build headers
+            headers = {'Content-Type': 'application/json'}
+            if conn.get('headers'):
+                try:
+                    stored_headers = json.loads(conn['headers']) if isinstance(conn['headers'], str) else conn['headers']
+                    headers.update(stored_headers)
+                except:
+                    pass
+            headers.update(custom_headers)
+
+            # Add authentication
+            auth_type = conn.get('auth_type', 'bearer')
+            api_key = conn.get('api_key', '')
+
+            if auth_type == 'bearer' and api_key:
+                headers['Authorization'] = f'Bearer {api_key}'
+            elif auth_type == 'api_key' and api_key:
+                headers['X-API-Key'] = api_key
+
+            # Make request
+            start = time.time()
+            try:
+                if method == 'GET':
+                    response = httpx.get(full_url, headers=headers, timeout=30)
+                elif method == 'POST':
+                    response = httpx.post(full_url, headers=headers, json=body, timeout=30)
+                elif method == 'PUT':
+                    response = httpx.put(full_url, headers=headers, json=body, timeout=30)
+                elif method == 'DELETE':
+                    response = httpx.delete(full_url, headers=headers, timeout=30)
+                else:
+                    return jsonify({"success": False, "error": f"Unsupported method: {method}"})
+
+                latency_ms = int((time.time() - start) * 1000)
+
+                # Try to parse response as JSON
+                try:
+                    response_body = response.json()
+                except:
+                    response_body = response.text
+
+                return jsonify({
+                    "success": response.status_code < 400,
+                    "status_code": response.status_code,
+                    "latency_ms": latency_ms,
+                    "response": response_body,
+                    "response_headers": dict(response.headers),
+                    "request": {
+                        "method": method,
+                        "url": full_url,
+                        "headers": {k: v if k.lower() != 'authorization' else '***' for k, v in headers.items()},
+                        "body": body
+                    }
+                })
+
+            except httpx.TimeoutException:
+                return jsonify({"success": False, "error": "Request timed out after 30 seconds"})
+            except httpx.RequestError as e:
+                return jsonify({"success": False, "error": str(e)})
+
+        return jsonify({"error": "Database not available"}), 500
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/connections/status')
+def get_all_connections_status():
+    """Get live status of all API connections."""
+    try:
+        if USE_DATABASE:
+            connections = db.get_all_api_connections()
+            statuses = {}
+            for conn in connections:
+                statuses[conn['id']] = {
+                    'name': conn.get('name'),
+                    'status': conn.get('status', 'unknown'),
+                    'last_tested': conn.get('last_tested'),
+                    'last_error': conn.get('last_error'),
+                    'url': conn.get('url', '')[:50] + '...' if len(conn.get('url', '')) > 50 else conn.get('url', '')
+                }
+            return jsonify(statuses)
+        return jsonify({})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Legacy Hive215 endpoints for backward compatibility
+HIVE215_CONFIG = {
+    "url": os.getenv("HIVE215_URL", ""),
+    "api_key": os.getenv("HIVE215_API_KEY", ""),
+}
+
 @app.route('/api/hive215/config')
 def get_hive215_config():
-    """Get Hive215 configuration."""
+    """Get Hive215 configuration (legacy)."""
     return jsonify(HIVE215_CONFIG)
 
 
 @app.route('/api/hive215/config', methods=['POST'])
 def update_hive215_config():
-    """Update Hive215 configuration."""
+    """Update Hive215 configuration (legacy)."""
     global HIVE215_CONFIG
     data = request.json
 
@@ -4487,7 +4765,7 @@ pipeline = Pipeline([
                 <button class="sub-tab-btn" onclick="showFastBrainTab('golden')">Golden Prompts</button>
                 <button class="sub-tab-btn" onclick="showFastBrainTab('train')">Train LoRA</button>
                 <button class="sub-tab-btn" onclick="showFastBrainTab('chat')">Test Chat</button>
-                <button class="sub-tab-btn" onclick="showFastBrainTab('integration')">Hive215</button>
+                <button class="sub-tab-btn" onclick="showFastBrainTab('integration')">Outgoing API</button>
             </div>
 
             <!-- Dashboard Sub-tab -->
@@ -4750,92 +5028,125 @@ pipeline = Pipeline([
                 </div>
             </div>
 
-            <!-- Hive215 Integration Sub-tab -->
+            <!-- Outgoing API Connections Sub-tab -->
             <div id="fb-tab-integration" class="sub-tab-content">
                 <div class="dashboard-grid">
-                    <!-- Integration Checklist -->
+                    <!-- API Connections List -->
                     <div class="glass-card card-full">
                         <div class="section-header">
-                            <div class="section-title"><span class="section-icon">CHK</span> Integration Checklist</div>
+                            <div class="section-title"><span class="section-icon">API</span> Outgoing API Connections</div>
                             <div>
-                                <span id="integration-progress" style="color: var(--neon-cyan); font-weight: bold;">0%</span> Complete
+                                <button class="btn btn-primary btn-sm" onclick="showAddConnectionModal()">+ Add Connection</button>
+                                <button class="btn btn-secondary btn-sm" onclick="refreshApiConnections()">Refresh</button>
                             </div>
                         </div>
-                        <div style="background: var(--glass-surface); border-radius: 8px; padding: 0.5rem; margin-bottom: 1rem;">
-                            <div id="integration-progress-bar" style="height: 8px; background: var(--neon-cyan); border-radius: 4px; width: 0%; transition: width 0.3s;"></div>
-                        </div>
-                        <div id="integration-checklist">
-                            <!-- Checklist items will be loaded here -->
-                            <div style="color: var(--text-secondary); padding: 1rem; text-align: center;">Loading checklist...</div>
+                        <p style="color: var(--text-secondary); margin-bottom: 1rem;">Connect to external APIs, webhooks, and services. Test connections and send requests.</p>
+                        <div id="api-connections-list">
+                            <div style="color: var(--text-secondary); padding: 2rem; text-align: center;">Loading connections...</div>
                         </div>
                     </div>
 
-                    <!-- Hive215 Configuration -->
-                    <div class="glass-card card-half">
+                    <!-- Add/Edit Connection Modal (inline) -->
+                    <div class="glass-card card-half" id="connection-form-card" style="display: none;">
                         <div class="section-header">
-                            <div class="section-title"><span class="section-icon">H215</span> Hive215 Configuration</div>
+                            <div class="section-title"><span class="section-icon">NEW</span> <span id="connection-form-title">Add Connection</span></div>
+                            <button class="btn btn-secondary btn-sm" onclick="hideConnectionForm()">×</button>
+                        </div>
+                        <input type="hidden" id="conn-edit-id">
+                        <div class="form-group">
+                            <label class="form-label">Connection Name *</label>
+                            <input type="text" class="form-input" id="conn-name" placeholder="My API Service">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Hive215 Dashboard URL</label>
-                            <input type="text" class="form-input" id="hive-url" placeholder="https://hive215.vercel.app">
+                            <label class="form-label">Base URL *</label>
+                            <input type="text" class="form-input" id="conn-url" placeholder="https://api.example.com">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">API Key</label>
-                            <input type="password" class="form-input" id="hive-api-key" placeholder="Your Hive215 API key">
+                            <label class="form-label">Authentication Type</label>
+                            <select class="form-select" id="conn-auth-type">
+                                <option value="none">None</option>
+                                <option value="bearer" selected>Bearer Token</option>
+                                <option value="api_key">X-API-Key Header</option>
+                                <option value="basic">Basic Auth</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="conn-apikey-group">
+                            <label class="form-label">API Key / Token</label>
+                            <input type="password" class="form-input" id="conn-apikey" placeholder="Your API key or token">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Custom Headers (JSON)</label>
+                            <textarea class="form-textarea" id="conn-headers" rows="2" placeholder='{"X-Custom-Header": "value"}'></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Webhook URL (for callbacks)</label>
+                            <input type="text" class="form-input" id="conn-webhook" placeholder="https://your-app.com/webhook">
                         </div>
                         <div class="form-row">
-                            <button class="btn btn-primary" onclick="saveHive215Config()">Save Config</button>
-                            <button class="btn btn-secondary" onclick="testHive215Connection()">Test Connection</button>
+                            <button class="btn btn-primary" onclick="saveApiConnection()">Save Connection</button>
+                            <button class="btn btn-secondary" onclick="hideConnectionForm()">Cancel</button>
                         </div>
-                        <div id="hive-config-message" style="margin-top: 1rem;"></div>
                     </div>
 
-                    <!-- Quick Setup Guide -->
+                    <!-- Request Tester -->
+                    <div class="glass-card card-half" id="request-tester-card" style="display: none;">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">TST</span> Request Tester</div>
+                            <button class="btn btn-secondary btn-sm" onclick="hideRequestTester()">×</button>
+                        </div>
+                        <div style="margin-bottom: 0.5rem; color: var(--neon-cyan); font-weight: 600;" id="tester-connection-name"></div>
+                        <input type="hidden" id="tester-connection-id">
+                        <div class="form-row" style="gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <select class="form-select" id="tester-method" style="width: 100px;">
+                                <option value="GET">GET</option>
+                                <option value="POST">POST</option>
+                                <option value="PUT">PUT</option>
+                                <option value="DELETE">DELETE</option>
+                            </select>
+                            <input type="text" class="form-input" id="tester-path" placeholder="/endpoint/path" style="flex: 1;">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Request Body (JSON)</label>
+                            <textarea class="form-textarea" id="tester-body" rows="4" placeholder='{"key": "value"}'></textarea>
+                        </div>
+                        <button class="btn btn-primary" onclick="sendTestRequest()">Send Request</button>
+                        <div id="tester-result" style="margin-top: 1rem;"></div>
+                    </div>
+
+                    <!-- Live Status Panel -->
                     <div class="glass-card card-half">
                         <div class="section-header">
-                            <div class="section-title"><span class="section-icon">DOC</span> Quick Setup Guide</div>
+                            <div class="section-title"><span class="section-icon">STS</span> Live Status</div>
+                            <button class="btn btn-secondary btn-sm" onclick="refreshConnectionStatuses()">Refresh All</button>
                         </div>
-                        <div style="font-size: 0.9rem; line-height: 1.6;">
-                            <h4 style="color: var(--neon-cyan); margin-bottom: 0.5rem;">1. Deploy Fast Brain</h4>
-                            <pre class="code-block" style="font-size: 0.8rem; margin-bottom: 1rem;">modal deploy fast_brain/deploy_groq.py</pre>
-
-                            <h4 style="color: var(--neon-cyan); margin-bottom: 0.5rem;">2. Set URL in Hive215</h4>
-                            <p style="color: var(--text-secondary); margin-bottom: 1rem;">Add FAST_BRAIN_URL to Railway worker environment</p>
-
-                            <h4 style="color: var(--neon-cyan); margin-bottom: 0.5rem;">3. Sync Skills</h4>
-                            <p style="color: var(--text-secondary); margin-bottom: 1rem;">Skills created here auto-sync to both Fast Brain and Hive215</p>
-
-                            <h4 style="color: var(--neon-cyan); margin-bottom: 0.5rem;">4. Test Voice Flow</h4>
-                            <p style="color: var(--text-secondary);">Call your Twilio number to test the full pipeline</p>
+                        <div id="connections-status-list">
+                            <div style="color: var(--text-secondary); padding: 1rem; text-align: center;">No connections configured</div>
                         </div>
                     </div>
 
-                    <!-- Connection Diagram -->
-                    <div class="glass-card card-full">
+                    <!-- Quick Tips -->
+                    <div class="glass-card card-half">
                         <div class="section-header">
-                            <div class="section-title"><span class="section-icon">MAP</span> System Architecture</div>
+                            <div class="section-title"><span class="section-icon">TIP</span> Integration Tips</div>
                         </div>
-                        <pre class="code-block" style="font-size: 0.75rem; overflow-x: auto;">
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              HIVE215 VOICE PIPELINE                              │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                  │
-│   [Caller] ──► [Twilio] ──► [LiveKit Worker] ──► [Fast Brain LPU] ──► [Response] │
-│                                    │                    │                        │
-│                                    │              ┌─────┴─────┐                  │
-│                              [Deepgram STT]      │   Groq    │                  │
-│                                    │             │ Llama 3.3 │                  │
-│                              [Cartesia TTS]      │   70B     │                  │
-│                                    │             └───────────┘                  │
-│                                    ▼                    │                        │
-│                           [Audio Response]    [Skills Database]                  │
-│                                                         │                        │
-│   ┌──────────────────────────────────────────────────────┘                      │
-│   │                                                                              │
-│   │  Skills: receptionist │ electrician │ plumber │ lawyer │ custom...         │
-│   │                                                                              │
-└───┴──────────────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div style="font-size: 0.85rem; line-height: 1.6;">
+                            <h4 style="color: var(--neon-green); margin-bottom: 0.5rem;">Supported Auth Types</h4>
+                            <ul style="color: var(--text-secondary); margin-left: 1rem; margin-bottom: 1rem;">
+                                <li><strong>Bearer:</strong> Authorization: Bearer {token}</li>
+                                <li><strong>API Key:</strong> X-API-Key: {key}</li>
+                                <li><strong>Basic:</strong> Authorization: Basic {base64}</li>
+                                <li><strong>None:</strong> No authentication header</li>
+                            </ul>
+
+                            <h4 style="color: var(--neon-green); margin-bottom: 0.5rem;">Common Integrations</h4>
+                            <ul style="color: var(--text-secondary); margin-left: 1rem;">
+                                <li>CRM systems (HubSpot, Salesforce)</li>
+                                <li>Ticket systems (Zendesk, Freshdesk)</li>
+                                <li>Calendars (Cal.com, Calendly)</li>
+                                <li>Notifications (Slack, Discord)</li>
+                                <li>Custom webhooks</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -5395,7 +5706,7 @@ pipeline = Pipeline([
 
             // Load appropriate data for each tab
             if (tabId === 'dashboard') { loadSkills(); loadMetrics(); }
-            if (tabId === 'skills' || tabId === 'fastbrain') { loadFastBrainConfig(); loadFastBrainSkills(); refreshSystemStatus(); loadHive215Config(); }
+            if (tabId === 'skills' || tabId === 'fastbrain') { loadFastBrainConfig(); loadFastBrainSkills(); refreshSystemStatus(); loadApiConnections(); }
             if (tabId === 'voice' || tabId === 'voicelab') { loadVoiceProjects(); loadSkillsForDropdowns(); }
             if (tabId === 'settings' || tabId === 'command') { refreshStats(); }
             if (tabId === 'factory') { loadProfileDropdowns(); }
@@ -7132,10 +7443,317 @@ print("Training complete! Adapter saved to adapters/${skill}")
                 const res = await fetch('/api/hive215/config');
                 const config = await res.json();
 
-                document.getElementById('hive-url').value = config.url || '';
-                document.getElementById('hive-api-key').value = config.api_key || '';
+                if (document.getElementById('hive-url')) {
+                    document.getElementById('hive-url').value = config.url || '';
+                }
+                if (document.getElementById('hive-api-key')) {
+                    document.getElementById('hive-api-key').value = config.api_key || '';
+                }
             } catch (e) {
                 console.error('Failed to load Hive215 config:', e);
+            }
+        }
+
+        // ============================================================
+        // OUTGOING API CONNECTIONS FUNCTIONS
+        // ============================================================
+        let apiConnections = [];
+
+        async function loadApiConnections() {
+            try {
+                const res = await fetch('/api/connections');
+                apiConnections = await res.json();
+                renderApiConnectionsList();
+                renderConnectionsStatus();
+            } catch (e) {
+                console.error('Failed to load API connections:', e);
+            }
+        }
+
+        function refreshApiConnections() {
+            loadApiConnections();
+        }
+
+        function renderApiConnectionsList() {
+            const container = document.getElementById('api-connections-list');
+            if (!container) return;
+
+            if (!apiConnections || apiConnections.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                        <div style="font-size: 2rem; margin-bottom: 1rem;">🔌</div>
+                        <h3 style="margin-bottom: 0.5rem; color: var(--text-primary);">No API Connections</h3>
+                        <p style="margin-bottom: 1rem;">Connect to external APIs, CRMs, or webhooks</p>
+                        <button class="btn btn-primary" onclick="showAddConnectionModal()">+ Add Connection</button>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = apiConnections.map(conn => {
+                const statusColor = conn.status === 'connected' ? 'var(--neon-green)' :
+                                   conn.status === 'error' ? 'var(--neon-orange)' :
+                                   conn.status === 'timeout' ? 'var(--neon-orange)' : 'var(--text-secondary)';
+                const statusIcon = conn.status === 'connected' ? '✓' :
+                                  conn.status === 'error' ? '✗' :
+                                  conn.status === 'timeout' ? '⏱' : '○';
+                return `
+                    <div style="background: var(--glass-surface); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; border-left: 4px solid ${statusColor};">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                            <div>
+                                <div style="font-weight: 600; color: var(--text-primary);">${conn.name}</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary); font-family: monospace;">${conn.url}</div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="color: ${statusColor}; font-size: 0.85rem;">${statusIcon} ${conn.status || 'Not tested'}</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem;">
+                            <span style="font-size: 0.75rem; background: var(--glass-bg); padding: 0.2rem 0.5rem; border-radius: 4px;">${conn.auth_type || 'bearer'}</span>
+                            ${conn.last_tested ? `<span style="font-size: 0.75rem; color: var(--text-secondary);">Tested: ${new Date(conn.last_tested).toLocaleString()}</span>` : ''}
+                        </div>
+                        ${conn.last_error ? `<div style="font-size: 0.8rem; color: var(--neon-orange); margin-top: 0.5rem;">Error: ${conn.last_error}</div>` : ''}
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+                            <button class="btn btn-secondary btn-sm" onclick="testApiConnection('${conn.id}')">Test</button>
+                            <button class="btn btn-secondary btn-sm" onclick="openRequestTester('${conn.id}', '${conn.name}')">Send Request</button>
+                            <button class="btn btn-secondary btn-sm" onclick="editApiConnection('${conn.id}')">Edit</button>
+                            <button class="btn btn-secondary btn-sm" onclick="deleteApiConnection('${conn.id}')" style="color: var(--neon-orange);">Delete</button>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        function renderConnectionsStatus() {
+            const container = document.getElementById('connections-status-list');
+            if (!container) return;
+
+            if (!apiConnections || apiConnections.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-secondary); padding: 1rem; text-align: center;">No connections configured</div>';
+                return;
+            }
+
+            container.innerHTML = apiConnections.map(conn => {
+                const statusColor = conn.status === 'connected' ? 'var(--neon-green)' :
+                                   conn.status === 'error' || conn.status === 'timeout' ? 'var(--neon-orange)' : 'var(--text-secondary)';
+                return `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-bottom: 1px solid var(--glass-border);">
+                        <span>${conn.name}</span>
+                        <span style="color: ${statusColor}; font-weight: 500;">${conn.status || 'Unknown'}</span>
+                    </div>`;
+            }).join('');
+        }
+
+        function showAddConnectionModal() {
+            document.getElementById('conn-edit-id').value = '';
+            document.getElementById('conn-name').value = '';
+            document.getElementById('conn-url').value = '';
+            document.getElementById('conn-auth-type').value = 'bearer';
+            document.getElementById('conn-apikey').value = '';
+            document.getElementById('conn-headers').value = '';
+            document.getElementById('conn-webhook').value = '';
+            document.getElementById('connection-form-title').textContent = 'Add Connection';
+            document.getElementById('connection-form-card').style.display = 'block';
+        }
+
+        function hideConnectionForm() {
+            document.getElementById('connection-form-card').style.display = 'none';
+        }
+
+        function editApiConnection(connId) {
+            const conn = apiConnections.find(c => c.id === connId);
+            if (!conn) return;
+
+            document.getElementById('conn-edit-id').value = conn.id;
+            document.getElementById('conn-name').value = conn.name || '';
+            document.getElementById('conn-url').value = conn.url || '';
+            document.getElementById('conn-auth-type').value = conn.auth_type || 'bearer';
+            document.getElementById('conn-apikey').value = conn.api_key || '';
+            try {
+                document.getElementById('conn-headers').value = conn.headers ? (typeof conn.headers === 'string' ? conn.headers : JSON.stringify(conn.headers, null, 2)) : '';
+            } catch { document.getElementById('conn-headers').value = ''; }
+            document.getElementById('conn-webhook').value = conn.webhook_url || '';
+            document.getElementById('connection-form-title').textContent = 'Edit Connection';
+            document.getElementById('connection-form-card').style.display = 'block';
+        }
+
+        async function saveApiConnection() {
+            const editId = document.getElementById('conn-edit-id').value;
+            const name = document.getElementById('conn-name').value.trim();
+            const url = document.getElementById('conn-url').value.trim();
+
+            if (!name || !url) {
+                alert('Name and URL are required');
+                return;
+            }
+
+            let headers = null;
+            const headersText = document.getElementById('conn-headers').value.trim();
+            if (headersText) {
+                try {
+                    headers = JSON.parse(headersText);
+                } catch {
+                    alert('Invalid JSON in headers field');
+                    return;
+                }
+            }
+
+            const data = {
+                name,
+                url,
+                auth_type: document.getElementById('conn-auth-type').value,
+                api_key: document.getElementById('conn-apikey').value,
+                headers,
+                webhook_url: document.getElementById('conn-webhook').value.trim() || null
+            };
+
+            try {
+                let res;
+                if (editId) {
+                    res = await fetch(`/api/connections/${editId}`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(data)
+                    });
+                } else {
+                    res = await fetch('/api/connections', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(data)
+                    });
+                }
+
+                const result = await res.json();
+                if (result.success || result.id) {
+                    hideConnectionForm();
+                    loadApiConnections();
+                } else {
+                    alert('Failed to save: ' + (result.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Failed to save connection: ' + e.message);
+            }
+        }
+
+        async function deleteApiConnection(connId) {
+            if (!confirm('Delete this connection?')) return;
+
+            try {
+                const res = await fetch(`/api/connections/${connId}`, {method: 'DELETE'});
+                const result = await res.json();
+                if (result.success) {
+                    loadApiConnections();
+                } else {
+                    alert('Failed to delete: ' + (result.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Failed to delete: ' + e.message);
+            }
+        }
+
+        async function testApiConnection(connId) {
+            const conn = apiConnections.find(c => c.id === connId);
+            if (!conn) return;
+
+            // Show testing indicator
+            const container = document.getElementById('api-connections-list');
+            const originalHtml = container.innerHTML;
+
+            try {
+                const res = await fetch(`/api/connections/${connId}/test`, {method: 'POST'});
+                const result = await res.json();
+
+                // Reload to show updated status
+                await loadApiConnections();
+
+                // Show result
+                if (result.success) {
+                    alert(`✓ Connection successful!\\nStatus: ${result.status_code}\\nLatency: ${result.latency_ms}ms`);
+                } else {
+                    alert(`✗ Connection failed\\nError: ${result.error}`);
+                }
+            } catch (e) {
+                alert('Test failed: ' + e.message);
+            }
+        }
+
+        function openRequestTester(connId, connName) {
+            document.getElementById('tester-connection-id').value = connId;
+            document.getElementById('tester-connection-name').textContent = connName;
+            document.getElementById('tester-method').value = 'GET';
+            document.getElementById('tester-path').value = '';
+            document.getElementById('tester-body').value = '';
+            document.getElementById('tester-result').innerHTML = '';
+            document.getElementById('request-tester-card').style.display = 'block';
+        }
+
+        function hideRequestTester() {
+            document.getElementById('request-tester-card').style.display = 'none';
+        }
+
+        async function sendTestRequest() {
+            const connId = document.getElementById('tester-connection-id').value;
+            const method = document.getElementById('tester-method').value;
+            const path = document.getElementById('tester-path').value;
+            const bodyText = document.getElementById('tester-body').value.trim();
+
+            let body = null;
+            if (bodyText && (method === 'POST' || method === 'PUT')) {
+                try {
+                    body = JSON.parse(bodyText);
+                } catch {
+                    document.getElementById('tester-result').innerHTML = '<div style="color: var(--neon-orange);">Invalid JSON in request body</div>';
+                    return;
+                }
+            }
+
+            document.getElementById('tester-result').innerHTML = '<div style="color: var(--neon-cyan);">Sending request...</div>';
+
+            try {
+                const res = await fetch(`/api/connections/${connId}/send`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({method, path, body})
+                });
+
+                const result = await res.json();
+
+                const statusColor = result.success ? 'var(--neon-green)' : 'var(--neon-orange)';
+                let responsePreview;
+                try {
+                    responsePreview = typeof result.response === 'object' ?
+                        JSON.stringify(result.response, null, 2) : result.response;
+                } catch {
+                    responsePreview = String(result.response);
+                }
+
+                document.getElementById('tester-result').innerHTML = `
+                    <div style="margin-bottom: 0.5rem;">
+                        <span style="color: ${statusColor}; font-weight: 600;">${result.status_code || 'Error'}</span>
+                        <span style="color: var(--text-secondary); margin-left: 0.5rem;">${result.latency_ms || 0}ms</span>
+                    </div>
+                    ${result.error ? `<div style="color: var(--neon-orange); margin-bottom: 0.5rem;">Error: ${result.error}</div>` : ''}
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Request: ${result.request?.method || method} ${result.request?.url || path}</div>
+                    <pre class="code-block" style="max-height: 200px; overflow: auto; font-size: 0.75rem;">${responsePreview?.substring(0, 2000) || '(empty)'}</pre>`;
+            } catch (e) {
+                document.getElementById('tester-result').innerHTML = `<div style="color: var(--neon-orange);">Request failed: ${e.message}</div>`;
+            }
+        }
+
+        async function refreshConnectionStatuses() {
+            try {
+                const res = await fetch('/api/connections/status');
+                const statuses = await res.json();
+                // Update apiConnections with new statuses
+                for (const conn of apiConnections) {
+                    if (statuses[conn.id]) {
+                        conn.status = statuses[conn.id].status;
+                        conn.last_tested = statuses[conn.id].last_tested;
+                        conn.last_error = statuses[conn.id].last_error;
+                    }
+                }
+                renderConnectionsStatus();
+                renderApiConnectionsList();
+            } catch (e) {
+                console.error('Failed to refresh statuses:', e);
             }
         }
 

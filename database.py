@@ -201,6 +201,28 @@ def init_db():
             )
         ''')
 
+        # =================================================================
+        # API CONNECTIONS TABLE - Outgoing API integrations
+        # =================================================================
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS api_connections (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                url TEXT NOT NULL,
+                api_key TEXT,
+                headers TEXT,  -- JSON object for custom headers
+                auth_type TEXT DEFAULT 'bearer',  -- bearer, api_key, basic, none
+                status TEXT DEFAULT 'disconnected',
+                last_tested TEXT,
+                last_error TEXT,
+                webhook_url TEXT,  -- For receiving callbacks
+                webhook_secret TEXT,
+                settings TEXT,  -- JSON for additional settings
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
         # Create indexes for common queries
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_skills_type ON skills(skill_type)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_skills_active ON skills(is_active)')
@@ -978,6 +1000,110 @@ def link_voice_to_skill(project_id: str, skill_id: str) -> bool:
                 skill_id
             ))
 
+        return cursor.rowcount > 0
+
+
+# =============================================================================
+# API CONNECTIONS - Outgoing integrations
+# =============================================================================
+
+def get_all_api_connections() -> List[Dict]:
+    """Get all API connections."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM api_connections ORDER BY name')
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+def get_api_connection(connection_id: str) -> Optional[Dict]:
+    """Get a single API connection by ID."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM api_connections WHERE id = ?', (connection_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def create_api_connection(
+    connection_id: str,
+    name: str,
+    url: str,
+    api_key: str = None,
+    headers: dict = None,
+    auth_type: str = 'bearer',
+    webhook_url: str = None,
+    webhook_secret: str = None,
+    settings: dict = None
+) -> bool:
+    """Create a new API connection."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT OR REPLACE INTO api_connections
+            (id, name, url, api_key, headers, auth_type, webhook_url, webhook_secret, settings, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            connection_id,
+            name,
+            url,
+            api_key,
+            json.dumps(headers) if headers else None,
+            auth_type,
+            webhook_url,
+            webhook_secret,
+            json.dumps(settings) if settings else None,
+            datetime.now().isoformat()
+        ))
+        return cursor.rowcount > 0
+
+
+def update_api_connection(connection_id: str, **kwargs) -> bool:
+    """Update an API connection."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Build dynamic update query
+        updates = []
+        values = []
+        for key, value in kwargs.items():
+            if key in ['name', 'url', 'api_key', 'auth_type', 'status', 'last_tested',
+                       'last_error', 'webhook_url', 'webhook_secret']:
+                updates.append(f"{key} = ?")
+                values.append(value)
+            elif key in ['headers', 'settings']:
+                updates.append(f"{key} = ?")
+                values.append(json.dumps(value) if value else None)
+
+        if not updates:
+            return False
+
+        updates.append("updated_at = ?")
+        values.append(datetime.now().isoformat())
+        values.append(connection_id)
+
+        query = f"UPDATE api_connections SET {', '.join(updates)} WHERE id = ?"
+        cursor.execute(query, values)
+        return cursor.rowcount > 0
+
+
+def delete_api_connection(connection_id: str) -> bool:
+    """Delete an API connection."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM api_connections WHERE id = ?', (connection_id,))
+        return cursor.rowcount > 0
+
+
+def update_api_connection_status(connection_id: str, status: str, error: str = None) -> bool:
+    """Update API connection status after testing."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE api_connections
+            SET status = ?, last_tested = ?, last_error = ?, updated_at = ?
+            WHERE id = ?
+        ''', (status, datetime.now().isoformat(), error, datetime.now().isoformat(), connection_id))
         return cursor.rowcount > 0
 
 
