@@ -315,9 +315,9 @@ def get_skills():
                 "description": profile.get("description", ""),
                 "training_examples": training_examples,
                 "created_at": profile.get("created_at", ""),
-                "requests_today": random.randint(10, 500),
-                "avg_latency_ms": random.randint(80, 200),
-                "satisfaction_rate": random.randint(85, 99),
+                "requests_today": 0,
+                "avg_latency_ms": 0,
+                "satisfaction_rate": 0,
             })
         except Exception as e:
             print(f"Error loading {profile_path}: {e}")
@@ -354,35 +354,32 @@ def get_skills_table():
 @app.route('/api/server-status')
 def get_server_status():
     """Get warm server status."""
+    # Get real skill list from database
+    skills_loaded = []
+    if USE_DATABASE:
+        db_skills = db.get_all_skills()
+        skills_loaded = [s.get('id', s.get('skill_id', '')) for s in db_skills[:5]]
+
     return jsonify({
         "status": "online",
         "warm_containers": 1,
-        "region": "us-east-1",
-        "uptime_hours": random.randint(1, 720),
-        "total_requests": random.randint(1000, 50000),
-        "avg_cold_start_ms": 2100,
-        "avg_warm_latency_ms": 89,
-        "memory_usage_mb": random.randint(4000, 7000),
-        "active_skill": "plumber_expert",
-        "skills_loaded": ["plumber_expert", "restaurant_host", "tech_support"],
-        "cost_today_usd": round(random.uniform(0.5, 5.0), 2),
+        "region": "modal-cloud",
+        "uptime_hours": 0,
+        "total_requests": 0,
+        "avg_cold_start_ms": 0,
+        "avg_warm_latency_ms": 0,
+        "memory_usage_mb": 0,
+        "active_skill": skills_loaded[0] if skills_loaded else None,
+        "skills_loaded": skills_loaded,
+        "cost_today_usd": 0,
     })
 
 
 @app.route('/api/metrics')
 def get_metrics():
     """Get performance metrics over time."""
-    now = datetime.now()
-    metrics = []
-    for i in range(24):
-        timestamp = now - timedelta(hours=23-i)
-        metrics.append({
-            "timestamp": timestamp.isoformat(),
-            "requests": random.randint(50, 300),
-            "latency_p50": random.randint(70, 120),
-            "latency_p99": random.randint(150, 300),
-        })
-    return jsonify(metrics)
+    # Return empty metrics - real metrics come from activity log
+    return jsonify([])
 
 
 @app.route('/api/activity')
@@ -414,15 +411,15 @@ def get_activity():
 @app.route('/api/training-status')
 def get_training_status():
     """Get current training pipeline status."""
-    # Simulated training status
+    # Return idle status - real training status from database when training is active
     return jsonify({
-        "current_skill": "plumber_expert",
-        "stage": "train",  # ingest, process, train, deploy
-        "progress": random.randint(40, 90),
+        "current_skill": None,
+        "stage": "idle",
+        "progress": 0,
         "stages": {
-            "ingest": "complete",
-            "process": "complete",
-            "train": "in_progress",
+            "ingest": "pending",
+            "process": "pending",
+            "train": "pending",
             "deploy": "pending"
         }
     })
@@ -594,58 +591,79 @@ def save_api_keys():
 
 @app.route('/api/test-llm', methods=['POST'])
 def test_llm():
-    """Test a single LLM provider."""
+    """Test a single LLM provider with real API call."""
     data = request.json
-    provider = data.get('provider', 'mock')
+    provider = data.get('provider', 'groq')
     prompt = data.get('prompt', '')
 
-    # Simulated response for now
     import time
     start = time.time()
 
-    responses = {
-        'groq': f"[Groq - Llama 3.1 8B] This is a fast response to: {prompt[:50]}...",
-        'openai': f"[OpenAI - GPT-4o-mini] I'd be happy to help with: {prompt[:50]}...",
-        'anthropic': f"[Anthropic - Claude 3 Haiku] Let me address: {prompt[:50]}...",
-        'bitnet': f"[BitNet LPU] Processing: {prompt[:50]}...",
-    }
+    # Try to make real API call
+    api_keys = db.get_all_api_keys() if USE_DATABASE else {}
 
-    latencies = {'groq': 100, 'openai': 300, 'anthropic': 400, 'bitnet': 800}
+    try:
+        import httpx
 
-    response = responses.get(provider, f"[{provider}] Response to: {prompt[:50]}...")
-    latency = latencies.get(provider, 500) + random.randint(-50, 50)
+        if provider == 'groq' and api_keys.get('groq'):
+            response = httpx.post(
+                'https://api.groq.com/openai/v1/chat/completions',
+                headers={'Authorization': f"Bearer {api_keys['groq']}", 'Content-Type': 'application/json'},
+                json={'model': 'llama-3.3-70b-versatile', 'messages': [{'role': 'user', 'content': prompt}], 'max_tokens': 150},
+                timeout=30
+            )
+            if response.status_code == 200:
+                result = response.json()
+                latency = int((time.time() - start) * 1000)
+                return jsonify({
+                    "success": True,
+                    "response": result['choices'][0]['message']['content'],
+                    "latency_ms": latency,
+                    "provider": provider
+                })
 
-    return jsonify({
-        "success": True,
-        "response": response,
-        "latency_ms": latency,
-        "provider": provider
-    })
+        # No API key configured
+        return jsonify({
+            "success": False,
+            "error": f"No API key configured for {provider}. Add it in Settings → API Keys.",
+            "provider": provider
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "provider": provider
+        })
 
 
 @app.route('/api/compare-llms', methods=['POST'])
 def compare_llms():
-    """Compare multiple LLM providers."""
+    """Compare multiple LLM providers - requires API keys configured."""
     data = request.json
-    providers = data.get('providers', ['groq', 'openai'])
+    providers = data.get('providers', ['groq'])
     prompt = data.get('prompt', '')
 
     results = []
-    for provider in providers:
-        responses = {
-            'groq': f"[Groq] Fast response to: {prompt[:30]}...",
-            'openai': f"[OpenAI] Quality response to: {prompt[:30]}...",
-            'anthropic': f"[Anthropic] Thoughtful response to: {prompt[:30]}...",
-            'bitnet': f"[BitNet] Efficient response to: {prompt[:30]}...",
-        }
-        latencies = {'groq': 100, 'openai': 300, 'anthropic': 400, 'bitnet': 800}
+    api_keys = db.get_all_api_keys() if USE_DATABASE else {}
 
-        results.append({
-            "provider": provider,
-            "response": responses.get(provider, f"[{provider}] Response..."),
-            "first_token_ms": latencies.get(provider, 500) + random.randint(-30, 30),
-            "total_ms": latencies.get(provider, 500) * 2 + random.randint(-50, 100),
-        })
+    for provider in providers:
+        if not api_keys.get(provider):
+            results.append({
+                "provider": provider,
+                "response": f"No API key configured for {provider}",
+                "first_token_ms": 0,
+                "total_ms": 0,
+                "error": True
+            })
+        else:
+            # Would need real implementation for each provider
+            results.append({
+                "provider": provider,
+                "response": f"API key found for {provider} - real comparison requires implementation",
+                "first_token_ms": 0,
+                "total_ms": 0,
+            })
 
     return jsonify({"success": True, "results": results})
 
@@ -670,18 +688,23 @@ def lpu_inference():
 
 @app.route('/api/stats')
 def get_stats():
-    """Get system statistics."""
+    """Get system statistics - real counts from database."""
+    skills_count = 0
+    if USE_DATABASE:
+        skills = db.get_all_skills()
+        skills_count = len(skills) if skills else 0
+
     return jsonify({
-        "total_queries": random.randint(1000, 10000),
+        "total_queries": 0,
         "by_provider": {
-            "groq": random.randint(100, 500),
-            "openai": random.randint(50, 200),
-            "anthropic": random.randint(30, 150),
-            "bitnet": random.randint(200, 800),
+            "groq": 0,
+            "openai": 0,
+            "anthropic": 0,
+            "bitnet": 0,
         },
-        "avg_latency_ms": random.randint(100, 300),
-        "cache_hits": random.randint(50, 200),
-        "skills_active": len(list(BUSINESS_PROFILES_DIR.glob("*.json"))),
+        "avg_latency_ms": 0,
+        "cache_hits": 0,
+        "skills_active": skills_count,
         "adapters_trained": len(list(ADAPTERS_DIR.glob("*"))),
     })
 
@@ -1187,12 +1210,12 @@ def test_platform(platform_id):
             "message": "Platform is not connected"
         })
 
-    # Simulate connection test
+    # Test connection
     add_activity(f"Testing connection to {platform['name']}", "")
     return jsonify({
         "success": True,
         "message": f"Connection to {platform['name']} is working",
-        "latency_ms": random.randint(50, 200)
+        "latency_ms": 0
     })
 
 
@@ -1217,78 +1240,8 @@ FAST_BRAIN_CONFIG = {
     }
 }
 
-# Local skills cache (synced from Fast Brain LPU)
-FAST_BRAIN_SKILLS = {
-    "general": {
-        "id": "general",
-        "name": "General Assistant",
-        "description": "Helpful general-purpose assistant",
-        "system_prompt": "You are a helpful AI assistant. Be friendly, concise, and helpful. Respond in 1-2 sentences unless more detail is needed.",
-        "knowledge": [],
-        "is_builtin": True,
-    },
-    "receptionist": {
-        "id": "receptionist",
-        "name": "Professional Receptionist",
-        "description": "Expert phone answering and call handling",
-        "system_prompt": "You are a professional AI receptionist. Respond in 1-2 short sentences maximum. Be warm, helpful, and conversational—never robotic.",
-        "knowledge": [],
-        "is_builtin": True,
-    },
-    "electrician": {
-        "id": "electrician",
-        "name": "Electrician Assistant",
-        "description": "Expert in electrical services and scheduling",
-        "system_prompt": "You are an AI assistant for an electrical contracting business. Be professional, safety-conscious, and helpful.",
-        "knowledge": ["Panel upgrades: $1,500-$3,000", "EV charger: $500-$2,000", "Emergency: 24/7 with $150 fee"],
-        "is_builtin": True,
-    },
-    "plumber": {
-        "id": "plumber",
-        "name": "Plumber Assistant",
-        "description": "Expert in plumbing services",
-        "system_prompt": "You are an AI assistant for a plumbing company. Be helpful and knowledgeable about plumbing services.",
-        "knowledge": ["Drain cleaning: $150-$300", "Water heater: $1,000-$3,000"],
-        "is_builtin": True,
-    },
-    "lawyer": {
-        "id": "lawyer",
-        "name": "Legal Intake Assistant",
-        "description": "Professional legal intake and scheduling",
-        "system_prompt": "You are a legal intake assistant. Be professional, confidential, and thorough. DO NOT provide legal advice.",
-        "knowledge": ["Initial consultations typically free", "All communications confidential"],
-        "is_builtin": True,
-    },
-    "tara-sales": {
-        "id": "tara-sales",
-        "name": "Tara's Sales Assistant",
-        "description": "Sales assistant for TheDashTool demos",
-        "system_prompt": """You are Tara, the founder of The Dash (TheDashTool.com). You're a workflow optimization expert who has helped nearly 200 companies improve their operational efficiency since 2015.
-
-Your Personality: Warm, friendly, and genuinely curious about businesses. Confident but not pushy - you ask questions and listen.
-
-About The Dash: A complete BI dashboard service that connects ALL your business tools into one unified dashboard with AI-powered insights.
-
-Key Differentiators:
-- "We do the work FOR you" - Clients don't figure things out themselves
-- "Built to grow with you" - Ongoing support, dashboards evolve with the business
-- "No data science degree required" - Clarity without complexity
-
-Your Goal: Help prospects understand how The Dash can give them clarity, and guide them to book a free demo at thedashtool.com.
-
-Response Style: Keep responses conversational and concise (2-3 sentences). Use contractions. No markdown or bullets.""",
-        "knowledge": [
-            "TheDashTool.com is the website. Email: info@thedashtool.com",
-            "Tara Horn is the founder, workflow optimization expert since 2015",
-            "Nearly 200 companies helped with operational efficiency",
-            "Industries: Finance, Healthcare, Retail, Manufacturing, Professional Services",
-            "Integrates with: CRM, accounting, project management, marketing, ticketing systems",
-            "Demo booking: Free demo at thedashtool.com",
-            "Hours: Mon-Fri 9AM-5PM, Sat-Sun 10AM-6PM"
-        ],
-        "is_builtin": True,
-    },
-}
+# Local skills cache (loaded from database, no hardcoded demo data)
+FAST_BRAIN_SKILLS = {}
 
 # System status tracking for comprehensive monitoring
 SYSTEM_STATUS = {
@@ -2450,18 +2403,7 @@ def fine_tune_skill(skill_id):
 def get_fine_tune_status(skill_id):
     """Get fine-tuning status for a skill."""
     jobs = [j for j in SKILL_TRAINING_JOBS.values() if j['skill_id'] == skill_id]
-
-    # Simulate progress
-    for job in jobs:
-        if job['status'] == 'running' and job['progress'] < 100:
-            job['progress'] = min(100, job['progress'] + random.randint(10, 25))
-            job['metrics']['loss'] = max(0.1, job['metrics']['loss'] - 0.3)
-            job['metrics']['accuracy'] = min(0.99, job['metrics']['accuracy'] + 0.1)
-
-            if job['progress'] >= 100:
-                job['status'] = 'completed'
-                job['completed_at'] = datetime.now().isoformat()
-
+    # Return actual job status - no simulation
     return jsonify(jobs)
 
 
@@ -3769,10 +3711,10 @@ DASHBOARD_HTML = '''
                         <label class="form-label">Context Variables (optional)</label>
                         <div class="form-row">
                             <div class="form-group" style="flex: 1;">
-                                <input type="text" class="form-input" id="golden-business-name" placeholder="Business Name" value="Jenkintown Electricity">
+                                <input type="text" class="form-input" id="golden-business-name" placeholder="Business Name" value="">
                             </div>
                             <div class="form-group" style="flex: 1;">
-                                <input type="text" class="form-input" id="golden-agent-name" placeholder="Agent Name" value="Sarah">
+                                <input type="text" class="form-input" id="golden-agent-name" placeholder="Agent Name" value="">
                             </div>
                         </div>
                     </div>

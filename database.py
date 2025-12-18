@@ -985,11 +985,15 @@ def link_voice_to_skill(project_id: str, skill_id: str) -> bool:
 # INITIALIZATION
 # =============================================================================
 
-def initialize_database():
-    """Initialize database with schema and seed data."""
+def initialize_database(seed_data=False):
+    """Initialize database with schema. Optionally seed demo data."""
     init_db()
-    seed_builtin_skills()
-    seed_default_platforms()
+    if seed_data:
+        seed_builtin_skills()
+        seed_default_platforms()
+    else:
+        # Just seed platform configs (empty), no demo skills
+        seed_default_platforms()
     add_activity("Database initialized", "🗄️", "system")
     print(f"Database initialized at: {DB_PATH}")
 
