@@ -4881,6 +4881,146 @@ pipeline = Pipeline([
                 </div>
             </div>
 
+            <!-- Edit Voice Project -->
+            <div id="voicelab-edit" class="sub-tab-content">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">Edit</span> <span id="vl-edit-title">Voice Project</span></div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-secondary btn-sm" onclick="showVoiceLabTab('projects')">← Back</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteCurrentVoiceProject()">Delete</button>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="vl-edit-project-id">
+
+                    <div class="dashboard-grid">
+                        <!-- Project Info -->
+                        <div class="glass-card card-half" style="background: var(--glass-surface);">
+                            <h4 style="margin-bottom: 1rem; color: var(--neon-cyan);">Project Info</h4>
+                            <div class="form-group">
+                                <label class="form-label">Voice Name</label>
+                                <input type="text" class="form-input" id="vl-edit-name" placeholder="Voice name">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Description</label>
+                                <textarea class="form-textarea" id="vl-edit-description" rows="2" placeholder="Description..."></textarea>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Provider</label>
+                                    <select class="form-select" id="vl-edit-provider">
+                                        <option value="elevenlabs">ElevenLabs</option>
+                                        <option value="cartesia">Cartesia</option>
+                                        <option value="edge_tts">Edge TTS (Free)</option>
+                                        <option value="parler_tts">Parler TTS</option>
+                                        <option value="xtts">XTTS-v2</option>
+                                        <option value="openvoice">OpenVoice</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Status</label>
+                                    <div id="vl-edit-status" class="stat-value" style="padding: 0.5rem; background: var(--glass-surface); border-radius: 8px;">Draft</div>
+                                </div>
+                            </div>
+                            <button class="btn btn-secondary" onclick="saveVoiceProjectChanges()">Save Changes</button>
+                        </div>
+
+                        <!-- Voice Settings -->
+                        <div class="glass-card card-half" style="background: var(--glass-surface);">
+                            <h4 style="margin-bottom: 1rem; color: var(--neon-pink);">Voice Settings</h4>
+                            <div class="form-group">
+                                <label class="form-label">Pitch: <span id="vl-edit-pitch-value">1.0</span></label>
+                                <input type="range" class="form-input" id="vl-edit-pitch" min="0.5" max="2.0" step="0.1" value="1.0" oninput="document.getElementById('vl-edit-pitch-value').textContent = this.value">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Speed: <span id="vl-edit-speed-value">1.0</span></label>
+                                <input type="range" class="form-input" id="vl-edit-speed" min="0.5" max="2.0" step="0.1" value="1.0" oninput="document.getElementById('vl-edit-speed-value').textContent = this.value">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Emotion</label>
+                                    <select class="form-select" id="vl-edit-emotion">
+                                        <option value="neutral">Neutral</option>
+                                        <option value="warm">Warm</option>
+                                        <option value="excited">Excited</option>
+                                        <option value="calm">Calm</option>
+                                        <option value="confident">Confident</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Style</label>
+                                    <select class="form-select" id="vl-edit-style">
+                                        <option value="conversational">Conversational</option>
+                                        <option value="professional">Professional</option>
+                                        <option value="friendly">Friendly</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Audio Samples -->
+                        <div class="glass-card card-full" style="background: var(--glass-surface);">
+                            <div class="section-header">
+                                <h4 style="color: var(--neon-green);">Audio Samples</h4>
+                                <button class="btn btn-primary btn-sm" onclick="document.getElementById('vl-edit-audio-input').click()">+ Add Sample</button>
+                            </div>
+                            <input type="file" id="vl-edit-audio-input" accept="audio/*" style="display: none;" onchange="uploadVoiceSample(this)">
+                            <div id="vl-edit-samples-list" style="margin-top: 1rem;">
+                                <div style="color: var(--text-secondary); padding: 1rem; text-align: center;">
+                                    No samples uploaded. Add audio samples to train your voice.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Train & Test -->
+                        <div class="glass-card card-full" style="background: var(--glass-surface);">
+                            <h4 style="margin-bottom: 1rem; color: var(--neon-purple);">Train & Test Voice</h4>
+                            <div class="form-row" style="align-items: flex-end;">
+                                <div class="form-group" style="flex: 2;">
+                                    <label class="form-label">Test Text</label>
+                                    <input type="text" class="form-input" id="vl-edit-test-text" value="Hello! This is a test of my custom voice. How does it sound?">
+                                </div>
+                                <div class="form-group">
+                                    <button class="btn btn-success" onclick="trainVoiceProject()">Train Voice</button>
+                                </div>
+                                <div class="form-group">
+                                    <button class="btn btn-primary" onclick="testVoiceProject()">Test Voice</button>
+                                </div>
+                            </div>
+                            <div id="vl-edit-audio-player" style="margin-top: 1rem; display: none;">
+                                <audio id="vl-edit-audio" controls style="width: 100%;"></audio>
+                            </div>
+                            <div id="vl-edit-message" style="margin-top: 1rem;"></div>
+                        </div>
+
+                        <!-- Link to Skill -->
+                        <div class="glass-card card-full" style="background: var(--glass-surface);">
+                            <h4 style="margin-bottom: 1rem; color: var(--neon-orange);">Link to Skill/Agent</h4>
+                            <div class="form-row" style="align-items: flex-end;">
+                                <div class="form-group" style="flex: 2;">
+                                    <label class="form-label">Select Skill</label>
+                                    <select class="form-select" id="vl-edit-skill-link">
+                                        <option value="">-- Select a skill --</option>
+                                        <option value="receptionist">Receptionist</option>
+                                        <option value="electrician">Electrician</option>
+                                        <option value="plumber">Plumber</option>
+                                        <option value="lawyer">Lawyer</option>
+                                        <option value="solar">Solar</option>
+                                        <option value="tara-sales">Tara Sales</option>
+                                        <option value="general">General</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <button class="btn btn-secondary" onclick="linkVoiceProjectToSkill()">Link Voice</button>
+                                </div>
+                            </div>
+                            <p id="vl-edit-linked-skill" style="color: var(--text-secondary); margin-top: 0.5rem;"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Create Voice -->
             <div id="voicelab-create" class="sub-tab-content">
                 <div class="dashboard-grid">
@@ -6702,8 +6842,12 @@ print("Training complete: adapters/${skillId}")`;
         function showVoiceLabTab(tabId) {
             document.querySelectorAll('#tab-voicelab .sub-tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('#tab-voicelab .sub-tab-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById('voicelab-' + tabId).classList.add('active');
-            event.target.classList.add('active');
+            const tabEl = document.getElementById('voicelab-' + tabId);
+            if (tabEl) tabEl.classList.add('active');
+            // Highlight the button if we can find it (edit tab has no button)
+            if (event && event.target && event.target.classList) {
+                event.target.classList.add('active');
+            }
         }
 
         async function loadVoiceProjects() {
@@ -6817,8 +6961,280 @@ print("Training complete: adapters/${skillId}")`;
             }
         }
 
-        function openVoiceProject(projectId) {
-            alert('Opening project: ' + projectId + '\\n\\nFull project editor coming soon!');
+        async function openVoiceProject(projectId) {
+            try {
+                const res = await fetch(`/api/voice-lab/projects/${projectId}`);
+                const project = await res.json();
+
+                if (project.error) {
+                    alert('Error loading project: ' + project.error);
+                    return;
+                }
+
+                // Store project ID
+                document.getElementById('vl-edit-project-id').value = projectId;
+
+                // Populate form fields
+                document.getElementById('vl-edit-title').textContent = project.name;
+                document.getElementById('vl-edit-name').value = project.name || '';
+                document.getElementById('vl-edit-description').value = project.description || '';
+                document.getElementById('vl-edit-provider').value = project.provider || 'elevenlabs';
+
+                // Status with color
+                const statusEl = document.getElementById('vl-edit-status');
+                statusEl.textContent = project.status || 'draft';
+                statusEl.style.color = project.status === 'trained' ? 'var(--neon-green)' :
+                                       project.status === 'training' ? 'var(--neon-orange)' :
+                                       project.status === 'failed' ? 'var(--neon-pink)' : 'var(--text-secondary)';
+
+                // Settings
+                const settings = project.settings || {};
+                document.getElementById('vl-edit-pitch').value = settings.pitch || 1.0;
+                document.getElementById('vl-edit-pitch-value').textContent = settings.pitch || 1.0;
+                document.getElementById('vl-edit-speed').value = settings.speed || 1.0;
+                document.getElementById('vl-edit-speed-value').textContent = settings.speed || 1.0;
+                document.getElementById('vl-edit-emotion').value = settings.emotion || 'neutral';
+                document.getElementById('vl-edit-style').value = settings.style || 'conversational';
+
+                // Linked skill
+                document.getElementById('vl-edit-skill-link').value = project.skill_id || '';
+                document.getElementById('vl-edit-linked-skill').textContent =
+                    project.skill_id ? `Currently linked to: ${project.skill_id}` : '';
+
+                // Load samples
+                renderVoiceSamples(project.samples || []);
+
+                // Show the edit tab
+                showVoiceLabTab('edit');
+
+            } catch (e) {
+                alert('Error opening project: ' + e.message);
+            }
+        }
+
+        function renderVoiceSamples(samples) {
+            const container = document.getElementById('vl-edit-samples-list');
+
+            if (!samples || samples.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-secondary); padding: 1rem; text-align: center;">No samples uploaded. Add audio samples to train your voice.</div>';
+                return;
+            }
+
+            container.innerHTML = samples.map(s => `
+                <div style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--card-bg); border-radius: 8px; margin-bottom: 0.5rem;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 500;">${s.filename || 'Audio Sample'}</div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">
+                            ${s.duration_ms ? Math.round(s.duration_ms/1000) + 's' : 'Unknown duration'} | ${s.emotion || 'neutral'}
+                        </div>
+                        ${s.transcript ? `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">"${s.transcript}"</div>` : ''}
+                    </div>
+                    <button class="btn btn-danger btn-sm" onclick="deleteVoiceSample('${s.id}')">Delete</button>
+                </div>
+            `).join('');
+        }
+
+        async function uploadVoiceSample(input) {
+            const projectId = document.getElementById('vl-edit-project-id').value;
+            if (!projectId) return;
+
+            const file = input.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('audio', file);
+            formData.append('emotion', document.getElementById('vl-edit-emotion').value);
+
+            try {
+                showEditMessage('Uploading sample...', 'info');
+
+                const res = await fetch(`/api/voice-lab/projects/${projectId}/samples`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    showEditMessage('Sample uploaded!', 'success');
+                    // Reload project to refresh samples
+                    openVoiceProject(projectId);
+                } else {
+                    showEditMessage(result.error || 'Upload failed', 'error');
+                }
+            } catch (e) {
+                showEditMessage('Upload error: ' + e.message, 'error');
+            }
+
+            input.value = '';
+        }
+
+        async function deleteVoiceSample(sampleId) {
+            const projectId = document.getElementById('vl-edit-project-id').value;
+            if (!confirm('Delete this sample?')) return;
+
+            try {
+                const res = await fetch(`/api/voice-lab/projects/${projectId}/samples/${sampleId}`, {
+                    method: 'DELETE'
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    openVoiceProject(projectId);
+                }
+            } catch (e) {
+                alert('Error deleting sample: ' + e.message);
+            }
+        }
+
+        async function saveVoiceProjectChanges() {
+            const projectId = document.getElementById('vl-edit-project-id').value;
+            if (!projectId) return;
+
+            const data = {
+                name: document.getElementById('vl-edit-name').value,
+                description: document.getElementById('vl-edit-description').value,
+                provider: document.getElementById('vl-edit-provider').value,
+                settings: {
+                    pitch: parseFloat(document.getElementById('vl-edit-pitch').value),
+                    speed: parseFloat(document.getElementById('vl-edit-speed').value),
+                    emotion: document.getElementById('vl-edit-emotion').value,
+                    style: document.getElementById('vl-edit-style').value
+                }
+            };
+
+            try {
+                const res = await fetch(`/api/voice-lab/projects/${projectId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    document.getElementById('vl-edit-title').textContent = data.name;
+                    showEditMessage('Changes saved!', 'success');
+                } else {
+                    showEditMessage(result.error || 'Save failed', 'error');
+                }
+            } catch (e) {
+                showEditMessage('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function trainVoiceProject() {
+            const projectId = document.getElementById('vl-edit-project-id').value;
+            if (!projectId) return;
+
+            try {
+                showEditMessage('Starting voice training...', 'info');
+                document.getElementById('vl-edit-status').textContent = 'training';
+                document.getElementById('vl-edit-status').style.color = 'var(--neon-orange)';
+
+                const res = await fetch(`/api/voice-lab/projects/${projectId}/train`, {
+                    method: 'POST'
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    document.getElementById('vl-edit-status').textContent = 'trained';
+                    document.getElementById('vl-edit-status').style.color = 'var(--neon-green)';
+                    showEditMessage(result.message || 'Voice trained successfully!', 'success');
+                } else {
+                    document.getElementById('vl-edit-status').textContent = 'failed';
+                    document.getElementById('vl-edit-status').style.color = 'var(--neon-pink)';
+                    showEditMessage(result.error || 'Training failed', 'error');
+                }
+            } catch (e) {
+                showEditMessage('Training error: ' + e.message, 'error');
+            }
+        }
+
+        async function testVoiceProject() {
+            const projectId = document.getElementById('vl-edit-project-id').value;
+            const text = document.getElementById('vl-edit-test-text').value;
+            if (!projectId || !text) return;
+
+            try {
+                showEditMessage('Synthesizing voice...', 'info');
+
+                const res = await fetch(`/api/voice-lab/projects/${projectId}/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                const result = await res.json();
+
+                if (result.success && result.audio_url) {
+                    const audioPlayer = document.getElementById('vl-edit-audio-player');
+                    const audio = document.getElementById('vl-edit-audio');
+                    audio.src = result.audio_url;
+                    audioPlayer.style.display = 'block';
+                    audio.play();
+                    showEditMessage(result.message || 'Audio generated!', 'success');
+                } else {
+                    showEditMessage(result.error || 'Could not generate audio', 'error');
+                }
+            } catch (e) {
+                showEditMessage('Test error: ' + e.message, 'error');
+            }
+        }
+
+        async function linkVoiceProjectToSkill() {
+            const projectId = document.getElementById('vl-edit-project-id').value;
+            const skillId = document.getElementById('vl-edit-skill-link').value;
+            if (!projectId || !skillId) {
+                showEditMessage('Please select a skill', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/voice-lab/projects/${projectId}/link-skill`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ skill_id: skillId })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    document.getElementById('vl-edit-linked-skill').textContent = `Currently linked to: ${skillId}`;
+                    showEditMessage(`Voice linked to ${skillId}!`, 'success');
+                } else {
+                    showEditMessage(result.error || 'Failed to link', 'error');
+                }
+            } catch (e) {
+                showEditMessage('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteCurrentVoiceProject() {
+            const projectId = document.getElementById('vl-edit-project-id').value;
+            const name = document.getElementById('vl-edit-name').value;
+
+            if (!confirm(`Delete voice project "${name}"? This cannot be undone.`)) return;
+
+            try {
+                const res = await fetch(`/api/voice-lab/projects/${projectId}`, {
+                    method: 'DELETE'
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    showVoiceLabTab('projects');
+                    loadVoiceProjects();
+                } else {
+                    alert(result.error || 'Delete failed');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        function showEditMessage(msg, type) {
+            const el = document.getElementById('vl-edit-message');
+            el.innerHTML = `<div style="color: ${type === 'success' ? 'var(--neon-green)' : type === 'error' ? 'var(--neon-pink)' : 'var(--neon-cyan)'};">${msg}</div>`;
+            if (type !== 'info') {
+                setTimeout(() => { el.innerHTML = ''; }, 5000);
+            }
         }
 
         async function refreshVoiceTrainingStatus() {
