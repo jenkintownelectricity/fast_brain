@@ -146,27 +146,77 @@ modal deploy deploy_dashboard.py && modal deploy fast_brain/deploy_groq.py && mo
 
 Access at: `https://[username]--hive215-dashboard-flask-app.modal.run`
 
-### Command Center
+### Four Pillars Navigation
+
+The dashboard is organized into 4 main sections for streamlined workflow:
+
+| Pillar | Contents |
+|--------|----------|
+| **Dashboard** | Overview, status cards, Getting Started onboarding |
+| **Skills** | Skills Manager, Golden Prompts, Train LoRA, Test Chat, Outgoing API |
+| **Voice** | Voice Projects, Create Voice, Training Queue, Skill Training |
+| **Settings** | API Keys (7 providers), Platform Connections, Stats |
+
+### Dark/Light Mode
+
+Toggle between Slack-inspired themes:
+- **Dark Mode**: Default cyberpunk theme with neon accents
+- **Light Mode**: Clean, professional Slack-inspired light theme
+- Theme persists via localStorage (survives browser restarts)
+- Toggle button (sun/moon icon) in top-right corner
+
+### Dashboard Tab
 - Real-time metrics and activity feed
-- Voice configuration with emotion controls
-- LLM comparison testing (Groq vs Claude)
+- Getting Started onboarding for new users
+- Status cards for skills, voices, and API connections
 
-### Skills Factory
-- **Business Profile**: Create skill configurations
-- **Golden Prompts**: View/edit voice-optimized prompts
-- **Upload Documents**: Add training data
-- **Train Skill**: Generate LoRA training scripts
-- **Manage Skills**: Full skill library
+### Skills Tab
+- **Skills Manager**: Create, edit, and manage AI agent skills
+- **Golden Prompts**: View/edit voice-optimized system prompts
+- **Train LoRA**: Generate training data for fine-tuning
+- **Test Chat**: Test skills with real LLM inference
+- **Outgoing API**: Configure external API integrations
 
-### Voice Lab
-- **Parler TTS**: Expressive voices with emotion (GPU)
-- **Edge TTS**: Free Microsoft voices
-- **gTTS**: Google Text-to-Speech fallback
-- Voice testing with audio playback
+### Voice Tab (Voice Lab)
 
-### Platform Connections
-- LiveKit, Twilio, Vonage integration status
-- Vapi configuration
+Full voice cloning and synthesis:
+
+| Feature | Description |
+|---------|-------------|
+| **Create Project** | New voice projects with provider selection |
+| **Upload Samples** | Add audio samples for voice training |
+| **Train Voice** | Clone voices with ElevenLabs, Cartesia, or free gTTS |
+| **Test Synthesis** | Generate audio and playback in browser |
+| **Link to Skill** | Connect trained voices to specific agents |
+
+**Supported Providers:**
+- **ElevenLabs**: Professional voice cloning (requires API key)
+- **Cartesia**: High-quality synthesis (requires API key)
+- **gTTS**: Free Google Text-to-Speech (no API key needed)
+- **Parler TTS**: Expressive GPU-based synthesis
+
+### Settings Tab
+
+**API Keys (7 providers):**
+| Category | Providers |
+|----------|-----------|
+| LLM | Groq, OpenAI, Anthropic |
+| Voice | ElevenLabs, Cartesia, Deepgram, PlayHT |
+
+**Platform Connections:**
+- LiveKit, Twilio, Vapi, Retell AI, Daily.co
+
+### Outgoing API Connections
+
+Connect your agents to external services:
+
+- **Add connections**: Name, URL, authentication type
+- **Auth types**: Bearer token, X-API-Key, Basic auth, None
+- **Custom headers**: Add any HTTP headers
+- **Webhook URL**: Receive callbacks from external services
+- **Test connection**: Verify with real HTTP requests
+- **Request tester**: Send GET/POST/PUT/DELETE with custom paths and bodies
+- **Live status**: See connection health at a glance
 
 ---
 
@@ -230,6 +280,27 @@ audio_bytes, description = model.synthesize_with_emotion.remote(
 
 ---
 
+## Database Schema
+
+The dashboard uses SQLite for persistent storage on a Modal volume (`/data/hive215.db`):
+
+| Table | Purpose |
+|-------|---------|
+| `skills` | Custom skills/agents with prompts and voice configs |
+| `golden_prompts` | Custom prompt overrides for built-in skills |
+| `api_keys` | Encrypted API key storage (7 providers) |
+| `platform_connections` | Voice platform configurations |
+| `activity_log` | System activity tracking and audit log |
+| `voice_projects` | Voice cloning projects and settings |
+| `voice_samples` | Audio samples for voice training |
+| `api_connections` | Outgoing API integrations |
+| `training_data` | Collected examples for LoRA fine-tuning |
+| `configurations` | Key-value system settings |
+
+Data persists across Modal container restarts via the `hive215-data` volume.
+
+---
+
 ## File Structure
 
 ```
@@ -244,12 +315,20 @@ fast_brain/
 └── __init__.py             # Package exports
 
 deploy_dashboard.py         # Dashboard Modal deployment
-unified_dashboard.py        # Full management UI (259KB)
+unified_dashboard.py        # Full management UI (Flask + HTML/JS)
+database.py                 # SQLite database with CRUD operations
+golden_prompts.py           # Voice-optimized skill prompts
 
 worker/
 ├── voice_agent.py          # LiveKit voice agent
 ├── requirements.txt        # Worker dependencies
 └── test_fast_brain.py      # Test client
+
+docs/visuals/               # Visual HTML documentation
+├── index.html              # Documentation library index
+├── dashboard-improvement-plan.html
+├── 2024-12-18_fast-brain-hive215-architecture.html
+└── 2024-12-18_unified-dashboard-features.html
 ```
 
 ---
@@ -394,14 +473,28 @@ model="claude-sonnet-4-5-20250929"
 ## Development
 
 ### Recent Updates (December 2024)
-- **HIVE215 Integration**: OpenAI-compatible API with skill parameter
+
+**New Features:**
+- **Voice Lab**: Full voice cloning workflow with ElevenLabs, Cartesia, and free gTTS
+- **Outgoing API Connections**: Connect agents to external REST APIs with auth support
+- **Dark/Light Mode**: Slack-inspired light theme with localStorage persistence
+- **Four Pillars Navigation**: Consolidated from 6 tabs to 4 main sections
+- **SQLite Database**: Persistent storage on Modal volume for all data
+- **7 API Key Providers**: Groq, OpenAI, Anthropic, ElevenLabs, Cartesia, Deepgram, PlayHT
 - **tara-sales skill**: TheDashTool sales assistant for voice demos
-- **Python 3.11 venv setup**: Recommended deployment workflow
+
+**Improvements:**
+- Removed all placeholder/test data for production readiness
+- Better empty states with Getting Started onboarding
+- Improved audio playback with proper error handling
+- Real HTTP testing for API connections
+- Activity logging for all operations
+
+**Infrastructure:**
+- Python 3.11 venv setup (recommended deployment workflow)
 - Parler TTS integration with emotion controls
-- Golden Prompts management UI
-- gTTS fallback for voice testing
-- Training collector for LoRA fine-tuning
-- Unified dashboard on Modal
+- gTTS fallback for reliable voice testing
+- Training collector for LoRA fine-tuning data export
 
 ---
 

@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Lab Guide | HIVE215</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #e6edf3;
+            line-height: 1.6;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 40px;
+            text-align: center;
+            border-bottom: 1px solid #30363d;
+        }
+        .date-badge {
+            display: inline-block;
+            background: rgba(136, 0, 255, 0.15);
+            color: #a855f7;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+            font-family: monospace;
+        }
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #a855f7, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #8b949e;
+            font-size: 1.1rem;
+        }
+        .nav {
+            background: #161b22;
+            padding: 16px 40px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+        .nav a {
+            color: #8b949e;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+        .nav a:hover, .nav a.active {
+            color: #a855f7;
+        }
+        .content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+        .section {
+            margin-bottom: 60px;
+        }
+        .section-title {
+            font-size: 1.8rem;
+            color: #a855f7;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 28px;
+            background: linear-gradient(180deg, #a855f7, #00ff88);
+            border-radius: 2px;
+        }
+
+        /* Workflow Diagram */
+        .workflow {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 16px;
+            padding: 40px;
+            margin-bottom: 40px;
+        }
+        .workflow-steps {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .workflow-step {
+            flex: 1;
+            min-width: 180px;
+            text-align: center;
+            position: relative;
+        }
+        .workflow-step:not(:last-child)::after {
+            content: '→';
+            position: absolute;
+            right: -20px;
+            top: 30px;
+            font-size: 24px;
+            color: #30363d;
+        }
+        .step-number {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #a855f7, #00d9ff);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            margin: 0 auto 16px;
+        }
+        .step-title {
+            font-size: 1.1rem;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        .step-desc {
+            font-size: 0.85rem;
+            color: #8b949e;
+        }
+
+        /* Provider Cards */
+        .providers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-top: 24px;
+        }
+        .provider-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.3s;
+        }
+        .provider-card:hover {
+            border-color: #a855f7;
+            transform: translateY(-4px);
+        }
+        .provider-card.free {
+            border-color: #00ff88;
+        }
+        .provider-card.premium {
+            border-color: #ff8800;
+        }
+        .provider-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .provider-name {
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+        .provider-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+        .provider-badge.free {
+            background: rgba(0, 255, 136, 0.15);
+            color: #00ff88;
+        }
+        .provider-badge.premium {
+            background: rgba(255, 136, 0, 0.15);
+            color: #ff8800;
+        }
+        .provider-desc {
+            color: #8b949e;
+            margin-bottom: 16px;
+        }
+        .provider-features {
+            list-style: none;
+        }
+        .provider-features li {
+            padding: 4px 0;
+            color: #8b949e;
+            font-size: 0.9rem;
+        }
+        .provider-features li::before {
+            content: '✓ ';
+            color: #00ff88;
+        }
+
+        /* Quick Start */
+        .quick-start {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 24px;
+        }
+        .quick-start h4 {
+            color: #00d9ff;
+            margin-bottom: 16px;
+        }
+        .quick-start ol {
+            margin-left: 24px;
+        }
+        .quick-start li {
+            margin-bottom: 12px;
+            color: #8b949e;
+        }
+        .quick-start li strong {
+            color: #fff;
+        }
+
+        /* Code Block */
+        code {
+            background: #21262d;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+            font-size: 0.85rem;
+            color: #ff7b72;
+        }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #30363d;
+        }
+        th {
+            background: #161b22;
+            color: #00d9ff;
+            font-weight: 600;
+        }
+        td {
+            color: #8b949e;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px;
+            color: #8b949e;
+            border-top: 1px solid #30363d;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="date-badge">Voice Lab Documentation</div>
+        <h1>Voice Lab Guide</h1>
+        <p class="subtitle">Create, train, and deploy custom voices for your AI agents</p>
+    </div>
+
+    <nav class="nav">
+        <a href="index.html">← Back to Docs</a>
+        <a href="#workflow">Workflow</a>
+        <a href="#providers">Providers</a>
+        <a href="#quick-start">Quick Start</a>
+        <a href="#settings">Settings</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+    </nav>
+
+    <div class="content">
+        <section id="workflow" class="section">
+            <h2 class="section-title">Voice Cloning Workflow</h2>
+            <div class="workflow">
+                <div class="workflow-steps">
+                    <div class="workflow-step">
+                        <div class="step-number">1</div>
+                        <div class="step-title">Create Project</div>
+                        <div class="step-desc">Name your voice, select provider, configure settings</div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="step-number">2</div>
+                        <div class="step-title">Upload Samples</div>
+                        <div class="step-desc">Add audio recordings with transcripts</div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="step-number">3</div>
+                        <div class="step-title">Train Voice</div>
+                        <div class="step-desc">Process samples to create custom voice</div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="step-number">4</div>
+                        <div class="step-title">Test & Link</div>
+                        <div class="step-desc">Test synthesis, link to skill/agent</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="providers" class="section">
+            <h2 class="section-title">Supported Providers</h2>
+            <div class="providers-grid">
+                <div class="provider-card free">
+                    <div class="provider-header">
+                        <span class="provider-name">gTTS</span>
+                        <span class="provider-badge free">Free</span>
+                    </div>
+                    <p class="provider-desc">Google Text-to-Speech - reliable HTTP-based synthesis</p>
+                    <ul class="provider-features">
+                        <li>No API key required</li>
+                        <li>Multiple languages and accents</li>
+                        <li>Works reliably from Modal</li>
+                        <li>Great for testing</li>
+                    </ul>
+                </div>
+
+                <div class="provider-card free">
+                    <div class="provider-header">
+                        <span class="provider-name">Parler TTS</span>
+                        <span class="provider-badge free">Free (GPU)</span>
+                    </div>
+                    <p class="provider-desc">Expressive voice synthesis with emotion control</p>
+                    <ul class="provider-features">
+                        <li>No API key required</li>
+                        <li>10+ emotion presets</li>
+                        <li>Skill-specific voice personas</li>
+                        <li>GPU-powered (30-60s cold start)</li>
+                    </ul>
+                </div>
+
+                <div class="provider-card premium">
+                    <div class="provider-header">
+                        <span class="provider-name">ElevenLabs</span>
+                        <span class="provider-badge premium">Premium</span>
+                    </div>
+                    <p class="provider-desc">Professional voice cloning with instant voice cloning</p>
+                    <ul class="provider-features">
+                        <li>High-quality voice cloning</li>
+                        <li>Instant voice from 1 sample</li>
+                        <li>Natural prosody and emotion</li>
+                        <li>Requires API key</li>
+                    </ul>
+                </div>
+
+                <div class="provider-card premium">
+                    <div class="provider-header">
+                        <span class="provider-name">Cartesia</span>
+                        <span class="provider-badge premium">Premium</span>
+                    </div>
+                    <p class="provider-desc">Ultra-low latency voice synthesis</p>
+                    <ul class="provider-features">
+                        <li>Sub-100ms latency</li>
+                        <li>Voice cloning support</li>
+                        <li>Streaming audio</li>
+                        <li>Requires API key</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section id="quick-start" class="section">
+            <h2 class="section-title">Quick Start Guide</h2>
+            <div class="quick-start">
+                <h4>Free Voice Testing (No API Key)</h4>
+                <ol>
+                    <li><strong>Go to Voice Tab</strong> in the dashboard</li>
+                    <li><strong>Click "Create Voice Project"</strong></li>
+                    <li><strong>Select "gTTS" or "Parler TTS"</strong> as provider</li>
+                    <li><strong>Enter a name</strong> for your voice project</li>
+                    <li><strong>Click "Create"</strong></li>
+                    <li><strong>Open project</strong> and click "Test Voice"</li>
+                    <li><strong>Listen to audio</strong> - it works!</li>
+                </ol>
+            </div>
+
+            <div class="quick-start" style="margin-top: 24px;">
+                <h4>Premium Voice Cloning (ElevenLabs)</h4>
+                <ol>
+                    <li><strong>Go to Settings → API Keys</strong></li>
+                    <li><strong>Enter your ElevenLabs API key</strong></li>
+                    <li><strong>Go to Voice Tab → Create Voice Project</strong></li>
+                    <li><strong>Select "ElevenLabs"</strong> as provider</li>
+                    <li><strong>Upload audio samples</strong> (at least 30 seconds total)</li>
+                    <li><strong>Add transcripts</strong> for each sample</li>
+                    <li><strong>Click "Train Voice"</strong></li>
+                    <li><strong>Wait for training</strong> (usually 1-5 minutes)</li>
+                    <li><strong>Test your cloned voice!</strong></li>
+                </ol>
+            </div>
+        </section>
+
+        <section id="settings" class="section">
+            <h2 class="section-title">Voice Settings</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Setting</th>
+                        <th>Description</th>
+                        <th>Range</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Pitch</strong></td>
+                        <td>Voice pitch adjustment</td>
+                        <td>0.5 - 2.0 (1.0 = normal)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Speed</strong></td>
+                        <td>Speech rate</td>
+                        <td>0.5 - 2.0 (1.0 = normal)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Emotion</strong></td>
+                        <td>Emotional tone (Parler TTS)</td>
+                        <td>neutral, warm, excited, calm, etc.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Style</strong></td>
+                        <td>Speaking style</td>
+                        <td>conversational, professional, friendly</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section id="troubleshooting" class="section">
+            <h2 class="section-title">Troubleshooting</h2>
+            <div class="quick-start">
+                <h4>Audio Not Playing (0:00 / 0:00 duration)</h4>
+                <ol>
+                    <li>Check browser console for errors (F12 → Console)</li>
+                    <li>Verify audio file was generated (check for error message)</li>
+                    <li>Try a different text or shorter phrase</li>
+                    <li>Ensure gTTS is working (test with free provider first)</li>
+                    <li>Check Modal logs for server-side errors</li>
+                </ol>
+            </div>
+
+            <div class="quick-start" style="margin-top: 24px;">
+                <h4>Training Failed (Premium Providers)</h4>
+                <ol>
+                    <li>Verify API key is valid in Settings → API Keys</li>
+                    <li>Ensure audio samples are clear (no background noise)</li>
+                    <li>Check sample length (minimum 30 seconds total)</li>
+                    <li>Verify audio format is supported (MP3, WAV, M4A)</li>
+                    <li>Check provider's dashboard for quota limits</li>
+                </ol>
+            </div>
+        </section>
+    </div>
+
+    <footer>
+        <p>HIVE215 Voice Platform | Fast Brain LPU</p>
+        <p style="margin-top: 8px;">Last updated: December 2024</p>
+    </footer>
+</body>
+</html>
