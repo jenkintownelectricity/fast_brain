@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fast Brain Visual Documentation Library</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e4e4e4;
+            padding: 40px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        h1 {
+            font-size: 3rem;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #888;
+            font-size: 1.2rem;
+        }
+        .docs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 24px;
+        }
+        .doc-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        .doc-card:hover {
+            transform: translateY(-4px);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: #00d9ff;
+            box-shadow: 0 8px 32px rgba(0, 217, 255, 0.2);
+        }
+        .doc-date {
+            font-size: 0.85rem;
+            color: #00d9ff;
+            margin-bottom: 8px;
+            font-family: monospace;
+        }
+        .doc-title {
+            font-size: 1.4rem;
+            margin-bottom: 12px;
+            color: #fff;
+        }
+        .doc-description {
+            color: #aaa;
+            line-height: 1.6;
+            margin-bottom: 16px;
+        }
+        .doc-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .tag {
+            background: rgba(0, 217, 255, 0.15);
+            color: #00d9ff;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+        .tag.hive215 { background: rgba(255, 136, 0, 0.15); color: #ff8800; }
+        .tag.modal { background: rgba(136, 0, 255, 0.15); color: #a855f7; }
+        .tag.skills { background: rgba(0, 255, 136, 0.15); color: #00ff88; }
+        .tag.api { background: rgba(255, 0, 136, 0.15); color: #ff0088; }
+
+        .section-title {
+            font-size: 1.5rem;
+            color: #00ff88;
+            margin: 40px 0 20px 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(0, 255, 136, 0.3);
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin: 40px 0;
+            flex-wrap: wrap;
+        }
+        .stat {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .stat-label {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 60px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .new-badge {
+            background: linear-gradient(90deg, #ff0088, #ff8800);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            margin-left: 8px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Fast Brain Visual Docs</h1>
+            <p class="subtitle">Architecture diagrams, system flows, and integration guides</p>
+        </header>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value">1</div>
+                <div class="stat-label">Architecture Docs</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">8</div>
+                <div class="stat-label">Skills Defined</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">&lt;50ms</div>
+                <div class="stat-label">Target TTFB</div>
+            </div>
+        </div>
+
+        <h2 class="section-title">Architecture & System Design</h2>
+        <div class="docs-grid">
+            <a href="2024-12-18_fast-brain-hive215-architecture.html" class="doc-card">
+                <div class="doc-date">2024-12-18</div>
+                <div class="doc-title">Fast Brain + HIVE215 Architecture <span class="new-badge">NEW</span></div>
+                <div class="doc-description">
+                    Complete system architecture showing Fast Brain LPU integration with HIVE215 Voice Platform.
+                    Includes voice pipeline, skill routing, API endpoints, and the hybrid System 1/System 2 design.
+                </div>
+                <div class="doc-tags">
+                    <span class="tag">architecture</span>
+                    <span class="tag hive215">hive215</span>
+                    <span class="tag modal">modal</span>
+                    <span class="tag skills">skills</span>
+                </div>
+            </a>
+        </div>
+
+        <h2 class="section-title">Coming Soon</h2>
+        <div class="docs-grid">
+            <div class="doc-card" style="opacity: 0.5; cursor: not-allowed;">
+                <div class="doc-date">Planned</div>
+                <div class="doc-title">Skills Deep Dive</div>
+                <div class="doc-description">
+                    Detailed breakdown of skill structure, system prompts, and how to create custom skills.
+                </div>
+                <div class="doc-tags">
+                    <span class="tag skills">skills</span>
+                    <span class="tag api">api</span>
+                </div>
+            </div>
+            <div class="doc-card" style="opacity: 0.5; cursor: not-allowed;">
+                <div class="doc-date">Planned</div>
+                <div class="doc-title">Deployment Guide</div>
+                <div class="doc-description">
+                    Step-by-step Modal deployment, Railway configuration, and production setup.
+                </div>
+                <div class="doc-tags">
+                    <span class="tag modal">modal</span>
+                    <span class="tag">deployment</span>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>Fast Brain LPU - Voice AI Inference Engine</p>
+            <p style="margin-top: 8px;">Last updated: December 18, 2024</p>
+        </footer>
+    </div>
+</body>
+</html>

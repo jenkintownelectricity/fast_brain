@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fast Brain + HIVE215 Architecture | Dec 18, 2024</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #e6edf3;
+            line-height: 1.6;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 40px;
+            text-align: center;
+            border-bottom: 1px solid #30363d;
+        }
+        .date-badge {
+            display: inline-block;
+            background: rgba(0, 217, 255, 0.15);
+            color: #00d9ff;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+            font-family: monospace;
+        }
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #8b949e;
+            font-size: 1.1rem;
+        }
+        .nav {
+            background: #161b22;
+            padding: 16px 40px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+        .nav a {
+            color: #8b949e;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+        .nav a:hover, .nav a.active {
+            color: #00d9ff;
+        }
+        .content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+        .section {
+            margin-bottom: 60px;
+        }
+        .section-title {
+            font-size: 1.8rem;
+            color: #00ff88;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 28px;
+            background: linear-gradient(180deg, #00ff88, #00d9ff);
+            border-radius: 2px;
+        }
+
+        /* Architecture Diagram */
+        .architecture {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 16px;
+            padding: 40px;
+            overflow-x: auto;
+        }
+        .diagram {
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+            min-width: 900px;
+        }
+        .layer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .layer-label {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            transform: rotate(180deg);
+            color: #8b949e;
+            font-size: 0.85rem;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            min-width: 40px;
+            text-align: center;
+        }
+        .box {
+            background: #21262d;
+            border: 2px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            min-width: 140px;
+            transition: all 0.3s;
+        }
+        .box:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+        .box-title {
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .box-subtitle {
+            font-size: 0.8rem;
+            color: #8b949e;
+        }
+        .box-latency {
+            font-size: 0.75rem;
+            color: #00ff88;
+            margin-top: 8px;
+            font-family: monospace;
+        }
+        .box.user { border-color: #a855f7; }
+        .box.user .box-title { color: #a855f7; }
+        .box.hive { border-color: #ff8800; }
+        .box.hive .box-title { color: #ff8800; }
+        .box.fast-brain { border-color: #00d9ff; }
+        .box.fast-brain .box-title { color: #00d9ff; }
+        .box.groq { border-color: #00ff88; }
+        .box.groq .box-title { color: #00ff88; }
+        .box.claude { border-color: #ff6b6b; }
+        .box.claude .box-title { color: #ff6b6b; }
+        .box.skill { border-color: #ffd93d; }
+        .box.skill .box-title { color: #ffd93d; }
+
+        .arrow {
+            font-size: 2rem;
+            color: #30363d;
+        }
+        .arrow-down {
+            text-align: center;
+            font-size: 2rem;
+            color: #30363d;
+            margin: -20px 0;
+        }
+
+        .wide-box {
+            min-width: 300px;
+        }
+        .extra-wide {
+            min-width: 600px;
+        }
+
+        /* Skills Grid */
+        .skills-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        .skill-card {
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .skill-card.featured {
+            border-color: #00ff88;
+            background: linear-gradient(135deg, rgba(0,255,136,0.05) 0%, transparent 100%);
+        }
+        .skill-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .skill-id {
+            font-family: monospace;
+            color: #8b949e;
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+        }
+        .skill-desc {
+            color: #8b949e;
+            font-size: 0.9rem;
+        }
+        .skill-badge {
+            display: inline-block;
+            background: rgba(0,255,136,0.15);
+            color: #00ff88;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-top: 12px;
+        }
+
+        /* API Reference */
+        .api-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #161b22;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .api-table th, .api-table td {
+            padding: 16px 20px;
+            text-align: left;
+            border-bottom: 1px solid #30363d;
+        }
+        .api-table th {
+            background: #21262d;
+            color: #8b949e;
+            font-weight: 500;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+        .method {
+            font-family: monospace;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+        .method.get { background: rgba(0,217,255,0.15); color: #00d9ff; }
+        .method.post { background: rgba(0,255,136,0.15); color: #00ff88; }
+        .endpoint {
+            font-family: monospace;
+            color: #e6edf3;
+        }
+
+        /* Code Block */
+        .code-block {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+            overflow-x: auto;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.8;
+        }
+        .code-block .comment { color: #8b949e; }
+        .code-block .string { color: #a5d6ff; }
+        .code-block .key { color: #ff7b72; }
+        .code-block .value { color: #79c0ff; }
+
+        /* Flow Section */
+        .flow-container {
+            display: flex;
+            gap: 20px;
+            align-items: stretch;
+            flex-wrap: wrap;
+        }
+        .flow-step {
+            flex: 1;
+            min-width: 200px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+        }
+        .flow-step::after {
+            content: '>';
+            position: absolute;
+            right: -15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.5rem;
+            color: #30363d;
+        }
+        .flow-step:last-child::after {
+            display: none;
+        }
+        .flow-number {
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(135deg, #00d9ff, #00ff88);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: #0d1117;
+            margin-bottom: 12px;
+        }
+        .flow-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .flow-desc {
+            color: #8b949e;
+            font-size: 0.9rem;
+        }
+        .flow-time {
+            font-family: monospace;
+            color: #00ff88;
+            font-size: 0.85rem;
+            margin-top: 12px;
+        }
+
+        /* Info Cards */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .info-card {
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 24px;
+        }
+        .info-card h3 {
+            color: #00d9ff;
+            margin-bottom: 16px;
+            font-size: 1.1rem;
+        }
+        .info-card ul {
+            list-style: none;
+        }
+        .info-card li {
+            padding: 8px 0;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+        }
+        .info-card li:last-child {
+            border-bottom: none;
+        }
+        .info-label { color: #8b949e; }
+        .info-value {
+            font-family: monospace;
+            color: #00ff88;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #8b949e;
+            text-decoration: none;
+            margin-bottom: 20px;
+            transition: color 0.2s;
+        }
+        .back-link:hover {
+            color: #00d9ff;
+        }
+
+        @media (max-width: 768px) {
+            .header { padding: 24px; }
+            h1 { font-size: 1.8rem; }
+            .content { padding: 20px; }
+            .layer { flex-direction: column; }
+            .layer-label {
+                writing-mode: horizontal-tb;
+                transform: none;
+            }
+            .arrow { transform: rotate(90deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="date-badge">December 18, 2024</div>
+        <h1>Fast Brain + HIVE215 Architecture</h1>
+        <p class="subtitle">Voice AI Pipeline with Hybrid System 1 / System 2 Design</p>
+    </div>
+
+    <nav class="nav">
+        <a href="#overview" class="active">Overview</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#voice-flow">Voice Flow</a>
+        <a href="#skills">Skills</a>
+        <a href="#api">API Reference</a>
+        <a href="#usage">Usage</a>
+    </nav>
+
+    <div class="content">
+        <a href="index.html" class="back-link">< Back to Documentation Index</a>
+
+        <!-- Overview Section -->
+        <section id="overview" class="section">
+            <h2 class="section-title">System Overview</h2>
+            <div class="info-grid">
+                <div class="info-card">
+                    <h3>Fast Brain LPU</h3>
+                    <ul>
+                        <li>
+                            <span class="info-label">Deployment</span>
+                            <span class="info-value">Modal (Serverless)</span>
+                        </li>
+                        <li>
+                            <span class="info-label">System 1 (Fast)</span>
+                            <span class="info-value">Groq + Llama 3.3 70B</span>
+                        </li>
+                        <li>
+                            <span class="info-label">System 2 (Deep)</span>
+                            <span class="info-value">Claude 3.5 Sonnet</span>
+                        </li>
+                        <li>
+                            <span class="info-label">Target TTFB</span>
+                            <span class="info-value">&lt; 50ms</span>
+                        </li>
+                        <li>
+                            <span class="info-label">Region</span>
+                            <span class="info-value">us-east</span>
+                        </li>
+                    </ul>
+                </div>
+                <div class="info-card">
+                    <h3>HIVE215 Voice Platform</h3>
+                    <ul>
+                        <li>
+                            <span class="info-label">Framework</span>
+                            <span class="info-value">LiveKit Agents</span>
+                        </li>
+                        <li>
+                            <span class="info-label">STT Provider</span>
+                            <span class="info-value">Deepgram (~30ms)</span>
+                        </li>
+                        <li>
+                            <span class="info-label">TTS Provider</span>
+                            <span class="info-value">Cartesia (~30ms)</span>
+                        </li>
+                        <li>
+                            <span class="info-label">LLM Backend</span>
+                            <span class="info-value">Fast Brain LPU</span>
+                        </li>
+                        <li>
+                            <span class="info-label">Default Skill</span>
+                            <span class="info-value">tara-sales</span>
+                        </li>
+                    </ul>
+                </div>
+                <div class="info-card">
+                    <h3>Performance Targets</h3>
+                    <ul>
+                        <li>
+                            <span class="info-label">Total Voice Latency</span>
+                            <span class="info-value">&lt; 300ms</span>
+                        </li>
+                        <li>
+                            <span class="info-label">STT Latency</span>
+                            <span class="info-value">~30ms</span>
+                        </li>
+                        <li>
+                            <span class="info-label">LLM Latency (Fast)</span>
+                            <span class="info-value">~40-80ms</span>
+                        </li>
+                        <li>
+                            <span class="info-label">TTS Latency</span>
+                            <span class="info-value">~30ms</span>
+                        </li>
+                        <li>
+                            <span class="info-label">Tokens/sec</span>
+                            <span class="info-value">&gt; 400</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Architecture Diagram -->
+        <section id="architecture" class="section">
+            <h2 class="section-title">System Architecture</h2>
+            <div class="architecture">
+                <div class="diagram">
+                    <!-- User Layer -->
+                    <div class="layer">
+                        <span class="layer-label">USER</span>
+                        <div class="box user wide-box">
+                            <div class="box-title">Phone / Web Client</div>
+                            <div class="box-subtitle">User speaks into device</div>
+                        </div>
+                    </div>
+
+                    <div class="arrow-down">|</div>
+
+                    <!-- HIVE215 Layer -->
+                    <div class="layer">
+                        <span class="layer-label">HIVE215</span>
+                        <div class="box hive">
+                            <div class="box-title">Deepgram</div>
+                            <div class="box-subtitle">Speech-to-Text</div>
+                            <div class="box-latency">~30ms</div>
+                        </div>
+                        <span class="arrow">-></span>
+                        <div class="box hive wide-box">
+                            <div class="box-title">LiveKit Agent</div>
+                            <div class="box-subtitle">Voice Pipeline Orchestrator</div>
+                            <div class="box-latency">Railway Worker</div>
+                        </div>
+                        <span class="arrow">-></span>
+                        <div class="box hive">
+                            <div class="box-title">Cartesia</div>
+                            <div class="box-subtitle">Text-to-Speech</div>
+                            <div class="box-latency">~30ms</div>
+                        </div>
+                    </div>
+
+                    <div class="arrow-down">|</div>
+                    <div style="text-align: center; color: #8b949e; font-size: 0.9rem;">
+                        POST /v1/chat/completions<br>
+                        <span style="font-family: monospace; color: #00d9ff;">{"skill": "tara-sales", "messages": [...]}</span>
+                    </div>
+                    <div class="arrow-down">|</div>
+
+                    <!-- Fast Brain Layer -->
+                    <div class="layer">
+                        <span class="layer-label">FAST BRAIN</span>
+                        <div class="box fast-brain extra-wide">
+                            <div class="box-title">Fast Brain LPU</div>
+                            <div class="box-subtitle">Modal Serverless - OpenAI-Compatible API</div>
+                            <div class="box-latency">us-east | Keep Warm: 1</div>
+                        </div>
+                    </div>
+
+                    <div class="arrow-down">|</div>
+
+                    <!-- Skill Router -->
+                    <div class="layer">
+                        <span class="layer-label">ROUTER</span>
+                        <div class="box skill wide-box">
+                            <div class="box-title">Skill Router</div>
+                            <div class="box-subtitle">Select system prompt by skill_id</div>
+                            <div class="box-latency">tara-sales | default | electrician | ...</div>
+                        </div>
+                    </div>
+
+                    <div class="arrow-down">|</div>
+
+                    <!-- LLM Layer -->
+                    <div class="layer">
+                        <span class="layer-label">LLM</span>
+                        <div class="box groq">
+                            <div class="box-title">System 1: Groq</div>
+                            <div class="box-subtitle">Llama 3.3 70B</div>
+                            <div class="box-latency">~80ms | 90% of calls</div>
+                        </div>
+                        <span class="arrow" style="color: #8b949e;">or</span>
+                        <div class="box claude">
+                            <div class="box-title">System 2: Claude</div>
+                            <div class="box-subtitle">3.5 Sonnet (Complex)</div>
+                            <div class="box-latency">~2000ms | 10% of calls</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Voice Flow -->
+        <section id="voice-flow" class="section">
+            <h2 class="section-title">Voice Pipeline Flow</h2>
+            <div class="flow-container">
+                <div class="flow-step">
+                    <div class="flow-number">1</div>
+                    <div class="flow-title">User Speaks</div>
+                    <div class="flow-desc">Audio captured from phone or web client</div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-number">2</div>
+                    <div class="flow-title">Deepgram STT</div>
+                    <div class="flow-desc">Speech converted to text</div>
+                    <div class="flow-time">~30ms</div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-number">3</div>
+                    <div class="flow-title">Fast Brain</div>
+                    <div class="flow-desc">LLM generates response with skill context</div>
+                    <div class="flow-time">~40-80ms</div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-number">4</div>
+                    <div class="flow-title">Cartesia TTS</div>
+                    <div class="flow-desc">Text synthesized to speech</div>
+                    <div class="flow-time">~30ms</div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-number">5</div>
+                    <div class="flow-title">User Hears</div>
+                    <div class="flow-desc">Audio played back to user</div>
+                    <div class="flow-time">Total: ~150ms</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Skills Section -->
+        <section id="skills" class="section">
+            <h2 class="section-title">Available Skills</h2>
+            <div class="skills-grid">
+                <div class="skill-card featured">
+                    <div class="skill-name">Tara's Sales Assistant</div>
+                    <div class="skill-id">tara-sales</div>
+                    <div class="skill-desc">Sales assistant for TheDashTool demos. Warm, conversational, guides prospects to book demos.</div>
+                    <span class="skill-badge">FEATURED</span>
+                </div>
+                <div class="skill-card">
+                    <div class="skill-name">Default Assistant</div>
+                    <div class="skill-id">default</div>
+                    <div class="skill-desc">General-purpose voice assistant. Friendly and concise.</div>
+                </div>
+                <div class="skill-card">
+                    <div class="skill-name">General Assistant</div>
+                    <div class="skill-id">general</div>
+                    <div class="skill-desc">Helpful voice assistant with System 1/2 routing.</div>
+                </div>
+                <div class="skill-card">
+                    <div class="skill-name">Professional Receptionist</div>
+                    <div class="skill-id">receptionist</div>
+                    <div class="skill-desc">Business receptionist for call handling.</div>
+                </div>
+                <div class="skill-card">
+                    <div class="skill-name">Electrician Intake</div>
+                    <div class="skill-id">electrician</div>
+                    <div class="skill-desc">Sparky - intake for electrical contracting.</div>
+                </div>
+                <div class="skill-card">
+                    <div class="skill-name">Plumber Intake</div>
+                    <div class="skill-id">plumber</div>
+                    <div class="skill-desc">Plumbing service intake specialist.</div>
+                </div>
+                <div class="skill-card">
+                    <div class="skill-name">Legal Intake</div>
+                    <div class="skill-id">lawyer</div>
+                    <div class="skill-desc">Law firm intake (no legal advice).</div>
+                </div>
+                <div class="skill-card">
+                    <div class="skill-name">Solar Receptionist</div>
+                    <div class="skill-id">solar</div>
+                    <div class="skill-desc">Solar installation company receptionist.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- API Reference -->
+        <section id="api" class="section">
+            <h2 class="section-title">API Reference</h2>
+            <table class="api-table">
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Endpoint</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="method get">GET</span></td>
+                        <td class="endpoint">/health</td>
+                        <td>Health check - returns status, backend, skills_available, version</td>
+                    </tr>
+                    <tr>
+                        <td><span class="method get">GET</span></td>
+                        <td class="endpoint">/v1/skills</td>
+                        <td>List all available skills with id, name, description, version</td>
+                    </tr>
+                    <tr>
+                        <td><span class="method post">POST</span></td>
+                        <td class="endpoint">/v1/skills</td>
+                        <td>Create a new skill dynamically at runtime</td>
+                    </tr>
+                    <tr>
+                        <td><span class="method get">GET</span></td>
+                        <td class="endpoint">/v1/skills/{skill_id}</td>
+                        <td>Get details for a specific skill</td>
+                    </tr>
+                    <tr>
+                        <td><span class="method post">POST</span></td>
+                        <td class="endpoint">/v1/chat/completions</td>
+                        <td>OpenAI-compatible chat with skill parameter</td>
+                    </tr>
+                    <tr>
+                        <td><span class="method post">POST</span></td>
+                        <td class="endpoint">/v1/chat/hybrid</td>
+                        <td>Hybrid System 1 + System 2 with filler phrases</td>
+                    </tr>
+                    <tr>
+                        <td><span class="method post">POST</span></td>
+                        <td class="endpoint">/v1/chat/voice</td>
+                        <td>Hybrid + voice descriptions for TTS</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Usage Example -->
+        <section id="usage" class="section">
+            <h2 class="section-title">Usage Example</h2>
+            <div class="code-block">
+<span class="comment"># Test the Tara Sales skill</span>
+curl -X POST https://your-fast-brain.modal.run/v1/chat/completions \
+  -H <span class="string">"Content-Type: application/json"</span> \
+  -d <span class="string">'{
+    "messages": [{"role": "user", "content": "What is The Dash?"}],
+    "skill": "tara-sales",
+    "max_tokens": 256
+  }'</span>
+
+<span class="comment"># Response (OpenAI-compatible + metrics)</span>
+{
+  <span class="key">"id"</span>: <span class="string">"chatcmpl-abc123"</span>,
+  <span class="key">"object"</span>: <span class="string">"chat.completion"</span>,
+  <span class="key">"choices"</span>: [{
+    <span class="key">"message"</span>: {
+      <span class="key">"role"</span>: <span class="string">"assistant"</span>,
+      <span class="key">"content"</span>: <span class="string">"The Dash is a complete BI dashboard service that connects all your business tools into one unified view. We do all the technical work for you, so you get clarity without complexity. What kind of tools are you currently using to run your business?"</span>
+    }
+  }],
+  <span class="key">"skill_used"</span>: <span class="string">"tara-sales"</span>,
+  <span class="key">"metrics"</span>: {
+    <span class="key">"ttfb_ms"</span>: <span class="value">42</span>,
+    <span class="key">"tokens_per_sec"</span>: <span class="value">450</span>
+  }
+}
+            </div>
+        </section>
+
+        <!-- Environment Setup -->
+        <section class="section">
+            <h2 class="section-title">Environment Setup</h2>
+            <div class="info-grid">
+                <div class="info-card">
+                    <h3>Fast Brain (Modal)</h3>
+                    <div class="code-block" style="font-size: 0.85rem;">
+<span class="comment"># Create secrets in Modal</span>
+modal secret create groq-api-key GROQ_API_KEY=gsk_xxx
+modal secret create anthropic-api-key ANTHROPIC_API_KEY=sk-ant-xxx
+
+<span class="comment"># Deploy</span>
+modal deploy fast_brain/deploy_groq.py
+                    </div>
+                </div>
+                <div class="info-card">
+                    <h3>HIVE215 Worker (Railway)</h3>
+                    <div class="code-block" style="font-size: 0.85rem;">
+<span class="comment"># Environment variables</span>
+FAST_BRAIN_URL=https://xxx--fast-brain-lpu.modal.run
+DEFAULT_SKILL=tara-sales
+LIVEKIT_URL=wss://xxx.livekit.cloud
+LIVEKIT_API_KEY=xxx
+LIVEKIT_API_SECRET=xxx
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // Smooth scrolling for nav links
+        document.querySelectorAll('.nav a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const target = document.querySelector(link.getAttribute('href'));
+                target.scrollIntoView({ behavior: 'smooth' });
+
+                document.querySelectorAll('.nav a').forEach(l => l.classList.remove('active'));
+                link.classList.add('active');
+            });
+        });
+
+        // Update active nav on scroll
+        window.addEventListener('scroll', () => {
+            const sections = document.querySelectorAll('section[id]');
+            let current = '';
+
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (scrollY >= sectionTop - 100) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            document.querySelectorAll('.nav a').forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
