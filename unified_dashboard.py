@@ -2054,6 +2054,10 @@ def train_voice_endpoint(project_id):
             # These are local models - mark as ready (would need GPU)
             voice_id = f"{provider}_{project_id}"
             message = f"Voice ready for {provider} synthesis (local model)"
+        elif provider in ['edge_tts', 'parler_tts', 'kokoro', 'chatterbox', 'gtts']:
+            # Free providers - no training needed, mark as ready
+            voice_id = f"{provider}_{project_id}"
+            message = f"Voice ready! {provider} doesn't require training - you can test it now."
         else:
             # For other providers, simulate training
             voice_id = f"{provider}_{project_id}"
@@ -2077,6 +2081,16 @@ def train_voice_endpoint(project_id):
                 "voice_id": voice_id,
                 "provider": provider
             })
+        else:
+            # Training failed - no voice_id returned (usually missing API key)
+            db.update_voice_project(project_id, status='failed')
+            job['status'] = 'failed'
+            job['error'] = message
+
+            return jsonify({
+                "success": False,
+                "error": message or f"Training failed. Make sure your {provider} API key is configured in Settings → API Keys."
+            }), 400
 
     except Exception as e:
         db.update_voice_project(project_id, status='failed')
@@ -2201,12 +2215,18 @@ def test_voice_project_endpoint(project_id):
 
     provider = project.get('provider', 'elevenlabs')
     voice_id = project.get('voice_id')
+    status = project.get('status', 'draft')
 
-    if not voice_id and project.get('status') != 'trained':
-        return jsonify({
-            "success": False,
-            "error": "Voice not trained yet. Please train the voice first."
-        }), 400
+    # Free providers that don't need voice cloning/training
+    free_providers = ['edge_tts', 'parler_tts', 'kokoro', 'chatterbox', 'gtts']
+
+    # For paid providers, check that training completed
+    if provider not in free_providers:
+        if not voice_id and status != 'trained':
+            return jsonify({
+                "success": False,
+                "error": f"Voice not trained. Add your {provider.title()} API key in Settings → API Keys, then click Train Voice."
+            }), 400
 
     try:
         audio_data = None
@@ -2216,7 +2236,8 @@ def test_voice_project_endpoint(project_id):
             audio_data = _synthesize_elevenlabs(voice_id, text)
         elif provider == 'cartesia' and voice_id:
             audio_data = _synthesize_cartesia(voice_id, text)
-        elif provider == 'edge_tts':
+        elif provider in free_providers or not voice_id:
+            # Use free TTS for testing (gTTS fallback)
             audio_data = _synthesize_edge_tts(project.get('base_voice', 'en-US-JennyNeural'), text)
 
         if audio_data:
@@ -4507,15 +4528,17 @@ pipeline = Pipeline([
         </div>
 
         <!-- ================================================================ -->
-        <!-- FAST BRAIN TAB -->
+        <!-- FAST BRAIN TAB (Skills) -->
         <!-- ================================================================ -->
         <div id="tab-fastbrain" class="tab-content">
-            <!-- Sub-tabs for Fast Brain -->
+            <!-- Sub-tabs for Skills -->
             <div class="sub-tabs">
                 <button class="sub-tab-btn active" onclick="showFastBrainTab('dashboard')">Dashboard</button>
                 <button class="sub-tab-btn" onclick="showFastBrainTab('skills')">Skills Manager</button>
+                <button class="sub-tab-btn" onclick="showFastBrainTab('golden')">Golden Prompts</button>
+                <button class="sub-tab-btn" onclick="showFastBrainTab('train')">Train LoRA</button>
                 <button class="sub-tab-btn" onclick="showFastBrainTab('chat')">Test Chat</button>
-                <button class="sub-tab-btn" onclick="showFastBrainTab('integration')">Hive215 Integration</button>
+                <button class="sub-tab-btn" onclick="showFastBrainTab('integration')">Hive215</button>
             </div>
 
             <!-- Dashboard Sub-tab -->
@@ -4864,6 +4887,140 @@ pipeline = Pipeline([
 │   │                                                                              │
 └───┴──────────────────────────────────────────────────────────────────────────────┘
                         </pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Golden Prompts Sub-tab -->
+            <div id="fb-tab-golden" class="sub-tab-content">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">Star</span> Golden Prompts</div>
+                        <button class="btn btn-secondary btn-sm" onclick="loadGoldenPrompts()">Refresh</button>
+                    </div>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Voice-optimized skill manuals for ultra-fast Groq inference. These prompts are designed to stay under 3k tokens for ~50-100ms prefill latency.</p>
+
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 2;">
+                            <label class="form-label">Select Skill</label>
+                            <select class="form-select" id="fb-golden-skill-select" onchange="loadGoldenPromptFB()">
+                                <option value="receptionist">Receptionist - Professional Call Handling</option>
+                                <option value="electrician">Electrician - Jenkintown Electricity</option>
+                                <option value="plumber">Plumber - Plumbing Services</option>
+                                <option value="lawyer">Lawyer - Legal Intake Specialist</option>
+                                <option value="solar">Solar - Solar Company Sales</option>
+                                <option value="tara-sales">Tara Sales - TheDashTool Assistant</option>
+                                <option value="general">General - Helpful Assistant</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label class="form-label">Voice <span style="color: var(--text-secondary); font-size: 0.8rem;">(optional)</span></label>
+                            <select class="form-select" id="fb-golden-voice-select" onchange="linkVoiceToSkillFB()">
+                                <option value="">No custom voice</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="stats-row" style="margin-bottom: 1rem;">
+                        <div class="stat-item">
+                            <div class="stat-value" id="fb-golden-tokens">~850</div>
+                            <div class="stat-label">Est. Tokens</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="fb-golden-prefill">~14ms</div>
+                            <div class="stat-label">Prefill Time</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="fb-golden-status">Ready</div>
+                            <div class="stat-label">Status</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Prompt Content</label>
+                        <textarea class="form-textarea" id="fb-golden-prompt-content" style="min-height: 350px; font-family: monospace; font-size: 0.85rem;" placeholder="Loading prompt..."></textarea>
+                    </div>
+
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="saveGoldenPromptFB()">Save Changes</button>
+                        <button class="btn btn-secondary" onclick="resetGoldenPromptFB()">Reset to Default</button>
+                        <button class="btn btn-success" onclick="testGoldenPromptFB()">Test Prompt</button>
+                    </div>
+
+                    <div id="fb-golden-message" style="margin-top: 1rem;"></div>
+                </div>
+            </div>
+
+            <!-- Train LoRA Sub-tab -->
+            <div id="fb-tab-train" class="sub-tab-content">
+                <div class="dashboard-grid">
+                    <div class="glass-card card-half">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">Train</span> Train LoRA Adapter</div>
+                        </div>
+                        <p style="color: var(--text-secondary); margin-bottom: 1rem;">Training requires a GPU. Generate a script to run on Colab, Modal, or your own machine.</p>
+                        <div class="form-group">
+                            <label class="form-label">Select Skill to Train</label>
+                            <select class="form-select" id="fb-train-profile">
+                                <option value="receptionist">Receptionist</option>
+                                <option value="electrician">Electrician</option>
+                                <option value="plumber">Plumber</option>
+                                <option value="lawyer">Lawyer</option>
+                                <option value="solar">Solar</option>
+                                <option value="tara-sales">Tara Sales</option>
+                                <option value="general">General</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Base Model</label>
+                            <select class="form-select" id="fb-train-model">
+                                <option value="llama-3.3-70b">Llama 3.3 70B (Groq)</option>
+                                <option value="llama-3.1-8b">Llama 3.1 8B (Local)</option>
+                                <option value="mistral-7b">Mistral 7B (Local)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Training Steps: <span id="fb-steps-value">60</span></label>
+                            <input type="range" id="fb-train-steps" min="20" max="200" value="60" style="width: 100%;" oninput="document.getElementById('fb-steps-value').textContent = this.value">
+                            <div style="display: flex; justify-content: space-between; color: var(--text-secondary); font-size: 0.75rem;">
+                                <span>20 (Quick)</span>
+                                <span>200 (Thorough)</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" onclick="generateTrainingScriptFB()">Generate Training Script</button>
+                    </div>
+
+                    <div class="glass-card card-half">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">GPU</span> Training Options</div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 1rem;">
+                            <div style="padding: 1rem; background: var(--glass-surface); border-radius: 8px; border-left: 3px solid var(--neon-cyan);">
+                                <h4 style="margin-bottom: 0.5rem;">Google Colab (Free)</h4>
+                                <p style="font-size: 0.85rem; color: var(--text-secondary);">Free T4 GPU, ~15 min for 60 steps</p>
+                            </div>
+                            <div style="padding: 1rem; background: var(--glass-surface); border-radius: 8px; border-left: 3px solid var(--neon-purple);">
+                                <h4 style="margin-bottom: 0.5rem;">Modal (Pay-per-use)</h4>
+                                <p style="font-size: 0.85rem; color: var(--text-secondary);">A100 GPU, ~5 min for 60 steps, ~$0.50</p>
+                            </div>
+                            <div style="padding: 1rem; background: var(--glass-surface); border-radius: 8px; border-left: 3px solid var(--neon-green);">
+                                <h4 style="margin-bottom: 0.5rem;">Local GPU</h4>
+                                <p style="font-size: 0.85rem; color: var(--text-secondary);">Requires 24GB+ VRAM, RTX 3090/4090</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass-card card-full">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">Code</span> Training Script</div>
+                        </div>
+                        <div id="fb-training-output">
+                            <pre class="code-block" id="fb-training-script" style="max-height: 400px; overflow-y: auto;">Click "Generate Training Script" to create your training code.</pre>
+                        </div>
+                        <div style="margin-top: 1rem; display: flex; gap: 1rem;">
+                            <button class="btn btn-secondary" onclick="copyTrainingScript()">Copy to Clipboard</button>
+                            <button class="btn btn-secondary" onclick="downloadTrainingScript()">Download as .py</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -6503,13 +6660,195 @@ print("Training complete: adapters/${skillId}")`;
         function showFastBrainTab(tabId) {
             document.querySelectorAll('#tab-fastbrain .sub-tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('#tab-fastbrain .sub-tab-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById('fb-tab-' + tabId).classList.add('active');
-            event.target.classList.add('active');
+            const tabEl = document.getElementById('fb-tab-' + tabId);
+            if (tabEl) tabEl.classList.add('active');
+            if (event && event.target && event.target.classList) {
+                event.target.classList.add('active');
+            }
 
             // Load data based on tab
             if (tabId === 'skills') loadFastBrainSkills();
             if (tabId === 'dashboard') refreshSystemStatus();
             if (tabId === 'integration') loadIntegrationChecklist();
+            if (tabId === 'golden') loadGoldenPromptFB();
+        }
+
+        // Golden Prompts functions for Skills tab
+        async function loadGoldenPromptFB() {
+            const skillId = document.getElementById('fb-golden-skill-select').value;
+            try {
+                const res = await fetch(`/api/golden-prompts/${skillId}`);
+                const data = await res.json();
+                if (data.content) {
+                    document.getElementById('fb-golden-prompt-content').value = data.content;
+                    document.getElementById('fb-golden-tokens').textContent = '~' + data.tokens;
+                    document.getElementById('fb-golden-prefill').textContent = '~' + data.prefill_ms + 'ms';
+                    document.getElementById('fb-golden-status').textContent = data.is_custom ? 'Custom' : 'Default';
+                }
+                loadVoicesForSkillFB(skillId);
+            } catch (e) {
+                console.error('Error loading prompt:', e);
+            }
+        }
+
+        async function loadVoicesForSkillFB(skillId) {
+            const voiceSelect = document.getElementById('fb-golden-voice-select');
+            if (!voiceSelect) return;
+            try {
+                const res = await fetch('/api/voice-lab/projects');
+                const projects = await res.json();
+                voiceSelect.innerHTML = '<option value="">No custom voice</option>';
+                (projects || []).filter(p => p.status === 'trained').forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.id;
+                    option.textContent = `${p.name} (${p.provider})`;
+                    if (p.skill_id === skillId) option.selected = true;
+                    voiceSelect.appendChild(option);
+                });
+            } catch (e) { console.error(e); }
+        }
+
+        async function saveGoldenPromptFB() {
+            const skillId = document.getElementById('fb-golden-skill-select').value;
+            const content = document.getElementById('fb-golden-prompt-content').value;
+            try {
+                const res = await fetch(`/api/golden-prompts/${skillId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('fb-golden-message').innerHTML = '<div style="color: var(--neon-green);">Prompt saved!</div>';
+                    document.getElementById('fb-golden-tokens').textContent = '~' + data.tokens;
+                    document.getElementById('fb-golden-status').textContent = 'Custom';
+                }
+            } catch (e) {
+                document.getElementById('fb-golden-message').innerHTML = '<div style="color: var(--neon-pink);">Error: ' + e.message + '</div>';
+            }
+        }
+
+        async function resetGoldenPromptFB() {
+            const skillId = document.getElementById('fb-golden-skill-select').value;
+            if (!confirm(`Reset "${skillId}" prompt to default?`)) return;
+            try {
+                await fetch(`/api/golden-prompts/${skillId}/reset`, { method: 'POST' });
+                loadGoldenPromptFB();
+                document.getElementById('fb-golden-message').innerHTML = '<div style="color: var(--neon-green);">Reset to default!</div>';
+            } catch (e) { console.error(e); }
+        }
+
+        async function testGoldenPromptFB() {
+            document.getElementById('fb-golden-message').innerHTML = '<div style="color: var(--neon-cyan);">Testing prompt...</div>';
+            const content = document.getElementById('fb-golden-prompt-content').value;
+            try {
+                const res = await fetch('/api/fast-brain/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        messages: [{ role: 'user', content: 'What are your hours?' }],
+                        system_prompt: content
+                    })
+                });
+                const data = await res.json();
+                document.getElementById('fb-golden-message').innerHTML = `<div style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; margin-top: 1rem;"><strong>Response:</strong><br>${data.response || data.content || 'No response'}</div>`;
+            } catch (e) {
+                document.getElementById('fb-golden-message').innerHTML = '<div style="color: var(--neon-pink);">Test failed: ' + e.message + '</div>';
+            }
+        }
+
+        async function linkVoiceToSkillFB() {
+            const skillId = document.getElementById('fb-golden-skill-select').value;
+            const voiceId = document.getElementById('fb-golden-voice-select').value;
+            if (!voiceId) return;
+            try {
+                await fetch(`/api/voice-lab/projects/${voiceId}/link-skill`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ skill_id: skillId })
+                });
+                document.getElementById('fb-golden-message').innerHTML = '<div style="color: var(--neon-green);">Voice linked!</div>';
+            } catch (e) { console.error(e); }
+        }
+
+        // Training script generation
+        function generateTrainingScriptFB() {
+            const skill = document.getElementById('fb-train-profile').value;
+            const model = document.getElementById('fb-train-model').value;
+            const steps = document.getElementById('fb-train-steps').value;
+
+            const script = `# LoRA Training Script for ${skill}
+# Base Model: ${model}
+# Training Steps: ${steps}
+
+from unsloth import FastLanguageModel
+import torch
+
+# Load base model
+model, tokenizer = FastLanguageModel.from_pretrained(
+    model_name="${model}",
+    max_seq_length=2048,
+    load_in_4bit=True,
+)
+
+# Add LoRA adapters
+model = FastLanguageModel.get_peft_model(
+    model,
+    r=16,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+    lora_alpha=16,
+    lora_dropout=0,
+    bias="none",
+)
+
+# Load training data
+from datasets import load_dataset
+dataset = load_dataset("json", data_files="training_data/${skill}.jsonl")
+
+# Training configuration
+from trl import SFTTrainer
+from transformers import TrainingArguments
+
+trainer = SFTTrainer(
+    model=model,
+    tokenizer=tokenizer,
+    train_dataset=dataset["train"],
+    args=TrainingArguments(
+        per_device_train_batch_size=2,
+        gradient_accumulation_steps=4,
+        warmup_steps=5,
+        max_steps=${steps},
+        learning_rate=2e-4,
+        fp16=not torch.cuda.is_bf16_supported(),
+        bf16=torch.cuda.is_bf16_supported(),
+        output_dir="outputs/${skill}",
+    ),
+)
+
+# Train
+trainer.train()
+
+# Save LoRA adapter
+model.save_pretrained("adapters/${skill}")
+print("Training complete! Adapter saved to adapters/${skill}")
+`;
+            document.getElementById('fb-training-script').textContent = script;
+        }
+
+        function copyTrainingScript() {
+            const script = document.getElementById('fb-training-script').textContent;
+            navigator.clipboard.writeText(script);
+            alert('Training script copied to clipboard!');
+        }
+
+        function downloadTrainingScript() {
+            const script = document.getElementById('fb-training-script').textContent;
+            const blob = new Blob([script], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'train_lora.py';
+            a.click();
         }
 
         async function loadFastBrainSkills() {
