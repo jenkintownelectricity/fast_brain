@@ -47,9 +47,11 @@ DOCUMENTS_DIR = Path("uploaded_documents")
 for d in [BUSINESS_PROFILES_DIR, TRAINING_DATA_DIR, ADAPTERS_DIR, LOGS_DIR, DOCUMENTS_DIR]:
     d.mkdir(exist_ok=True)
 
-# In-memory state for API keys and activity
-API_KEYS = {}
-ACTIVITY_LOG = []
+# Load API keys from database (for backward compatibility with existing code)
+API_KEYS = db.get_api_keys()
+
+# Activity log - now uses database but keep reference for backward compatibility
+ACTIVITY_LOG = db.get_recent_activity(20)
 
 # Voice configuration and platform connections
 VOICE_CONFIG = {
@@ -566,22 +568,26 @@ def generate_training(skill_id):
 
 @app.route('/api/save-api-keys', methods=['POST'])
 def save_api_keys():
-    """Save API keys."""
+    """Save API keys (persisted to database with encryption)."""
+    global API_KEYS
     data = request.json
     saved = []
 
     if data.get('groq'):
+        db.save_api_key('groq', data['groq'])
         API_KEYS['groq'] = data['groq']
         saved.append('Groq')
     if data.get('openai'):
+        db.save_api_key('openai', data['openai'])
         API_KEYS['openai'] = data['openai']
         saved.append('OpenAI')
     if data.get('anthropic'):
+        db.save_api_key('anthropic', data['anthropic'])
         API_KEYS['anthropic'] = data['anthropic']
         saved.append('Anthropic')
 
     if saved:
-        add_activity(f"API keys saved: {', '.join(saved)}", "")
+        add_activity(f"API keys saved: {', '.join(saved)}", "", "api")
         return jsonify({"success": True, "saved": saved})
     return jsonify({"success": True, "message": "No keys provided"})
 
@@ -976,7 +982,7 @@ def save_golden_prompt(skill_id):
 
         prefill_ms = int((tokens / 6000) * 1000)
 
-        add_activity(f"Updated golden prompt: {skill_id}", "📝", "prompts")
+        add_activity(f"Updated golden prompt: {skill_id}", "", "prompts")
 
         return jsonify({
             "success": True,
@@ -991,21 +997,21 @@ def save_golden_prompt(skill_id):
 
 @app.route('/api/golden-prompts/<skill_id>/reset', methods=['POST'])
 def reset_golden_prompt(skill_id):
-    """Reset a golden prompt to its default."""
+    """Reset a golden prompt to its default (removes from database)."""
     global CUSTOM_PROMPTS
 
     try:
         if USE_DATABASE:
             deleted = db.delete_golden_prompt(skill_id)
             if deleted:
-                add_activity(f"Reset golden prompt: {skill_id}", "🔄", "prompts")
+                add_activity(f"Reset golden prompt: {skill_id}", "", "prompts")
                 return jsonify({"success": True, "message": f"Prompt for '{skill_id}' reset to default"})
             else:
                 return jsonify({"success": True, "message": "Prompt was already at default"})
         else:
             if skill_id in CUSTOM_PROMPTS:
                 del CUSTOM_PROMPTS[skill_id]
-                add_activity(f"Reset golden prompt: {skill_id}", "🔄", "prompts")
+                add_activity(f"Reset golden prompt: {skill_id}", "", "prompts")
                 return jsonify({"success": True, "message": f"Prompt for '{skill_id}' reset to default"})
             else:
                 return jsonify({"success": True, "message": "Prompt was already at default"})
@@ -1113,7 +1119,7 @@ def get_platform(platform_id):
 
 @app.route('/api/platforms/<platform_id>/connect', methods=['POST'])
 def connect_platform(platform_id):
-    """Connect to a voice platform."""
+    """Connect to a voice platform (persisted to database)."""
     global PLATFORM_CONNECTIONS
 
     if platform_id not in PLATFORM_CONNECTIONS:
@@ -1122,7 +1128,7 @@ def connect_platform(platform_id):
     data = request.json
     config = data.get('config', {})
 
-    # Update the platform config
+    # Update the platform config in memory
     PLATFORM_CONNECTIONS[platform_id]['config'].update(config)
 
     # Simulate connection test
@@ -1130,7 +1136,9 @@ def connect_platform(platform_id):
 
     if has_required_fields:
         PLATFORM_CONNECTIONS[platform_id]['status'] = 'connected'
-        add_activity(f"Connected to {PLATFORM_CONNECTIONS[platform_id]['name']}", "")
+        # Save to database
+        db.save_platform(platform_id, PLATFORM_CONNECTIONS[platform_id]['config'], 'connected')
+        add_activity(f"Connected to {PLATFORM_CONNECTIONS[platform_id]['name']}", "", "platform")
         return jsonify({
             "success": True,
             "status": "connected",
@@ -1147,14 +1155,16 @@ def connect_platform(platform_id):
 
 @app.route('/api/platforms/<platform_id>/disconnect', methods=['POST'])
 def disconnect_platform(platform_id):
-    """Disconnect from a voice platform."""
+    """Disconnect from a voice platform (persisted to database)."""
     global PLATFORM_CONNECTIONS
 
     if platform_id not in PLATFORM_CONNECTIONS:
         return jsonify({"error": "Platform not found"}), 404
 
     PLATFORM_CONNECTIONS[platform_id]['status'] = 'disconnected'
-    add_activity(f"Disconnected from {PLATFORM_CONNECTIONS[platform_id]['name']}", "")
+    # Save to database
+    db.update_platform_status(platform_id, 'disconnected')
+    add_activity(f"Disconnected from {PLATFORM_CONNECTIONS[platform_id]['name']}", "", "platform")
 
     return jsonify({
         "success": True,
@@ -2118,6 +2128,7 @@ DASHBOARD_HTML = '''
     <title>Skill Command Center</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        /* Dark Theme (Default) */
         :root {
             --neon-cyan: #00fff2;
             --neon-pink: #ff00ff;
@@ -2137,7 +2148,228 @@ DASHBOARD_HTML = '''
             --font-accent: 'Rajdhani', sans-serif;
         }
 
+        /* Light Theme (Slack-inspired) */
+        [data-theme="light"] {
+            --neon-cyan: #1264a3;
+            --neon-pink: #e01e5a;
+            --neon-purple: #4a154b;
+            --neon-blue: #36c5f0;
+            --neon-green: #2eb67d;
+            --neon-orange: #e8912d;
+            --neon-yellow: #ecb22e;
+            --bg-dark: #ffffff;
+            --card-bg: #f8f8f8;
+            --glass-surface: rgba(0, 0, 0, 0.03);
+            --glass-border: rgba(0, 0, 0, 0.1);
+            --text-primary: #1d1c1d;
+            --text-secondary: #616061;
+        }
+
+        [data-theme="light"] body {
+            background: #ffffff;
+        }
+
+        [data-theme="light"] .bg-effects {
+            display: none;
+        }
+
+        [data-theme="light"] .glass-card {
+            background: #ffffff;
+            border: 1px solid #e8e8e8;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        [data-theme="light"] .main-tab-btn {
+            border-color: #e8e8e8;
+            color: #616061;
+        }
+
+        [data-theme="light"] .main-tab-btn:hover,
+        [data-theme="light"] .main-tab-btn.active {
+            background: #4a154b;
+            border-color: #4a154b;
+            color: #ffffff;
+            box-shadow: none;
+        }
+
+        [data-theme="light"] .sub-tab-btn {
+            color: #616061;
+        }
+
+        [data-theme="light"] .sub-tab-btn.active {
+            background: #4a154b;
+            color: #ffffff;
+        }
+
+        [data-theme="light"] .btn-primary {
+            background: #4a154b;
+        }
+
+        [data-theme="light"] .btn-primary:hover {
+            background: #611f69;
+        }
+
+        [data-theme="light"] .form-input,
+        [data-theme="light"] .form-select,
+        [data-theme="light"] .form-textarea {
+            background: #ffffff;
+            border-color: #e8e8e8;
+            color: #1d1c1d;
+        }
+
+        [data-theme="light"] .form-input:focus,
+        [data-theme="light"] .form-select:focus,
+        [data-theme="light"] .form-textarea:focus {
+            border-color: #1264a3;
+            box-shadow: 0 0 0 3px rgba(18, 100, 163, 0.1);
+        }
+
+        [data-theme="light"] .logo {
+            background: linear-gradient(135deg, #4a154b 0%, #1264a3 50%, #2eb67d 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        [data-theme="light"] .stat-value {
+            color: #1d1c1d;
+        }
+
+        [data-theme="light"] .stat-value.green { color: #2eb67d; }
+        [data-theme="light"] .stat-value.pink { color: #e01e5a; }
+        [data-theme="light"] .stat-value.orange { color: #e8912d; }
+
+        [data-theme="light"] .section-icon {
+            color: #4a154b;
+        }
+
+        [data-theme="light"] .skill-card {
+            background: #ffffff;
+            border: 1px solid #e8e8e8;
+        }
+
+        [data-theme="light"] .skill-card:hover {
+            border-color: #4a154b;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        [data-theme="light"] .console {
+            background: #f8f8f8;
+            border-color: #e8e8e8;
+            color: #1d1c1d;
+        }
+
+        [data-theme="light"] .code-block {
+            background: #f8f8f8;
+            border-color: #e8e8e8;
+        }
+
+        [data-theme="light"] .skills-table th {
+            background: #f8f8f8;
+            color: #1d1c1d;
+        }
+
+        [data-theme="light"] .skills-table td {
+            border-color: #e8e8e8;
+        }
+
+        [data-theme="light"] .pipeline-icon {
+            border-color: #e8e8e8;
+        }
+
+        [data-theme="light"] .getting-started-card {
+            background: linear-gradient(135deg, rgba(74,21,75,0.1), rgba(18,100,163,0.1)) !important;
+            border-color: rgba(74,21,75,0.3) !important;
+        }
+
+        /* Theme Toggle Button */
+        .theme-toggle-btn {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+            background: var(--glass-surface);
+            border: 1px solid var(--glass-border);
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            transition: all 0.2s;
+        }
+
+        .theme-toggle-btn:hover {
+            background: var(--neon-purple);
+            transform: scale(1.1);
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* Tooltip Styles for Technical Terms */
+        .tooltip {
+            position: relative;
+            cursor: help;
+            border-bottom: 1px dotted var(--neon-cyan);
+        }
+
+        .tooltip::before {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0.5rem 0.75rem;
+            background: var(--card-bg);
+            border: 1px solid var(--neon-cyan);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            color: var(--text-primary);
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 1000;
+            max-width: 250px;
+            white-space: normal;
+            text-align: center;
+        }
+
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: var(--neon-cyan);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+        }
+
+        .tooltip:hover::before,
+        .tooltip:hover::after {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Help icon style */
+        .help-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: rgba(0, 255, 242, 0.2);
+            color: var(--neon-cyan);
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-left: 4px;
+            cursor: help;
+        }
 
         body {
             font-family: var(--font-body);
@@ -2820,6 +3052,11 @@ DASHBOARD_HTML = '''
     </style>
 </head>
 <body>
+    <!-- Theme Toggle Button -->
+    <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Dark/Light Mode" id="theme-toggle">
+        🌙
+    </button>
+
     <div class="bg-effects">
         <div class="grid-overlay"></div>
         <div class="gradient-blob blob-1"></div>
@@ -2836,20 +3073,57 @@ DASHBOARD_HTML = '''
             </div>
         </header>
 
-        <!-- Main Tabs -->
+        <!-- Main Tabs - Simplified to 4 core sections -->
         <div class="main-tabs">
-            <button class="main-tab-btn active" onclick="showMainTab('dashboard')">Dashboard</button>
-            <button class="main-tab-btn" onclick="showMainTab('fastbrain')">Fast Brain</button>
-            <button class="main-tab-btn" onclick="showMainTab('voicelab')">Voice Lab</button>
-            <button class="main-tab-btn" onclick="showMainTab('factory')">Skill Factory</button>
-            <button class="main-tab-btn" onclick="showMainTab('command')">Command Center</button>
-            <button class="main-tab-btn" onclick="showMainTab('lpu')">LPU Inference</button>
+            <button class="main-tab-btn active" onclick="showMainTab('dashboard')" title="Overview, status, and quick actions">Dashboard</button>
+            <button class="main-tab-btn" onclick="showMainTab('skills')" title="Create, manage, and test all your AI skills">Skills</button>
+            <button class="main-tab-btn" onclick="showMainTab('voice')" title="Voice projects, TTS settings, and platform connections">Voice</button>
+            <button class="main-tab-btn" onclick="showMainTab('settings')" title="API keys, integrations, and advanced configuration">Settings</button>
         </div>
 
         <!-- ================================================================ -->
         <!-- DASHBOARD TAB -->
         <!-- ================================================================ -->
         <div id="tab-dashboard" class="tab-content active">
+            <!-- Getting Started Card - Shows for new users -->
+            <div class="glass-card getting-started-card" id="getting-started" style="background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(139,92,246,0.1)); border: 1px solid rgba(0,212,255,0.3); margin-bottom: 1.5rem;">
+                <div class="section-header">
+                    <div class="section-title"><span class="section-icon">Rocket</span> Getting Started</div>
+                    <button class="btn btn-secondary btn-sm" onclick="hideGettingStarted()">Dismiss</button>
+                </div>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Complete these steps to set up your AI voice assistant in under 5 minutes:</p>
+                <div class="onboarding-steps" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                    <div class="onboarding-step" id="step-api" onclick="showMainTab('settings'); showSettingsTab('keys');" style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; cursor: pointer; border-left: 3px solid var(--neon-cyan);">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <span class="step-number" style="background: var(--neon-cyan); color: #000; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.8rem;">1</span>
+                            <span style="font-weight: 600;">Connect API Key</span>
+                        </div>
+                        <p style="color: var(--text-secondary); font-size: 0.85rem;">Add your Groq or OpenAI key to enable the AI brain</p>
+                    </div>
+                    <div class="onboarding-step" id="step-skill" onclick="showMainTab('skills'); showSkillsTab('create');" style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; cursor: pointer; border-left: 3px solid var(--neon-purple);">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <span class="step-number" style="background: var(--neon-purple); color: #fff; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.8rem;">2</span>
+                            <span style="font-weight: 600;">Create First Skill</span>
+                        </div>
+                        <p style="color: var(--text-secondary); font-size: 0.85rem;">Build an AI receptionist for your business in 2 min</p>
+                    </div>
+                    <div class="onboarding-step" id="step-test" onclick="showMainTab('skills'); showSkillsTab('test');" style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; cursor: pointer; border-left: 3px solid var(--neon-green);">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <span class="step-number" style="background: var(--neon-green); color: #000; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.8rem;">3</span>
+                            <span style="font-weight: 600;">Test Your Skill</span>
+                        </div>
+                        <p style="color: var(--text-secondary); font-size: 0.85rem;">Chat with your AI to make sure it works right</p>
+                    </div>
+                    <div class="onboarding-step" id="step-connect" onclick="showMainTab('voice'); showVoiceTab('connections');" style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; cursor: pointer; border-left: 3px solid var(--neon-orange);">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <span class="step-number" style="background: var(--neon-orange); color: #000; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.8rem;">4</span>
+                            <span style="font-weight: 600;">Connect Phone</span>
+                        </div>
+                        <p style="color: var(--text-secondary); font-size: 0.85rem;">Link Twilio or Vapi to handle real calls</p>
+                    </div>
+                </div>
+            </div>
+
             <div class="dashboard-grid">
                 <div class="glass-card stat-card card-quarter">
                     <div class="stat-value" id="total-skills">0</div>
@@ -3061,6 +3335,7 @@ DASHBOARD_HTML = '''
                             <option value="plumber">Plumber - Plumbing Services</option>
                             <option value="lawyer">Lawyer - Legal Intake Specialist</option>
                             <option value="solar">Solar - Solar Company Sales</option>
+                            <option value="tara-sales">Tara Sales - TheDashTool Assistant</option>
                             <option value="general">General - Helpful Assistant</option>
                         </select>
                     </div>
@@ -4440,19 +4715,102 @@ pipeline = Pipeline([
 
     <script>
         // ============================================================
+        // THEME TOGGLE
+        // ============================================================
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+
+            // Update toggle button icon
+            const toggleBtn = document.getElementById('theme-toggle');
+            toggleBtn.textContent = newTheme === 'light' ? '☀️' : '🌙';
+        }
+
+        // Load saved theme on page load
+        (function() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+
+            // Update toggle button icon after DOM loads
+            document.addEventListener('DOMContentLoaded', function() {
+                const toggleBtn = document.getElementById('theme-toggle');
+                if (toggleBtn) {
+                    toggleBtn.textContent = savedTheme === 'light' ? '☀️' : '🌙';
+                }
+            });
+        })();
+
+        // ============================================================
         // TAB NAVIGATION
         // ============================================================
         function showMainTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.main-tab-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById('tab-' + tabId).classList.add('active');
-            event.target.classList.add('active');
 
+            // Map new simplified tabs to existing content
+            let actualTabId = tabId;
+            if (tabId === 'skills') actualTabId = 'fastbrain';  // Skills -> Fast Brain (has Skills Manager)
+            if (tabId === 'voice') actualTabId = 'voicelab';    // Voice -> Voice Lab
+            if (tabId === 'settings') actualTabId = 'command';  // Settings -> Command Center (has API Keys)
+
+            const tabElement = document.getElementById('tab-' + actualTabId);
+            if (tabElement) {
+                tabElement.classList.add('active');
+            }
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
+
+            // Load appropriate data for each tab
             if (tabId === 'dashboard') { loadSkills(); loadMetrics(); }
-            if (tabId === 'fastbrain') { loadFastBrainConfig(); loadFastBrainSkills(); refreshSystemStatus(); loadHive215Config(); }
-            if (tabId === 'voicelab') { loadVoiceProjects(); loadSkillsForDropdowns(); }
+            if (tabId === 'skills' || tabId === 'fastbrain') { loadFastBrainConfig(); loadFastBrainSkills(); refreshSystemStatus(); loadHive215Config(); }
+            if (tabId === 'voice' || tabId === 'voicelab') { loadVoiceProjects(); loadSkillsForDropdowns(); }
+            if (tabId === 'settings' || tabId === 'command') { refreshStats(); }
             if (tabId === 'factory') { loadProfileDropdowns(); }
-            if (tabId === 'command') { refreshStats(); }
+        }
+
+        // New helper functions for consolidated navigation
+        function showSkillsTab(subTab) {
+            showMainTab('skills');
+            setTimeout(() => {
+                if (subTab === 'create') showFastBrainTab('skills');
+                if (subTab === 'test') showFastBrainTab('chat');
+                if (subTab === 'golden') showFactoryTab('golden');
+            }, 100);
+        }
+
+        function showVoiceTab(subTab) {
+            showMainTab('voice');
+            setTimeout(() => {
+                if (subTab === 'connections') showVoiceLabTab('projects');
+            }, 100);
+        }
+
+        function showSettingsTab(subTab) {
+            showMainTab('settings');
+            setTimeout(() => {
+                if (subTab === 'keys') showCommandTab('keys');
+            }, 100);
+        }
+
+        function hideGettingStarted() {
+            const card = document.getElementById('getting-started');
+            if (card) {
+                card.style.display = 'none';
+                localStorage.setItem('hideGettingStarted', 'true');
+            }
+        }
+
+        // Check if getting started should be hidden
+        if (localStorage.getItem('hideGettingStarted') === 'true') {
+            document.addEventListener('DOMContentLoaded', () => {
+                const card = document.getElementById('getting-started');
+                if (card) card.style.display = 'none';
+            });
         }
 
         function showFactoryTab(tabId) {
@@ -4485,7 +4843,15 @@ pipeline = Pipeline([
                 let totalReq = 0, totalLat = 0, totalSat = 0;
 
                 if (skills.length === 0) {
-                    grid.innerHTML = '<p style="color: var(--text-secondary); text-align: center; grid-column: span 4;">No skills yet. Create one in Skill Factory!</p>';
+                    grid.innerHTML = `
+                        <div style="text-align: center; grid-column: span 4; padding: 2rem;">
+                            <div style="font-size: 3rem; margin-bottom: 1rem;">Brain</div>
+                            <h3 style="margin-bottom: 0.5rem;">Create Your First AI Skill</h3>
+                            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Build an AI receptionist for your business in under 2 minutes</p>
+                            <button class="btn btn-primary" onclick="showMainTab('skills'); setTimeout(() => showFastBrainTab('skills'), 100);">
+                                + Create Skill
+                            </button>
+                        </div>`;
                 }
 
                 skills.forEach(s => {
@@ -4882,7 +5248,11 @@ print("Training complete: adapters/${skillId}")`;
         function renderSkillsTable(skills) {
             const tbody = document.getElementById('skills-table-body');
             if (skills.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-secondary);">No skills found</td></tr>';
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem;">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">Folder</div>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">No skills found. Create a business profile to get started.</p>
+                    <button class="btn btn-primary btn-sm" onclick="showFactoryTab('profile')">Create Business Profile</button>
+                </td></tr>`;
                 return;
             }
             tbody.innerHTML = skills.map(s => `
@@ -5555,7 +5925,13 @@ print("Training complete: adapters/${skillId}")`;
                 document.getElementById('fb-skills-count').textContent = skills.length;
 
                 if (skills.length === 0) {
-                    container.innerHTML = '<div style="color: var(--text-secondary); padding: 2rem; text-align: center;">No skills available.</div>';
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 2rem; grid-column: span 3;">
+                            <div style="font-size: 2.5rem; margin-bottom: 1rem;">Stars</div>
+                            <h3 style="margin-bottom: 0.5rem;">No Skills Yet</h3>
+                            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Create your first AI skill to get started with voice automation</p>
+                            <button class="btn btn-primary" onclick="showCreateSkillModal()">+ Create Your First Skill</button>
+                        </div>`;
                     return;
                 }
 
@@ -5889,7 +6265,13 @@ print("Training complete: adapters/${skillId}")`;
 
                 const container = document.getElementById('voice-projects-list');
                 if (projects.length === 0) {
-                    container.innerHTML = '<div style="color: var(--text-secondary); padding: 2rem; text-align: center;">No voice projects yet. Click "New Voice" to create one.</div>';
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 2rem; grid-column: span 3;">
+                            <div style="font-size: 2.5rem; margin-bottom: 1rem;">Mic</div>
+                            <h3 style="margin-bottom: 0.5rem;">Create Your Custom Voice</h3>
+                            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Clone your voice or customize TTS settings for natural-sounding AI responses</p>
+                            <button class="btn btn-primary" onclick="showVoiceLabTab('create')">+ Create Voice Project</button>
+                        </div>`;
                     return;
                 }
 
