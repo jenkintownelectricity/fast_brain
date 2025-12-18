@@ -1846,47 +1846,62 @@ VOICE_SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
 @app.route('/api/voice-lab/projects')
 def get_voice_projects():
     """Get all voice projects from database."""
-    if USE_DATABASE:
-        projects = db.get_all_voice_projects()
-        return jsonify(projects)
-    return jsonify([])
+    try:
+        if USE_DATABASE:
+            # Ensure tables exist
+            db.init_db()
+            projects = db.get_all_voice_projects()
+            return jsonify(projects)
+        return jsonify([])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/voice-lab/projects', methods=['POST'])
 def create_voice_project_endpoint():
     """Create a new voice project with database persistence."""
-    data = request.json
-    project_id = f"voice_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000,9999)}"
+    try:
+        data = request.json or {}
+        project_id = f"voice_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000,9999)}"
 
-    if USE_DATABASE:
-        project = db.create_voice_project(
-            project_id=project_id,
-            name=data.get("name", "Untitled Voice"),
-            description=data.get("description", ""),
-            provider=data.get("provider", "elevenlabs"),
-            base_voice=data.get("base_voice"),
-            settings=data.get("settings", {
-                "pitch": 1.0,
-                "speed": 1.0,
-                "emotion": "neutral",
-                "style": "conversational",
-            }),
-            skill_id=data.get("skill_id")
-        )
-        add_activity(f"Voice project created: {project['name']}", "", "voice")
-        return jsonify({"success": True, "project": project})
+        if USE_DATABASE:
+            # Ensure tables exist
+            db.init_db()
 
-    return jsonify({"success": False, "error": "Database not available"}), 500
+            project = db.create_voice_project(
+                project_id=project_id,
+                name=data.get("name", "Untitled Voice"),
+                description=data.get("description", ""),
+                provider=data.get("provider", "elevenlabs"),
+                base_voice=data.get("base_voice"),
+                settings=data.get("settings", {
+                    "pitch": 1.0,
+                    "speed": 1.0,
+                    "emotion": "neutral",
+                    "style": "conversational",
+                }),
+                skill_id=data.get("skill_id")
+            )
+            add_activity(f"Voice project created: {project['name']}", "", "voice")
+            return jsonify({"success": True, "project": project})
+
+        return jsonify({"success": False, "error": "Database not available"}), 500
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route('/api/voice-lab/projects/<project_id>')
 def get_voice_project_endpoint(project_id):
     """Get a specific voice project from database."""
-    if USE_DATABASE:
-        project = db.get_voice_project(project_id)
-        if project:
-            return jsonify(project)
-    return jsonify({"error": "Project not found"}), 404
+    try:
+        if USE_DATABASE:
+            db.init_db()
+            project = db.get_voice_project(project_id)
+            if project:
+                return jsonify(project)
+        return jsonify({"error": "Project not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/voice-lab/projects/<project_id>', methods=['PUT'])
