@@ -2248,17 +2248,23 @@ def test_voice_project_endpoint(project_id):
                 f.write(audio_data)
             audio_url = f"/api/voice-lab/audio/{audio_filename}"
 
-        add_activity(f"Voice test: {project['name']}", "", "voice")
+            add_activity(f"Voice test: {project['name']}", "", "voice")
 
-        return jsonify({
-            "success": True,
-            "project_id": project_id,
-            "text": text,
-            "duration_ms": len(text) * 80,
-            "audio_url": audio_url,
-            "provider": provider,
-            "message": f"Voice '{project['name']}' synthesized successfully"
-        })
+            return jsonify({
+                "success": True,
+                "project_id": project_id,
+                "text": text,
+                "duration_ms": len(text) * 80,
+                "audio_url": audio_url,
+                "provider": provider,
+                "message": f"Voice '{project['name']}' synthesized successfully"
+            })
+        else:
+            # No audio generated
+            return jsonify({
+                "success": False,
+                "error": f"Could not generate audio. Check your {provider} API key in Settings, or try a free provider like Edge TTS."
+            }), 400
 
     except Exception as e:
         return jsonify({
@@ -2322,7 +2328,7 @@ def _synthesize_cartesia(voice_id, text):
 
 
 def _synthesize_edge_tts(voice, text):
-    """Synthesize speech using Edge TTS (free)."""
+    """Synthesize speech using gTTS (free Google TTS)."""
     try:
         from gtts import gTTS
         import io
@@ -2332,7 +2338,8 @@ def _synthesize_edge_tts(voice, text):
         tts.write_to_fp(audio_buffer)
         audio_buffer.seek(0)
         return audio_buffer.read()
-    except Exception:
+    except Exception as e:
+        print(f"gTTS error: {e}")
         return None
 
 
