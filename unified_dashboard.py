@@ -4144,8 +4144,11 @@ DASHBOARD_HTML = '''
                     <div class="section-header">
                         <div class="section-title"><span class="section-icon">Keys</span> Configure API Keys</div>
                     </div>
-                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Leave blank to use mock clients for testing.</p>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">API keys are stored in the database and used for LLM and voice services.</p>
                     <div id="keys-message"></div>
+
+                    <!-- LLM Providers -->
+                    <h4 style="color: var(--neon-cyan); margin: 1rem 0 0.5rem 0; font-size: 0.9rem;">LLM Providers</h4>
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">Groq API Key</label>
@@ -4160,7 +4163,31 @@ DASHBOARD_HTML = '''
                         <label class="form-label">Anthropic API Key</label>
                         <input type="password" class="form-input" id="key-anthropic" placeholder="sk-ant-...">
                     </div>
-                    <button class="btn btn-primary" onclick="saveApiKeys()">Save API Keys</button>
+
+                    <!-- Voice Providers -->
+                    <h4 style="color: var(--neon-green); margin: 1.5rem 0 0.5rem 0; font-size: 0.9rem;">Voice / TTS Providers</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">ElevenLabs API Key</label>
+                            <input type="password" class="form-input" id="key-elevenlabs" placeholder="xi_...">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Cartesia API Key</label>
+                            <input type="password" class="form-input" id="key-cartesia" placeholder="sk_car_...">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Deepgram API Key (STT)</label>
+                            <input type="password" class="form-input" id="key-deepgram" placeholder="dg_...">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">PlayHT API Key</label>
+                            <input type="password" class="form-input" id="key-playht" placeholder="...">
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary" onclick="saveApiKeys()" style="margin-top: 1rem;">Save All API Keys</button>
                 </div>
             </div>
 
@@ -5718,7 +5745,7 @@ pipeline = Pipeline([
             if (tabId === 'dashboard') { loadSkills(); loadMetrics(); }
             if (tabId === 'skills' || tabId === 'fastbrain') { loadFastBrainConfig(); loadFastBrainSkills(); refreshSystemStatus(); loadApiConnections(); }
             if (tabId === 'voice' || tabId === 'voicelab') { loadVoiceProjects(); loadSkillsForDropdowns(); }
-            if (tabId === 'settings' || tabId === 'command') { refreshStats(); }
+            if (tabId === 'settings' || tabId === 'command') { refreshStats(); loadApiKeys(); }
             if (tabId === 'factory') { loadProfileDropdowns(); }
         }
 
@@ -6330,11 +6357,36 @@ print("Training complete: adapters/${skillId}")`;
         // ============================================================
         // COMMAND CENTER
         // ============================================================
+        async function loadApiKeys() {
+            try {
+                const res = await fetch('/api/api-keys');
+                const keys = await res.json();
+
+                // LLM Providers
+                if (keys.groq) document.getElementById('key-groq').value = keys.groq;
+                if (keys.openai) document.getElementById('key-openai').value = keys.openai;
+                if (keys.anthropic) document.getElementById('key-anthropic').value = keys.anthropic;
+                // Voice Providers
+                if (keys.elevenlabs) document.getElementById('key-elevenlabs').value = keys.elevenlabs;
+                if (keys.cartesia) document.getElementById('key-cartesia').value = keys.cartesia;
+                if (keys.deepgram) document.getElementById('key-deepgram').value = keys.deepgram;
+                if (keys.playht) document.getElementById('key-playht').value = keys.playht;
+            } catch (e) {
+                console.error('Failed to load API keys:', e);
+            }
+        }
+
         async function saveApiKeys() {
             const data = {
+                // LLM Providers
                 groq: document.getElementById('key-groq').value,
                 openai: document.getElementById('key-openai').value,
-                anthropic: document.getElementById('key-anthropic').value
+                anthropic: document.getElementById('key-anthropic').value,
+                // Voice Providers
+                elevenlabs: document.getElementById('key-elevenlabs').value,
+                cartesia: document.getElementById('key-cartesia').value,
+                deepgram: document.getElementById('key-deepgram').value,
+                playht: document.getElementById('key-playht').value
             };
 
             try {
@@ -6347,7 +6399,7 @@ print("Training complete: adapters/${skillId}")`;
                 if (result.saved && result.saved.length > 0) {
                     document.getElementById('keys-message').innerHTML = `<div class="message success">Saved: ${result.saved.join(', ')}</div>`;
                 } else {
-                    document.getElementById('keys-message').innerHTML = '<div class="message info">No keys provided. Using mock clients.</div>';
+                    document.getElementById('keys-message').innerHTML = '<div class="message info">No keys provided. Using mock clients for LLM and free TTS.</div>';
                 }
             } catch (e) {
                 document.getElementById('keys-message').innerHTML = '<div class="message error">Error: ' + e.message + '</div>';
