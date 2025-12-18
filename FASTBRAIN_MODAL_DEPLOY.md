@@ -5,6 +5,26 @@ This guide deploys the HIVE215 Fast Brain LPU service to Modal — now with hybr
 
 ---
 
+## 🚀 DEPLOY ALL 3 SERVICES (Copy & Paste)
+
+**Always deploy all 3 together for the full system:**
+
+```bash
+# Windows (PowerShell)
+modal deploy deploy_dashboard.py; modal deploy fast_brain/deploy_groq.py; modal deploy parler_integration.py
+
+# Mac/Linux
+modal deploy deploy_dashboard.py && modal deploy fast_brain/deploy_groq.py && modal deploy parler_integration.py
+```
+
+| Service | Command | URL Pattern |
+|---------|---------|-------------|
+| Dashboard | `modal deploy deploy_dashboard.py` | `https://[user]--hive215-dashboard-flask-app.modal.run` |
+| Fast Brain | `modal deploy fast_brain/deploy_groq.py` | `https://[user]--fast-brain-lpu-fastapi-app.modal.run` |
+| Parler TTS | `modal deploy parler_integration.py` | `https://[user]--hive215-parler-tts-*.modal.run` |
+
+---
+
 ## The "Holy Grail" Architecture
 
 Named after "Thinking, Fast and Slow" by Daniel Kahneman:
