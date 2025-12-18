@@ -2054,6 +2054,10 @@ def train_voice_endpoint(project_id):
             # These are local models - mark as ready (would need GPU)
             voice_id = f"{provider}_{project_id}"
             message = f"Voice ready for {provider} synthesis (local model)"
+        elif provider in ['edge_tts', 'parler_tts', 'kokoro', 'chatterbox', 'gtts']:
+            # Free providers - no training needed, mark as ready
+            voice_id = f"{provider}_{project_id}"
+            message = f"Voice ready! {provider} doesn't require training - you can test it now."
         else:
             # For other providers, simulate training
             voice_id = f"{provider}_{project_id}"
@@ -2077,6 +2081,16 @@ def train_voice_endpoint(project_id):
                 "voice_id": voice_id,
                 "provider": provider
             })
+        else:
+            # Training failed - no voice_id returned (usually missing API key)
+            db.update_voice_project(project_id, status='failed')
+            job['status'] = 'failed'
+            job['error'] = message
+
+            return jsonify({
+                "success": False,
+                "error": message or f"Training failed. Make sure your {provider} API key is configured in Settings → API Keys."
+            }), 400
 
     except Exception as e:
         db.update_voice_project(project_id, status='failed')
@@ -2201,12 +2215,18 @@ def test_voice_project_endpoint(project_id):
 
     provider = project.get('provider', 'elevenlabs')
     voice_id = project.get('voice_id')
+    status = project.get('status', 'draft')
 
-    if not voice_id and project.get('status') != 'trained':
-        return jsonify({
-            "success": False,
-            "error": "Voice not trained yet. Please train the voice first."
-        }), 400
+    # Free providers that don't need voice cloning/training
+    free_providers = ['edge_tts', 'parler_tts', 'kokoro', 'chatterbox', 'gtts']
+
+    # For paid providers, check that training completed
+    if provider not in free_providers:
+        if not voice_id and status != 'trained':
+            return jsonify({
+                "success": False,
+                "error": f"Voice not trained. Add your {provider.title()} API key in Settings → API Keys, then click Train Voice."
+            }), 400
 
     try:
         audio_data = None
@@ -2216,7 +2236,8 @@ def test_voice_project_endpoint(project_id):
             audio_data = _synthesize_elevenlabs(voice_id, text)
         elif provider == 'cartesia' and voice_id:
             audio_data = _synthesize_cartesia(voice_id, text)
-        elif provider == 'edge_tts':
+        elif provider in free_providers or not voice_id:
+            # Use free TTS for testing (gTTS fallback)
             audio_data = _synthesize_edge_tts(project.get('base_voice', 'en-US-JennyNeural'), text)
 
         if audio_data:
