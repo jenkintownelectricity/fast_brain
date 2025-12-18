@@ -54,25 +54,33 @@ Fast Brain is a dual-system inference engine inspired by Daniel Kahneman's cogni
 - Groq API key (free at console.groq.com)
 - Anthropic API key
 
-### Windows Users (Python 3.11)
+### Windows Users (Python 3.11 + venv - Recommended)
 ```powershell
-# Use py launcher to specify Python 3.11
-py -3.11 -m pip install modal
-py -3.11 -m modal token new
+# Create virtual environment with Python 3.11
+py -3.11 -m venv venv
+.\venv\Scripts\Activate
 
-# Set up secrets
-py -3.11 -m modal secret create groq-api-key GROQ_API_KEY=gsk_your_key
-py -3.11 -m modal secret create anthropic-api-key ANTHROPIC_API_KEY=sk-ant-your_key
+# Install dependencies
+pip install modal fastapi pydantic
+
+# Authenticate with Modal (opens browser)
+modal token new
+
+# Set up secrets in Modal dashboard or CLI
+modal secret create groq-api-key GROQ_API_KEY=gsk_your_key
+modal secret create anthropic-api-key ANTHROPIC_API_KEY=sk-ant-your_key
 
 # Deploy Fast Brain API
-py -3.11 -m modal deploy fast_brain/deploy_groq.py
+modal deploy fast_brain/deploy_groq.py
 
 # Deploy Dashboard
-py -3.11 -m modal deploy deploy_dashboard.py
+modal deploy deploy_dashboard.py
 
 # Deploy Parler TTS (GPU - optional)
-py -3.11 -m modal deploy parler_integration.py
+modal deploy parler_integration.py
 ```
+
+**VS Code Users:** Press `Ctrl+Shift+P` → "Python: Select Interpreter" → Choose `.\venv\Scripts\python.exe`
 
 ### Mac/Linux Users
 ```bash
@@ -158,6 +166,7 @@ Voice-native skill manuals optimized for ultra-fast Groq inference:
 | `plumber` | ~850 | ~14ms | Plumbing service intake |
 | `lawyer` | ~950 | ~16ms | Legal intake specialist |
 | `solar` | ~900 | ~15ms | Solar sales qualification |
+| `tara-sales` | ~1200 | ~20ms | TheDashTool sales assistant |
 | `general` | ~750 | ~12ms | General assistant |
 
 **Usage:**
@@ -249,7 +258,7 @@ Response:
   "architecture": "System 1 + System 2 Hybrid",
   "system1": {"model": "llama-3.3-70b-versatile", "latency": "~80ms"},
   "system2": {"model": "claude-sonnet-4-5-20250929", "latency": "~2000ms"},
-  "skills": ["general", "receptionist", "electrician", "plumber", "lawyer", "solar"]
+  "skills": ["general", "receptionist", "electrician", "plumber", "lawyer", "solar", "default", "tara-sales"]
 }
 ```
 
@@ -369,12 +378,10 @@ model="claude-sonnet-4-5-20250929"
 
 ## Development
 
-### Current Branch
-```
-claude/add-modal-instructions-01BymuqovBFYVM933PhHLvVg
-```
-
-### Recent Updates
+### Recent Updates (December 2024)
+- **HIVE215 Integration**: OpenAI-compatible API with skill parameter
+- **tara-sales skill**: TheDashTool sales assistant for voice demos
+- **Python 3.11 venv setup**: Recommended deployment workflow
 - Parler TTS integration with emotion controls
 - Golden Prompts management UI
 - gTTS fallback for voice testing
