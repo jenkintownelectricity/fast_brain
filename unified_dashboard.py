@@ -48,10 +48,10 @@ for d in [BUSINESS_PROFILES_DIR, TRAINING_DATA_DIR, ADAPTERS_DIR, LOGS_DIR, DOCU
     d.mkdir(exist_ok=True)
 
 # Load API keys from database (for backward compatibility with existing code)
-API_KEYS = db.get_api_keys()
+API_KEYS = db.get_all_api_keys() if USE_DATABASE else {}
 
 # Activity log - now uses database but keep reference for backward compatibility
-ACTIVITY_LOG = db.get_recent_activity(20)
+ACTIVITY_LOG = db.get_recent_activity(20) if USE_DATABASE else []
 
 # Voice configuration and platform connections
 VOICE_CONFIG = {
