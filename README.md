@@ -54,7 +54,35 @@ Fast Brain is a dual-system inference engine inspired by Daniel Kahneman's cogni
 - Groq API key (free at console.groq.com)
 - Anthropic API key
 
-### Windows Users (Python 3.11 + venv - Recommended)
+### 🚀 DEPLOY ALL 3 SERVICES (Copy & Paste)
+
+**Always deploy all 3 together:**
+
+```bash
+# Windows (PowerShell)
+modal deploy deploy_dashboard.py; modal deploy fast_brain/deploy_groq.py; modal deploy parler_integration.py
+
+# Mac/Linux
+modal deploy deploy_dashboard.py && modal deploy fast_brain/deploy_groq.py && modal deploy parler_integration.py
+```
+
+**Or run each separately:**
+```bash
+modal deploy deploy_dashboard.py        # Dashboard UI
+modal deploy fast_brain/deploy_groq.py  # Fast Brain API
+modal deploy parler_integration.py      # Parler TTS (GPU)
+```
+
+### Your 3 Deployed URLs
+```
+Dashboard:       https://[username]--hive215-dashboard-flask-app.modal.run
+Fast Brain API:  https://[username]--fast-brain-lpu-fastapi-app.modal.run
+Parler TTS:      https://[username]--hive215-parler-tts-parlerttsmodel-*.modal.run
+```
+
+### First-Time Setup
+
+#### Windows Users (Python 3.11 + venv - Recommended)
 ```powershell
 # Create virtual environment with Python 3.11
 py -3.11 -m venv venv
@@ -70,34 +98,21 @@ modal token new
 modal secret create groq-api-key GROQ_API_KEY=gsk_your_key
 modal secret create anthropic-api-key ANTHROPIC_API_KEY=sk-ant-your_key
 
-# Deploy Fast Brain API
-modal deploy fast_brain/deploy_groq.py
-
-# Deploy Dashboard
-modal deploy deploy_dashboard.py
-
-# Deploy Parler TTS (GPU - optional)
-modal deploy parler_integration.py
+# 🚀 DEPLOY ALL 3 SERVICES
+modal deploy deploy_dashboard.py; modal deploy fast_brain/deploy_groq.py; modal deploy parler_integration.py
 ```
 
 **VS Code Users:** Press `Ctrl+Shift+P` → "Python: Select Interpreter" → Choose `.\venv\Scripts\python.exe`
 
-### Mac/Linux Users
+#### Mac/Linux Users
 ```bash
 pip install modal
 modal token new
 modal secret create groq-api-key GROQ_API_KEY=gsk_your_key
 modal secret create anthropic-api-key ANTHROPIC_API_KEY=sk-ant-your_key
-modal deploy fast_brain/deploy_groq.py
-modal deploy deploy_dashboard.py
-modal deploy parler_integration.py
-```
 
-### Your Deployed URLs
-```
-Fast Brain API:  https://[username]--fast-brain-lpu-fastapi-app.modal.run
-Dashboard:       https://[username]--hive215-dashboard-flask-app.modal.run
-Parler TTS:      https://[username]--hive215-parler-tts-parlerttsmodel-*.modal.run
+# 🚀 DEPLOY ALL 3 SERVICES
+modal deploy deploy_dashboard.py && modal deploy fast_brain/deploy_groq.py && modal deploy parler_integration.py
 ```
 
 ---
