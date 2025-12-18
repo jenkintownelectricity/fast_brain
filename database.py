@@ -161,11 +161,54 @@ def init_db():
             )
         ''')
 
+        # =================================================================
+        # VOICE PROJECTS TABLE - Custom voice cloning/training
+        # =================================================================
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS voice_projects (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                provider TEXT DEFAULT 'elevenlabs',
+                base_voice TEXT,
+                status TEXT DEFAULT 'draft',
+                settings TEXT,  -- JSON: pitch, speed, emotion, style
+                samples TEXT,   -- JSON array of sample metadata
+                voice_id TEXT,  -- External voice ID from provider (after training)
+                skill_id TEXT,  -- Linked skill/agent
+                training_started TEXT,
+                training_completed TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (skill_id) REFERENCES skills(id)
+            )
+        ''')
+
+        # =================================================================
+        # VOICE SAMPLES TABLE - Audio samples for training
+        # =================================================================
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS voice_samples (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                file_path TEXT,  -- Path on Modal volume
+                transcript TEXT,
+                duration_ms INTEGER,
+                emotion TEXT DEFAULT 'neutral',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (project_id) REFERENCES voice_projects(id)
+            )
+        ''')
+
         # Create indexes for common queries
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_skills_type ON skills(skill_type)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_skills_active ON skills(is_active)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_log(created_at)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_training_skill ON training_data(skill_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_voice_projects_status ON voice_projects(status)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_voice_projects_skill ON voice_projects(skill_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_voice_samples_project ON voice_samples(project_id)')
 
         conn.commit()
 
@@ -722,6 +765,220 @@ def seed_default_platforms():
             )
 
     print(f"Seeded {len(platforms)} default platforms")
+
+
+# =============================================================================
+# VOICE PROJECTS CRUD
+# =============================================================================
+
+def create_voice_project(
+    project_id: str,
+    name: str,
+    description: str = "",
+    provider: str = "elevenlabs",
+    base_voice: str = None,
+    settings: Dict = None,
+    skill_id: str = None
+) -> Dict:
+    """Create a new voice project."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+
+        cursor.execute('''
+            INSERT INTO voice_projects
+            (id, name, description, provider, base_voice, settings, skill_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            project_id,
+            name,
+            description,
+            provider,
+            base_voice,
+            json.dumps(settings or {'pitch': 1.0, 'speed': 1.0, 'emotion': 'neutral', 'style': 'conversational'}),
+            skill_id,
+            now,
+            now
+        ))
+
+        return get_voice_project(project_id)
+
+
+def get_voice_project(project_id: str) -> Optional[Dict]:
+    """Get a voice project by ID."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM voice_projects WHERE id = ?', (project_id,))
+        row = cursor.fetchone()
+
+        if row:
+            project = dict(row)
+            project['settings'] = json.loads(project['settings'] or '{}')
+            project['samples'] = json.loads(project['samples'] or '[]')
+            # Get samples from voice_samples table
+            cursor.execute('SELECT * FROM voice_samples WHERE project_id = ? ORDER BY created_at', (project_id,))
+            project['samples'] = [dict(s) for s in cursor.fetchall()]
+            return project
+        return None
+
+
+def get_all_voice_projects(status: str = None) -> List[Dict]:
+    """Get all voice projects, optionally filtered by status."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        if status:
+            cursor.execute('SELECT * FROM voice_projects WHERE status = ? ORDER BY updated_at DESC', (status,))
+        else:
+            cursor.execute('SELECT * FROM voice_projects ORDER BY updated_at DESC')
+
+        projects = []
+        for row in cursor.fetchall():
+            project = dict(row)
+            project['settings'] = json.loads(project['settings'] or '{}')
+            project['samples'] = json.loads(project['samples'] or '[]')
+            projects.append(project)
+
+        return projects
+
+
+def update_voice_project(project_id: str, **kwargs) -> Optional[Dict]:
+    """Update a voice project."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        allowed_fields = ['name', 'description', 'provider', 'base_voice', 'status',
+                         'settings', 'voice_id', 'skill_id', 'training_started', 'training_completed']
+
+        updates = []
+        values = []
+
+        for key, value in kwargs.items():
+            if key in allowed_fields:
+                if key == 'settings' and isinstance(value, dict):
+                    value = json.dumps(value)
+                updates.append(f"{key} = ?")
+                values.append(value)
+
+        if updates:
+            updates.append("updated_at = ?")
+            values.append(datetime.now().isoformat())
+            values.append(project_id)
+
+            cursor.execute(f'''
+                UPDATE voice_projects SET {', '.join(updates)} WHERE id = ?
+            ''', values)
+
+        return get_voice_project(project_id)
+
+
+def delete_voice_project(project_id: str) -> bool:
+    """Delete a voice project and its samples."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        # Delete samples first
+        cursor.execute('DELETE FROM voice_samples WHERE project_id = ?', (project_id,))
+        # Delete project
+        cursor.execute('DELETE FROM voice_projects WHERE id = ?', (project_id,))
+        return cursor.rowcount > 0
+
+
+def add_voice_sample(
+    project_id: str,
+    sample_id: str,
+    filename: str,
+    file_path: str = None,
+    transcript: str = "",
+    duration_ms: int = 0,
+    emotion: str = "neutral"
+) -> Dict:
+    """Add a voice sample to a project."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO voice_samples
+            (id, project_id, filename, file_path, transcript, duration_ms, emotion, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            sample_id,
+            project_id,
+            filename,
+            file_path,
+            transcript,
+            duration_ms,
+            emotion,
+            datetime.now().isoformat()
+        ))
+
+        # Update project updated_at
+        cursor.execute('UPDATE voice_projects SET updated_at = ? WHERE id = ?',
+                      (datetime.now().isoformat(), project_id))
+
+        cursor.execute('SELECT * FROM voice_samples WHERE id = ?', (sample_id,))
+        return dict(cursor.fetchone())
+
+
+def get_voice_samples(project_id: str) -> List[Dict]:
+    """Get all samples for a voice project."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM voice_samples WHERE project_id = ? ORDER BY created_at', (project_id,))
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def delete_voice_sample(sample_id: str) -> bool:
+    """Delete a voice sample."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM voice_samples WHERE id = ?', (sample_id,))
+        return cursor.rowcount > 0
+
+
+def get_voice_projects_for_skill(skill_id: str) -> List[Dict]:
+    """Get all trained voice projects linked to a skill."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM voice_projects
+            WHERE skill_id = ? AND status = 'trained'
+            ORDER BY updated_at DESC
+        ''', (skill_id,))
+
+        projects = []
+        for row in cursor.fetchall():
+            project = dict(row)
+            project['settings'] = json.loads(project['settings'] or '{}')
+            projects.append(project)
+
+        return projects
+
+
+def link_voice_to_skill(project_id: str, skill_id: str) -> bool:
+    """Link a trained voice project to a skill."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE voice_projects SET skill_id = ?, updated_at = ? WHERE id = ?
+        ''', (skill_id, datetime.now().isoformat(), project_id))
+
+        # Also update the skill's voice_config
+        project = get_voice_project(project_id)
+        if project:
+            cursor.execute('''
+                UPDATE skills SET voice_config = ?, updated_at = ? WHERE id = ?
+            ''', (
+                json.dumps({
+                    'voice_project_id': project_id,
+                    'voice_id': project.get('voice_id'),
+                    'provider': project.get('provider'),
+                    'settings': project.get('settings')
+                }),
+                datetime.now().isoformat(),
+                skill_id
+            ))
+
+        return cursor.rowcount > 0
 
 
 # =============================================================================

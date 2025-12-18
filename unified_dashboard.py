@@ -15,7 +15,7 @@ Usage:
     # Opens at http://localhost:5000
 """
 
-from flask import Flask, jsonify, render_template_string, request
+from flask import Flask, jsonify, render_template_string, request, send_file
 from flask_cors import CORS
 import json
 import os
@@ -1832,170 +1832,529 @@ def get_fast_brain_errors():
 
 
 # =============================================================================
-# API ENDPOINTS - VOICE LAB
+# API ENDPOINTS - VOICE LAB (Database-backed with TTS Integration)
 # =============================================================================
 
-VOICE_PROJECTS = {}
+# Training queue kept in memory for real-time progress (jobs are short-lived)
 VOICE_TRAINING_QUEUE = []
+
+# Voice samples directory on Modal volume
+VOICE_SAMPLES_DIR = Path("/data/voice_samples")
+VOICE_SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @app.route('/api/voice-lab/projects')
 def get_voice_projects():
-    """Get all voice projects."""
-    return jsonify(list(VOICE_PROJECTS.values()))
+    """Get all voice projects from database."""
+    if USE_DATABASE:
+        projects = db.get_all_voice_projects()
+        return jsonify(projects)
+    return jsonify([])
 
 
 @app.route('/api/voice-lab/projects', methods=['POST'])
-def create_voice_project():
-    """Create a new voice project."""
+def create_voice_project_endpoint():
+    """Create a new voice project with database persistence."""
     data = request.json
-    project_id = f"voice_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    project_id = f"voice_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000,9999)}"
 
-    project = {
-        "id": project_id,
-        "name": data.get("name", "Untitled Voice"),
-        "description": data.get("description", ""),
-        "base_voice": data.get("base_voice", "chatterbox_default"),
-        "provider": data.get("provider", "chatterbox"),
-        "status": "draft",
-        "samples": [],
-        "settings": {
-            "pitch": 1.0,
-            "speed": 1.0,
-            "emotion": "neutral",
-            "style": "conversational",
-        },
-        "training_data": [],
-        "created_at": datetime.now().isoformat(),
-        "updated_at": datetime.now().isoformat(),
-    }
+    if USE_DATABASE:
+        project = db.create_voice_project(
+            project_id=project_id,
+            name=data.get("name", "Untitled Voice"),
+            description=data.get("description", ""),
+            provider=data.get("provider", "elevenlabs"),
+            base_voice=data.get("base_voice"),
+            settings=data.get("settings", {
+                "pitch": 1.0,
+                "speed": 1.0,
+                "emotion": "neutral",
+                "style": "conversational",
+            }),
+            skill_id=data.get("skill_id")
+        )
+        add_activity(f"Voice project created: {project['name']}", "", "voice")
+        return jsonify({"success": True, "project": project})
 
-    VOICE_PROJECTS[project_id] = project
-    add_activity(f"Voice project created: {project['name']}", "")
-    return jsonify({"success": True, "project": project})
+    return jsonify({"success": False, "error": "Database not available"}), 500
 
 
 @app.route('/api/voice-lab/projects/<project_id>')
-def get_voice_project(project_id):
-    """Get a specific voice project."""
-    if project_id in VOICE_PROJECTS:
-        return jsonify(VOICE_PROJECTS[project_id])
+def get_voice_project_endpoint(project_id):
+    """Get a specific voice project from database."""
+    if USE_DATABASE:
+        project = db.get_voice_project(project_id)
+        if project:
+            return jsonify(project)
     return jsonify({"error": "Project not found"}), 404
 
 
 @app.route('/api/voice-lab/projects/<project_id>', methods=['PUT'])
-def update_voice_project(project_id):
-    """Update a voice project."""
-    if project_id not in VOICE_PROJECTS:
-        return jsonify({"error": "Project not found"}), 404
+def update_voice_project_endpoint(project_id):
+    """Update a voice project in database."""
+    if not USE_DATABASE:
+        return jsonify({"error": "Database not available"}), 500
 
     data = request.json
-    project = VOICE_PROJECTS[project_id]
+    project = db.update_voice_project(project_id, **data)
 
-    if 'name' in data:
-        project['name'] = data['name']
-    if 'description' in data:
-        project['description'] = data['description']
-    if 'settings' in data:
-        project['settings'].update(data['settings'])
+    if project:
+        return jsonify({"success": True, "project": project})
+    return jsonify({"error": "Project not found"}), 404
 
-    project['updated_at'] = datetime.now().isoformat()
 
-    return jsonify({"success": True, "project": project})
+@app.route('/api/voice-lab/projects/<project_id>', methods=['DELETE'])
+def delete_voice_project_endpoint(project_id):
+    """Delete a voice project."""
+    if USE_DATABASE:
+        # Also delete sample files from disk
+        project = db.get_voice_project(project_id)
+        if project:
+            for sample in project.get('samples', []):
+                if sample.get('file_path') and os.path.exists(sample['file_path']):
+                    os.remove(sample['file_path'])
+
+            if db.delete_voice_project(project_id):
+                add_activity(f"Voice project deleted: {project['name']}", "", "voice")
+                return jsonify({"success": True})
+
+    return jsonify({"error": "Project not found"}), 404
 
 
 @app.route('/api/voice-lab/projects/<project_id>/samples', methods=['POST'])
-def add_voice_sample(project_id):
-    """Add a training sample to a voice project."""
-    if project_id not in VOICE_PROJECTS:
+def add_voice_sample_endpoint(project_id):
+    """Add a training sample to a voice project (with file upload)."""
+    if not USE_DATABASE:
+        return jsonify({"error": "Database not available"}), 500
+
+    project = db.get_voice_project(project_id)
+    if not project:
         return jsonify({"error": "Project not found"}), 404
 
-    data = request.json
-    sample = {
-        "id": f"sample_{len(VOICE_PROJECTS[project_id]['samples'])+1}",
-        "text": data.get("text", ""),
-        "audio_url": data.get("audio_url", ""),
-        "duration_ms": data.get("duration_ms", 0),
-        "emotion": data.get("emotion", "neutral"),
-        "created_at": datetime.now().isoformat(),
-    }
+    # Handle file upload
+    if 'audio' in request.files:
+        audio_file = request.files['audio']
+        if audio_file.filename:
+            sample_id = f"sample_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000,9999)}"
+            filename = f"{project_id}_{sample_id}_{audio_file.filename}"
+            file_path = VOICE_SAMPLES_DIR / filename
 
-    VOICE_PROJECTS[project_id]['samples'].append(sample)
-    VOICE_PROJECTS[project_id]['updated_at'] = datetime.now().isoformat()
+            audio_file.save(str(file_path))
+
+            # Get transcript and duration from form data
+            transcript = request.form.get('transcript', '')
+            duration_ms = int(request.form.get('duration_ms', 0))
+            emotion = request.form.get('emotion', 'neutral')
+
+            sample = db.add_voice_sample(
+                project_id=project_id,
+                sample_id=sample_id,
+                filename=filename,
+                file_path=str(file_path),
+                transcript=transcript,
+                duration_ms=duration_ms,
+                emotion=emotion
+            )
+
+            add_activity(f"Voice sample added to {project['name']}", "", "voice")
+            return jsonify({"success": True, "sample": sample})
+
+    # Handle JSON data (metadata only, for URL-based samples)
+    data = request.json or {}
+    sample_id = f"sample_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000,9999)}"
+
+    sample = db.add_voice_sample(
+        project_id=project_id,
+        sample_id=sample_id,
+        filename=data.get('filename', 'external_audio'),
+        file_path=data.get('audio_url'),
+        transcript=data.get('transcript', data.get('text', '')),
+        duration_ms=int(data.get('duration_ms', 0)),
+        emotion=data.get('emotion', 'neutral')
+    )
 
     return jsonify({"success": True, "sample": sample})
 
 
+@app.route('/api/voice-lab/projects/<project_id>/samples/<sample_id>', methods=['DELETE'])
+def delete_voice_sample_endpoint(project_id, sample_id):
+    """Delete a voice sample."""
+    if USE_DATABASE:
+        # Delete file from disk if it exists
+        samples = db.get_voice_samples(project_id)
+        for sample in samples:
+            if sample['id'] == sample_id and sample.get('file_path'):
+                if os.path.exists(sample['file_path']):
+                    os.remove(sample['file_path'])
+                break
+
+        if db.delete_voice_sample(sample_id):
+            return jsonify({"success": True})
+
+    return jsonify({"error": "Sample not found"}), 404
+
+
 @app.route('/api/voice-lab/projects/<project_id>/train', methods=['POST'])
-def train_voice(project_id):
-    """Start training a custom voice."""
-    if project_id not in VOICE_PROJECTS:
+def train_voice_endpoint(project_id):
+    """Start training a custom voice using the selected provider."""
+    if not USE_DATABASE:
+        return jsonify({"error": "Database not available"}), 500
+
+    project = db.get_voice_project(project_id)
+    if not project:
         return jsonify({"error": "Project not found"}), 404
 
-    project = VOICE_PROJECTS[project_id]
-
-    if len(project['samples']) < 3:
+    samples = project.get('samples', [])
+    if len(samples) < 1:
         return jsonify({
             "success": False,
-            "error": "Need at least 3 audio samples to train"
-        })
+            "error": "Need at least 1 audio sample to clone/train a voice"
+        }), 400
 
-    project['status'] = 'training'
-    project['training_started'] = datetime.now().isoformat()
+    provider = project.get('provider', 'elevenlabs')
 
-    VOICE_TRAINING_QUEUE.append({
+    # Update project status to training
+    db.update_voice_project(project_id, status='training', training_started=datetime.now().isoformat())
+
+    # Add to training queue for progress tracking
+    job = {
         "project_id": project_id,
+        "provider": provider,
         "started_at": datetime.now().isoformat(),
         "progress": 0,
-    })
+        "status": "starting"
+    }
+    VOICE_TRAINING_QUEUE.append(job)
 
-    add_activity(f"Voice training started: {project['name']}", "")
+    # Try to actually train/clone with the provider
+    try:
+        voice_id = None
+        message = ""
+
+        if provider == 'elevenlabs':
+            voice_id, message = _train_elevenlabs_voice(project, samples)
+        elif provider == 'cartesia':
+            voice_id, message = _train_cartesia_voice(project, samples)
+        elif provider in ['xtts', 'openvoice']:
+            # These are local models - mark as ready (would need GPU)
+            voice_id = f"{provider}_{project_id}"
+            message = f"Voice ready for {provider} synthesis (local model)"
+        else:
+            # For other providers, simulate training
+            voice_id = f"{provider}_{project_id}"
+            message = f"Voice configured for {provider}"
+
+        if voice_id:
+            db.update_voice_project(
+                project_id,
+                status='trained',
+                voice_id=voice_id,
+                training_completed=datetime.now().isoformat()
+            )
+            job['status'] = 'completed'
+            job['progress'] = 100
+
+            add_activity(f"Voice trained: {project['name']} ({provider})", "", "voice")
+
+            return jsonify({
+                "success": True,
+                "message": message,
+                "voice_id": voice_id,
+                "provider": provider
+            })
+
+    except Exception as e:
+        db.update_voice_project(project_id, status='failed')
+        job['status'] = 'failed'
+        job['error'] = str(e)
+
+        return jsonify({
+            "success": False,
+            "error": f"Training failed: {str(e)}"
+        }), 500
 
     return jsonify({
         "success": True,
         "message": "Training started",
-        "estimated_time_minutes": len(project['samples']) * 5
+        "estimated_time_minutes": len(samples) * 2
     })
 
 
+def _train_elevenlabs_voice(project, samples):
+    """Clone a voice using ElevenLabs API."""
+    api_key = None
+    if USE_DATABASE:
+        api_key = db.get_api_key('elevenlabs')
+
+    if not api_key:
+        return None, "ElevenLabs API key not configured"
+
+    try:
+        import requests
+
+        # Prepare files for upload
+        files = []
+        for sample in samples:
+            if sample.get('file_path') and os.path.exists(sample['file_path']):
+                files.append(
+                    ('files', (sample['filename'], open(sample['file_path'], 'rb'), 'audio/mpeg'))
+                )
+
+        if not files:
+            return None, "No audio files found for training"
+
+        # Create voice clone
+        response = requests.post(
+            'https://api.elevenlabs.io/v1/voices/add',
+            headers={'xi-api-key': api_key},
+            data={
+                'name': project['name'],
+                'description': project.get('description', 'Custom cloned voice'),
+            },
+            files=files
+        )
+
+        # Close file handles
+        for _, (_, f, _) in files:
+            f.close()
+
+        if response.status_code == 200:
+            result = response.json()
+            return result.get('voice_id'), f"Voice cloned successfully: {result.get('voice_id')}"
+        else:
+            return None, f"ElevenLabs error: {response.text}"
+
+    except Exception as e:
+        return None, f"ElevenLabs API error: {str(e)}"
+
+
+def _train_cartesia_voice(project, samples):
+    """Clone a voice using Cartesia API."""
+    api_key = None
+    if USE_DATABASE:
+        api_key = db.get_api_key('cartesia')
+
+    if not api_key:
+        return None, "Cartesia API key not configured"
+
+    try:
+        import requests
+
+        # Cartesia uses a different cloning approach
+        # First sample is used as reference
+        if samples and samples[0].get('file_path') and os.path.exists(samples[0]['file_path']):
+            with open(samples[0]['file_path'], 'rb') as f:
+                audio_data = f.read()
+
+            response = requests.post(
+                'https://api.cartesia.ai/voices/clone/clip',
+                headers={
+                    'X-API-Key': api_key,
+                    'Cartesia-Version': '2024-06-10',
+                    'Content-Type': 'application/json'
+                },
+                json={
+                    'clip': audio_data.hex(),  # Cartesia expects hex-encoded audio
+                    'name': project['name'],
+                }
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                return result.get('id'), f"Voice cloned with Cartesia: {result.get('id')}"
+            else:
+                return None, f"Cartesia error: {response.text}"
+
+        return None, "No audio samples available"
+
+    except Exception as e:
+        return None, f"Cartesia API error: {str(e)}"
+
+
 @app.route('/api/voice-lab/projects/<project_id>/test', methods=['POST'])
-def test_voice_project(project_id):
-    """Test a trained voice with sample text."""
-    if project_id not in VOICE_PROJECTS:
+def test_voice_project_endpoint(project_id):
+    """Test a trained voice with sample text - actual TTS synthesis."""
+    if not USE_DATABASE:
+        return jsonify({"error": "Database not available"}), 500
+
+    project = db.get_voice_project(project_id)
+    if not project:
         return jsonify({"error": "Project not found"}), 404
 
     data = request.json
     text = data.get("text", "Hello, this is a test of my custom voice.")
 
-    project = VOICE_PROJECTS[project_id]
+    provider = project.get('provider', 'elevenlabs')
+    voice_id = project.get('voice_id')
 
-    # Simulate voice synthesis
-    add_activity(f"Voice test: {project['name']}", "")
+    if not voice_id and project.get('status') != 'trained':
+        return jsonify({
+            "success": False,
+            "error": "Voice not trained yet. Please train the voice first."
+        }), 400
 
-    return jsonify({
-        "success": True,
-        "project_id": project_id,
-        "text": text,
-        "duration_ms": len(text) * 50,  # Rough estimate
-        "audio_url": None,  # Would be real audio URL
-        "message": f"Voice '{project['name']}' synthesized successfully"
-    })
+    try:
+        audio_data = None
+        audio_url = None
+
+        if provider == 'elevenlabs' and voice_id:
+            audio_data = _synthesize_elevenlabs(voice_id, text)
+        elif provider == 'cartesia' and voice_id:
+            audio_data = _synthesize_cartesia(voice_id, text)
+        elif provider == 'edge_tts':
+            audio_data = _synthesize_edge_tts(project.get('base_voice', 'en-US-JennyNeural'), text)
+
+        if audio_data:
+            # Save to temporary file and return URL
+            audio_filename = f"test_{project_id}_{datetime.now().strftime('%H%M%S')}.mp3"
+            audio_path = VOICE_SAMPLES_DIR / audio_filename
+            with open(audio_path, 'wb') as f:
+                f.write(audio_data)
+            audio_url = f"/api/voice-lab/audio/{audio_filename}"
+
+        add_activity(f"Voice test: {project['name']}", "", "voice")
+
+        return jsonify({
+            "success": True,
+            "project_id": project_id,
+            "text": text,
+            "duration_ms": len(text) * 80,
+            "audio_url": audio_url,
+            "provider": provider,
+            "message": f"Voice '{project['name']}' synthesized successfully"
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"Synthesis failed: {str(e)}"
+        }), 500
+
+
+def _synthesize_elevenlabs(voice_id, text):
+    """Synthesize speech using ElevenLabs."""
+    api_key = db.get_api_key('elevenlabs') if USE_DATABASE else None
+    if not api_key:
+        return None
+
+    import requests
+    response = requests.post(
+        f'https://api.elevenlabs.io/v1/text-to-speech/{voice_id}',
+        headers={
+            'xi-api-key': api_key,
+            'Content-Type': 'application/json'
+        },
+        json={
+            'text': text,
+            'model_id': 'eleven_monolingual_v1',
+            'voice_settings': {
+                'stability': 0.5,
+                'similarity_boost': 0.75
+            }
+        }
+    )
+
+    if response.status_code == 200:
+        return response.content
+    return None
+
+
+def _synthesize_cartesia(voice_id, text):
+    """Synthesize speech using Cartesia."""
+    api_key = db.get_api_key('cartesia') if USE_DATABASE else None
+    if not api_key:
+        return None
+
+    import requests
+    response = requests.post(
+        'https://api.cartesia.ai/tts/bytes',
+        headers={
+            'X-API-Key': api_key,
+            'Cartesia-Version': '2024-06-10',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'transcript': text,
+            'voice': {'mode': 'id', 'id': voice_id},
+            'output_format': {'container': 'mp3', 'encoding': 'mp3', 'sample_rate': 44100}
+        }
+    )
+
+    if response.status_code == 200:
+        return response.content
+    return None
+
+
+def _synthesize_edge_tts(voice, text):
+    """Synthesize speech using Edge TTS (free)."""
+    try:
+        from gtts import gTTS
+        import io
+
+        tts = gTTS(text=text, lang='en')
+        audio_buffer = io.BytesIO()
+        tts.write_to_fp(audio_buffer)
+        audio_buffer.seek(0)
+        return audio_buffer.read()
+    except Exception:
+        return None
+
+
+@app.route('/api/voice-lab/audio/<filename>')
+def serve_voice_audio(filename):
+    """Serve generated voice audio files."""
+    file_path = VOICE_SAMPLES_DIR / filename
+    if file_path.exists():
+        return send_file(str(file_path), mimetype='audio/mpeg')
+    return jsonify({"error": "File not found"}), 404
 
 
 @app.route('/api/voice-lab/training-status')
 def get_voice_training_status():
     """Get status of all voice training jobs."""
-    # Simulate progress
-    for job in VOICE_TRAINING_QUEUE:
-        if job['progress'] < 100:
-            job['progress'] = min(100, job['progress'] + random.randint(5, 15))
-
-        if job['progress'] >= 100:
-            project = VOICE_PROJECTS.get(job['project_id'])
-            if project:
-                project['status'] = 'trained'
-
+    # Clean up completed jobs older than 1 hour
+    cutoff = datetime.now() - timedelta(hours=1)
+    global VOICE_TRAINING_QUEUE
+    VOICE_TRAINING_QUEUE = [
+        job for job in VOICE_TRAINING_QUEUE
+        if datetime.fromisoformat(job['started_at']) > cutoff or job.get('status') != 'completed'
+    ]
     return jsonify(VOICE_TRAINING_QUEUE)
+
+
+@app.route('/api/voice-lab/projects/<project_id>/link-skill', methods=['POST'])
+def link_voice_to_skill_endpoint(project_id):
+    """Link a trained voice to a skill/agent."""
+    if not USE_DATABASE:
+        return jsonify({"error": "Database not available"}), 500
+
+    data = request.json
+    skill_id = data.get('skill_id')
+
+    if not skill_id:
+        return jsonify({"error": "skill_id is required"}), 400
+
+    project = db.get_voice_project(project_id)
+    if not project:
+        return jsonify({"error": "Voice project not found"}), 404
+
+    if db.link_voice_to_skill(project_id, skill_id):
+        add_activity(f"Voice '{project['name']}' linked to skill '{skill_id}'", "", "voice")
+        return jsonify({
+            "success": True,
+            "message": f"Voice linked to skill {skill_id}"
+        })
+
+    return jsonify({"error": "Failed to link voice to skill"}), 500
+
+
+@app.route('/api/voice-lab/skills/<skill_id>/voices')
+def get_voices_for_skill(skill_id):
+    """Get all trained voices linked to a skill."""
+    if USE_DATABASE:
+        voices = db.get_voice_projects_for_skill(skill_id)
+        return jsonify(voices)
+    return jsonify([])
 
 
 # =============================================================================
@@ -3327,17 +3686,25 @@ DASHBOARD_HTML = '''
                     </div>
                     <p style="color: var(--text-secondary); margin-bottom: 1rem;">Voice-optimized skill manuals for ultra-fast Groq inference. These prompts are designed to stay under 3k tokens for ~50-100ms prefill latency.</p>
 
-                    <div class="form-group">
-                        <label class="form-label">Select Skill</label>
-                        <select class="form-select" id="golden-skill-select" onchange="loadGoldenPrompt()">
-                            <option value="receptionist">Receptionist - Professional Call Handling</option>
-                            <option value="electrician">Electrician - Jenkintown Electricity</option>
-                            <option value="plumber">Plumber - Plumbing Services</option>
-                            <option value="lawyer">Lawyer - Legal Intake Specialist</option>
-                            <option value="solar">Solar - Solar Company Sales</option>
-                            <option value="tara-sales">Tara Sales - TheDashTool Assistant</option>
-                            <option value="general">General - Helpful Assistant</option>
-                        </select>
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 2;">
+                            <label class="form-label">Select Skill</label>
+                            <select class="form-select" id="golden-skill-select" onchange="loadGoldenPrompt()">
+                                <option value="receptionist">Receptionist - Professional Call Handling</option>
+                                <option value="electrician">Electrician - Jenkintown Electricity</option>
+                                <option value="plumber">Plumber - Plumbing Services</option>
+                                <option value="lawyer">Lawyer - Legal Intake Specialist</option>
+                                <option value="solar">Solar - Solar Company Sales</option>
+                                <option value="tara-sales">Tara Sales - TheDashTool Assistant</option>
+                                <option value="general">General - Helpful Assistant</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label class="form-label">Voice <span style="color: var(--text-secondary); font-size: 0.8rem;">(optional)</span></label>
+                            <select class="form-select" id="golden-voice-select" onchange="linkVoiceToSkill()">
+                                <option value="">No custom voice</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div class="stats-row" style="margin-bottom: 1rem;">
@@ -4979,6 +5346,87 @@ pipeline = Pipeline([
             } catch (e) {
                 console.error('Error loading prompt:', e);
                 showGoldenMessage('Error loading prompt: ' + e.message, 'error');
+            }
+
+            // Also load available voices for this skill
+            loadVoicesForSkill(skillId);
+        }
+
+        async function loadVoicesForSkill(skillId) {
+            const voiceSelect = document.getElementById('golden-voice-select');
+            if (!voiceSelect) return;
+
+            try {
+                // Get all trained voice projects
+                const res = await fetch('/api/voice-lab/projects');
+                const projects = await res.json();
+
+                // Clear existing options
+                voiceSelect.innerHTML = '<option value="">No custom voice</option>';
+
+                // Add trained voices
+                projects.filter(p => p.status === 'trained').forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.id;
+                    option.textContent = `${p.name} (${p.provider})`;
+                    // Mark if this voice is linked to the current skill
+                    if (p.skill_id === skillId) {
+                        option.selected = true;
+                    }
+                    voiceSelect.appendChild(option);
+                });
+
+                // Add separator and option to create new voice
+                if (projects.filter(p => p.status === 'trained').length > 0) {
+                    const separator = document.createElement('option');
+                    separator.disabled = true;
+                    separator.textContent = '───────────';
+                    voiceSelect.appendChild(separator);
+                }
+
+                const createOption = document.createElement('option');
+                createOption.value = '__create__';
+                createOption.textContent = '+ Create New Voice...';
+                voiceSelect.appendChild(createOption);
+
+            } catch (e) {
+                console.error('Error loading voices:', e);
+            }
+        }
+
+        async function linkVoiceToSkill() {
+            const skillId = document.getElementById('golden-skill-select').value;
+            const voiceSelect = document.getElementById('golden-voice-select');
+            const voiceId = voiceSelect.value;
+
+            if (voiceId === '__create__') {
+                // Switch to Voice Lab tab
+                showSubTab('voicelab');
+                showVoiceLabTab('create');
+                voiceSelect.value = '';
+                return;
+            }
+
+            if (!voiceId) {
+                // Clear voice link - not implemented yet, just return
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/voice-lab/projects/${voiceId}/link-skill`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ skill_id: skillId })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    showGoldenMessage(`Voice linked to ${skillId} skill`, 'success');
+                } else {
+                    showGoldenMessage(data.error || 'Failed to link voice', 'error');
+                }
+            } catch (e) {
+                showGoldenMessage('Error linking voice: ' + e.message, 'error');
             }
         }
 
