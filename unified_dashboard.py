@@ -2471,30 +2471,40 @@ def test_voice_project_endpoint(project_id):
             # Use free TTS for testing (gTTS fallback)
             audio_data = _synthesize_edge_tts(project.get('base_voice', 'en-US-JennyNeural'), text)
 
-        if audio_data:
+        if audio_data and len(audio_data) > 100:  # Ensure audio has actual content
             # Save to temporary file and return URL
             audio_filename = f"test_{project_id}_{datetime.now().strftime('%H%M%S')}.mp3"
             audio_path = VOICE_SAMPLES_DIR / audio_filename
             with open(audio_path, 'wb') as f:
                 f.write(audio_data)
-            audio_url = f"/api/voice-lab/audio/{audio_filename}"
 
-            add_activity(f"Voice test: {project['name']}", "", "voice")
+            # Verify file was written
+            if audio_path.exists() and audio_path.stat().st_size > 100:
+                audio_url = f"/api/voice-lab/audio/{audio_filename}"
 
-            return jsonify({
-                "success": True,
-                "project_id": project_id,
-                "text": text,
-                "duration_ms": len(text) * 80,
-                "audio_url": audio_url,
-                "provider": provider,
-                "message": f"Voice '{project['name']}' synthesized successfully"
-            })
+                add_activity(f"Voice test: {project['name']}", "", "voice")
+
+                return jsonify({
+                    "success": True,
+                    "project_id": project_id,
+                    "text": text,
+                    "duration_ms": len(text) * 80,
+                    "audio_url": audio_url,
+                    "audio_size": audio_path.stat().st_size,
+                    "provider": provider,
+                    "message": f"Voice '{project['name']}' synthesized successfully"
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": f"Audio file was not created properly. File size: {audio_path.stat().st_size if audio_path.exists() else 0} bytes"
+                }), 400
         else:
             # No audio generated
+            audio_len = len(audio_data) if audio_data else 0
             return jsonify({
                 "success": False,
-                "error": f"Could not generate audio. Check your {provider} API key in Settings, or try a free provider like Edge TTS."
+                "error": f"Could not generate audio (got {audio_len} bytes). Check your {provider} API key in Settings, or try a free provider like Edge TTS."
             }), 400
 
     except Exception as e:
@@ -8088,10 +8098,25 @@ print("Training complete! Adapter saved to adapters/${skill}")
                 if (result.success && result.audio_url) {
                     const audioPlayer = document.getElementById('vl-edit-audio-player');
                     const audio = document.getElementById('vl-edit-audio');
+
+                    // Clear any previous errors
+                    audio.onerror = function(e) {
+                        console.error('Audio load error:', e);
+                        showEditMessage('Audio file could not be loaded. Try again.', 'error');
+                    };
+
+                    audio.onloadedmetadata = function() {
+                        console.log('Audio loaded, duration:', audio.duration);
+                        showEditMessage(`${result.message} (${result.audio_size || 'unknown'} bytes)`, 'success');
+                    };
+
                     audio.src = result.audio_url;
                     audioPlayer.style.display = 'block';
-                    audio.play();
-                    showEditMessage(result.message || 'Audio generated!', 'success');
+                    audio.load();  // Force reload
+                    audio.play().catch(e => {
+                        console.error('Play error:', e);
+                        showEditMessage('Click play to hear the audio', 'info');
+                    });
                 } else {
                     showEditMessage(result.error || 'Could not generate audio', 'error');
                 }
