@@ -24,6 +24,15 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import random
 
+# Import unified database
+try:
+    import database as db
+    USE_DATABASE = True
+    print("Using SQLite database for persistent storage")
+except ImportError:
+    USE_DATABASE = False
+    print("Database module not found - using in-memory storage")
+
 app = Flask(__name__)
 CORS(app)
 
@@ -261,17 +270,20 @@ PLATFORM_CONNECTIONS = {
     }
 }
 
-def add_activity(message, icon=""):
+def add_activity(message, icon="", category="general"):
     """Add an activity to the log."""
-    ACTIVITY_LOG.insert(0, {
-        "message": message,
-        "icon": icon,
-        "timestamp": datetime.now().isoformat(),
-        "ago": "just now"
-    })
-    # Keep only last 20 activities
-    if len(ACTIVITY_LOG) > 20:
-        ACTIVITY_LOG.pop()
+    if USE_DATABASE:
+        db.add_activity(message, icon, category)
+    else:
+        ACTIVITY_LOG.insert(0, {
+            "message": message,
+            "icon": icon,
+            "timestamp": datetime.now().isoformat(),
+            "ago": "just now"
+        })
+        # Keep only last 20 activities
+        if len(ACTIVITY_LOG) > 20:
+            ACTIVITY_LOG.pop()
 
 
 # =============================================================================
@@ -374,23 +386,27 @@ def get_metrics():
 @app.route('/api/activity')
 def get_activity():
     """Get recent activity."""
-    # Update "ago" times
-    now = datetime.now()
-    for act in ACTIVITY_LOG:
-        try:
-            ts = datetime.fromisoformat(act["timestamp"])
-            delta = now - ts
-            if delta.seconds < 60:
-                act["ago"] = "just now"
-            elif delta.seconds < 3600:
-                act["ago"] = f"{delta.seconds // 60} minutes ago"
-            elif delta.seconds < 86400:
-                act["ago"] = f"{delta.seconds // 3600} hours ago"
-            else:
-                act["ago"] = f"{delta.days} days ago"
-        except:
-            pass
-    return jsonify(ACTIVITY_LOG[:10])
+    if USE_DATABASE:
+        activities = db.get_recent_activity(limit=10)
+        return jsonify(activities)
+    else:
+        # Update "ago" times
+        now = datetime.now()
+        for act in ACTIVITY_LOG:
+            try:
+                ts = datetime.fromisoformat(act["timestamp"])
+                delta = now - ts
+                if delta.seconds < 60:
+                    act["ago"] = "just now"
+                elif delta.seconds < 3600:
+                    act["ago"] = f"{delta.seconds // 60} minutes ago"
+                elif delta.seconds < 86400:
+                    act["ago"] = f"{delta.seconds // 3600} hours ago"
+                else:
+                    act["ago"] = f"{delta.days} days ago"
+            except:
+                pass
+        return jsonify(ACTIVITY_LOG[:10])
 
 
 @app.route('/api/training-status')
@@ -850,11 +866,25 @@ def test_voice():
 
 
 # =============================================================================
-# API ENDPOINTS - GOLDEN PROMPTS
+# API ENDPOINTS - GOLDEN PROMPTS (with Database Persistence)
 # =============================================================================
 
-# In-memory storage for custom prompts (overrides defaults)
+# In-memory storage for custom prompts (fallback if no database)
 CUSTOM_PROMPTS = {}
+
+def get_custom_prompt(skill_id):
+    """Get custom prompt from database or memory."""
+    if USE_DATABASE:
+        prompt = db.get_golden_prompt(skill_id)
+        return prompt['content'] if prompt else None
+    return CUSTOM_PROMPTS.get(skill_id)
+
+def get_all_custom_prompt_ids():
+    """Get list of skill IDs with custom prompts."""
+    if USE_DATABASE:
+        prompts = db.get_all_golden_prompts()
+        return [p['skill_id'] for p in prompts]
+    return list(CUSTOM_PROMPTS.keys())
 
 @app.route('/api/golden-prompts')
 def get_golden_prompts_list():
@@ -864,16 +894,18 @@ def get_golden_prompts_list():
         sys.path.insert(0, '/root')
         from golden_prompts import SKILL_MANUALS, TOKEN_ESTIMATES
 
+        custom_ids = get_all_custom_prompt_ids()
+
         prompts = []
         for skill_id in SKILL_MANUALS.keys():
             tokens = TOKEN_ESTIMATES.get(skill_id, 800)
             prefill_ms = int((tokens / 6000) * 1000)
             prompts.append({
                 "id": skill_id,
-                "name": skill_id.replace("_", " ").title(),
+                "name": skill_id.replace("_", " ").replace("-", " ").title(),
                 "tokens": tokens,
                 "prefill_ms": prefill_ms,
-                "is_custom": skill_id in CUSTOM_PROMPTS
+                "is_custom": skill_id in custom_ids
             })
         return jsonify({"prompts": prompts})
     except Exception as e:
@@ -888,11 +920,15 @@ def get_golden_prompt(skill_id):
         sys.path.insert(0, '/root')
         from golden_prompts import SKILL_MANUALS, TOKEN_ESTIMATES, get_skill_prompt
 
-        # Check for custom override first
-        if skill_id in CUSTOM_PROMPTS:
-            content = CUSTOM_PROMPTS[skill_id]
+        # Check for custom override first (database or memory)
+        custom_content = get_custom_prompt(skill_id)
+
+        if custom_content:
+            content = custom_content
+            is_custom = True
         elif skill_id in SKILL_MANUALS:
             content = SKILL_MANUALS[skill_id]
+            is_custom = False
         else:
             return jsonify({"error": f"Skill '{skill_id}' not found"}), 404
 
@@ -912,7 +948,7 @@ def get_golden_prompt(skill_id):
             "formatted": formatted,
             "tokens": tokens,
             "prefill_ms": prefill_ms,
-            "is_custom": skill_id in CUSTOM_PROMPTS
+            "is_custom": is_custom
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -920,7 +956,7 @@ def get_golden_prompt(skill_id):
 
 @app.route('/api/golden-prompts/<skill_id>', methods=['POST'])
 def save_golden_prompt(skill_id):
-    """Save a custom golden prompt."""
+    """Save a custom golden prompt with database persistence."""
     global CUSTOM_PROMPTS
 
     try:
@@ -930,13 +966,17 @@ def save_golden_prompt(skill_id):
         if not content.strip():
             return jsonify({"error": "Prompt content cannot be empty"}), 400
 
-        CUSTOM_PROMPTS[skill_id] = content
+        # Save to database if available, otherwise memory
+        if USE_DATABASE:
+            result = db.save_golden_prompt(skill_id, content)
+            tokens = result['tokens_estimate']
+        else:
+            CUSTOM_PROMPTS[skill_id] = content
+            tokens = len(content) // 4
 
-        # Estimate tokens (rough: ~4 chars per token)
-        tokens = len(content) // 4
         prefill_ms = int((tokens / 6000) * 1000)
 
-        add_activity(f"Updated golden prompt: {skill_id}", "")
+        add_activity(f"Updated golden prompt: {skill_id}", "📝", "prompts")
 
         return jsonify({
             "success": True,
@@ -955,12 +995,20 @@ def reset_golden_prompt(skill_id):
     global CUSTOM_PROMPTS
 
     try:
-        if skill_id in CUSTOM_PROMPTS:
-            del CUSTOM_PROMPTS[skill_id]
-            add_activity(f"Reset golden prompt: {skill_id}", "")
-            return jsonify({"success": True, "message": f"Prompt for '{skill_id}' reset to default"})
+        if USE_DATABASE:
+            deleted = db.delete_golden_prompt(skill_id)
+            if deleted:
+                add_activity(f"Reset golden prompt: {skill_id}", "🔄", "prompts")
+                return jsonify({"success": True, "message": f"Prompt for '{skill_id}' reset to default"})
+            else:
+                return jsonify({"success": True, "message": "Prompt was already at default"})
         else:
-            return jsonify({"success": True, "message": "Prompt was already at default"})
+            if skill_id in CUSTOM_PROMPTS:
+                del CUSTOM_PROMPTS[skill_id]
+                add_activity(f"Reset golden prompt: {skill_id}", "🔄", "prompts")
+                return jsonify({"success": True, "message": f"Prompt for '{skill_id}' reset to default"})
+            else:
+                return jsonify({"success": True, "message": "Prompt was already at default"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -973,14 +1021,17 @@ def export_golden_prompts():
         sys.path.insert(0, '/root')
         from golden_prompts import SKILL_MANUALS
 
+        custom_ids = get_all_custom_prompt_ids()
+
         export_data = {}
         for skill_id, content in SKILL_MANUALS.items():
             # Use custom if available, otherwise default
-            export_data[skill_id] = CUSTOM_PROMPTS.get(skill_id, content)
+            custom_content = get_custom_prompt(skill_id)
+            export_data[skill_id] = custom_content if custom_content else content
 
         return jsonify({
             "prompts": export_data,
-            "custom_overrides": list(CUSTOM_PROMPTS.keys())
+            "custom_overrides": custom_ids
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1430,61 +1481,80 @@ def fast_brain_benchmark():
 
 
 # =============================================================================
-# API ENDPOINTS - FAST BRAIN SKILLS
+# API ENDPOINTS - FAST BRAIN SKILLS (Unified with Database)
 # =============================================================================
 
 @app.route('/api/fast-brain/skills')
 def get_fast_brain_skills():
-    """Get all available skills."""
-    url = FAST_BRAIN_CONFIG.get('url')
-
-    # Try to fetch from deployed LPU first
-    if url:
-        try:
-            import httpx
-            with httpx.Client(timeout=5.0) as client:
-                response = client.get(f"{url}/v1/skills")
-                if response.status_code == 200:
-                    remote_skills = response.json().get("skills", [])
-                    # Merge remote skills with local cache
-                    for skill in remote_skills:
-                        if skill["id"] not in FAST_BRAIN_SKILLS:
-                            FAST_BRAIN_SKILLS[skill["id"]] = {
-                                **skill,
-                                "is_builtin": False,
-                            }
-        except:
-            pass  # Fall back to local cache
+    """Get all available skills from unified database."""
+    if USE_DATABASE:
+        skills = db.get_all_skills()
+        selected = db.get_config('selected_skill', 'general')
+    else:
+        # Fallback to in-memory
+        url = FAST_BRAIN_CONFIG.get('url')
+        if url:
+            try:
+                import httpx
+                with httpx.Client(timeout=5.0) as client:
+                    response = client.get(f"{url}/v1/skills")
+                    if response.status_code == 200:
+                        remote_skills = response.json().get("skills", [])
+                        for skill in remote_skills:
+                            if skill["id"] not in FAST_BRAIN_SKILLS:
+                                FAST_BRAIN_SKILLS[skill["id"]] = {**skill, "is_builtin": False}
+            except:
+                pass
+        skills = list(FAST_BRAIN_SKILLS.values())
+        selected = FAST_BRAIN_CONFIG.get("selected_skill", "general")
 
     return jsonify({
-        "skills": list(FAST_BRAIN_SKILLS.values()),
-        "selected": FAST_BRAIN_CONFIG.get("selected_skill", "general")
+        "skills": skills,
+        "selected": selected
     })
 
 
 @app.route('/api/fast-brain/skills', methods=['POST'])
 def create_fast_brain_skill():
-    """Create a new custom skill."""
-    global FAST_BRAIN_SKILLS
+    """Create a new custom skill with database persistence."""
     data = request.json
 
     skill_id = data.get('skill_id', '').lower().replace(' ', '_')
+    skill_id = re.sub(r'[^\w\-]', '_', skill_id)
+
     if not skill_id:
         return jsonify({"success": False, "error": "Skill ID is required"})
 
-    if skill_id in FAST_BRAIN_SKILLS and FAST_BRAIN_SKILLS[skill_id].get('is_builtin'):
-        return jsonify({"success": False, "error": "Cannot overwrite built-in skill"})
+    # Check for builtin skill
+    if USE_DATABASE:
+        existing = db.get_skill(skill_id)
+        if existing and existing.get('is_builtin'):
+            return jsonify({"success": False, "error": "Cannot overwrite built-in skill"})
 
-    skill = {
-        "id": skill_id,
-        "name": data.get('name', skill_id.title()),
-        "description": data.get('description', ''),
-        "system_prompt": data.get('system_prompt', ''),
-        "knowledge": data.get('knowledge', []),
-        "is_builtin": False,
-    }
+        # Create/update in database
+        skill = db.create_skill(
+            skill_id=skill_id,
+            name=data.get('name', skill_id.replace('_', ' ').title()),
+            description=data.get('description', ''),
+            skill_type=data.get('skill_type', 'custom'),
+            system_prompt=data.get('system_prompt', ''),
+            knowledge=data.get('knowledge', []),
+            is_builtin=False
+        )
+    else:
+        # Fallback to in-memory
+        if skill_id in FAST_BRAIN_SKILLS and FAST_BRAIN_SKILLS[skill_id].get('is_builtin'):
+            return jsonify({"success": False, "error": "Cannot overwrite built-in skill"})
 
-    FAST_BRAIN_SKILLS[skill_id] = skill
+        skill = {
+            "id": skill_id,
+            "name": data.get('name', skill_id.title()),
+            "description": data.get('description', ''),
+            "system_prompt": data.get('system_prompt', ''),
+            "knowledge": data.get('knowledge', []),
+            "is_builtin": False,
+        }
+        FAST_BRAIN_SKILLS[skill_id] = skill
 
     # Try to sync to deployed LPU
     url = FAST_BRAIN_CONFIG.get('url')
@@ -1496,49 +1566,112 @@ def create_fast_brain_skill():
                     f"{url}/v1/skills",
                     json={
                         "skill_id": skill_id,
-                        "name": skill["name"],
-                        "description": skill["description"],
-                        "system_prompt": skill["system_prompt"],
-                        "knowledge": skill["knowledge"],
+                        "name": skill.get("name"),
+                        "description": skill.get("description"),
+                        "system_prompt": skill.get("system_prompt"),
+                        "knowledge": skill.get("knowledge", []),
                     }
                 )
                 if response.status_code == 200:
-                    add_activity(f"Skill '{skill['name']}' synced to LPU", "")
+                    add_activity(f"Skill '{skill.get('name')}' synced to LPU", "🔄", "skills")
         except Exception as e:
-            add_activity(f"Skill created locally (sync failed: {str(e)[:50]})", "")
+            add_activity(f"Skill created (sync failed: {str(e)[:50]})", "⚠️", "skills")
 
-    add_activity(f"Created skill: {skill['name']}", "")
+    add_activity(f"Created skill: {skill.get('name')}", "✨", "skills")
     return jsonify({"success": True, "skill": skill})
+
+
+@app.route('/api/fast-brain/skills/<skill_id>', methods=['PUT'])
+def update_fast_brain_skill(skill_id):
+    """Update an existing skill."""
+    data = request.json
+
+    if USE_DATABASE:
+        existing = db.get_skill(skill_id)
+        if not existing:
+            return jsonify({"success": False, "error": "Skill not found"})
+
+        if existing.get('is_builtin') and 'system_prompt' not in data:
+            return jsonify({"success": False, "error": "Cannot modify built-in skill structure"})
+
+        # Update allowed fields
+        update_data = {}
+        for field in ['name', 'description', 'system_prompt', 'knowledge', 'skill_type']:
+            if field in data:
+                update_data[field] = data[field]
+
+        skill = db.update_skill(skill_id, **update_data)
+        add_activity(f"Updated skill: {skill.get('name')}", "📝", "skills")
+        return jsonify({"success": True, "skill": skill})
+    else:
+        if skill_id not in FAST_BRAIN_SKILLS:
+            return jsonify({"success": False, "error": "Skill not found"})
+
+        FAST_BRAIN_SKILLS[skill_id].update(data)
+        add_activity(f"Updated skill: {skill_id}", "📝", "skills")
+        return jsonify({"success": True, "skill": FAST_BRAIN_SKILLS[skill_id]})
 
 
 @app.route('/api/fast-brain/skills/<skill_id>', methods=['DELETE'])
 def delete_fast_brain_skill(skill_id):
     """Delete a custom skill."""
-    global FAST_BRAIN_SKILLS
+    if USE_DATABASE:
+        existing = db.get_skill(skill_id)
+        if not existing:
+            return jsonify({"success": False, "error": "Skill not found"})
 
-    if skill_id not in FAST_BRAIN_SKILLS:
-        return jsonify({"success": False, "error": "Skill not found"})
+        if existing.get('is_builtin'):
+            return jsonify({"success": False, "error": "Cannot delete built-in skill"})
 
-    if FAST_BRAIN_SKILLS[skill_id].get('is_builtin'):
-        return jsonify({"success": False, "error": "Cannot delete built-in skill"})
+        db.delete_skill(skill_id)
+        add_activity(f"Deleted skill: {skill_id}", "🗑️", "skills")
+        return jsonify({"success": True})
+    else:
+        if skill_id not in FAST_BRAIN_SKILLS:
+            return jsonify({"success": False, "error": "Skill not found"})
 
-    del FAST_BRAIN_SKILLS[skill_id]
-    add_activity(f"Deleted skill: {skill_id}", "")
-    return jsonify({"success": True})
+        if FAST_BRAIN_SKILLS[skill_id].get('is_builtin'):
+            return jsonify({"success": False, "error": "Cannot delete built-in skill"})
+
+        del FAST_BRAIN_SKILLS[skill_id]
+        add_activity(f"Deleted skill: {skill_id}", "🗑️", "skills")
+        return jsonify({"success": True})
+
+
+@app.route('/api/fast-brain/skills/<skill_id>')
+def get_single_skill(skill_id):
+    """Get a single skill by ID."""
+    if USE_DATABASE:
+        skill = db.get_skill(skill_id)
+        if not skill:
+            return jsonify({"error": "Skill not found"}), 404
+        return jsonify(skill)
+    else:
+        if skill_id not in FAST_BRAIN_SKILLS:
+            return jsonify({"error": "Skill not found"}), 404
+        return jsonify(FAST_BRAIN_SKILLS[skill_id])
 
 
 @app.route('/api/fast-brain/skills/select', methods=['POST'])
 def select_fast_brain_skill():
     """Select the active skill for chat."""
-    global FAST_BRAIN_CONFIG
     data = request.json
     skill_id = data.get('skill_id', 'general')
 
-    if skill_id not in FAST_BRAIN_SKILLS:
-        return jsonify({"success": False, "error": "Skill not found"})
+    if USE_DATABASE:
+        skill = db.get_skill(skill_id)
+        if not skill:
+            return jsonify({"success": False, "error": "Skill not found"})
 
-    FAST_BRAIN_CONFIG['selected_skill'] = skill_id
-    add_activity(f"Selected skill: {FAST_BRAIN_SKILLS[skill_id]['name']}", "")
+        db.set_config('selected_skill', skill_id, 'fast_brain')
+        add_activity(f"Selected skill: {skill.get('name')}", "✓", "skills")
+    else:
+        if skill_id not in FAST_BRAIN_SKILLS:
+            return jsonify({"success": False, "error": "Skill not found"})
+
+        FAST_BRAIN_CONFIG['selected_skill'] = skill_id
+        add_activity(f"Selected skill: {FAST_BRAIN_SKILLS[skill_id]['name']}", "✓", "skills")
+
     return jsonify({"success": True, "skill_id": skill_id})
 
 
