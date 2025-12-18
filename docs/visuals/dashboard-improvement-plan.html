@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Improvement Plan - Fast Brain</title>
+    <style>
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #141928;
+            --bg-card: #1a1f35;
+            --accent-cyan: #00d4ff;
+            --accent-purple: #8b5cf6;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-yellow: #f59e0b;
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+            --border-color: #2d3548;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.2rem;
+            margin-bottom: 3rem;
+        }
+
+        .section {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .section-title .icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .icon-red { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+        .icon-green { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); }
+        .icon-cyan { background: rgba(0, 212, 255, 0.2); color: var(--accent-cyan); }
+        .icon-purple { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
+        .icon-yellow { background: rgba(245, 158, 11, 0.2); color: var(--accent-yellow); }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 1000px) {
+            .grid-2, .grid-3 { grid-template-columns: 1fr; }
+        }
+
+        .issue-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border-left: 4px solid var(--accent-red);
+        }
+
+        .fix-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border-left: 4px solid var(--accent-green);
+        }
+
+        .card-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-content {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .status-done { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); }
+        .status-progress { background: rgba(0, 212, 255, 0.2); color: var(--accent-cyan); }
+        .status-pending { background: rgba(148, 163, 184, 0.2); color: var(--text-secondary); }
+
+        .db-schema {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+        }
+
+        .table-name {
+            color: var(--accent-cyan);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .table-cols {
+            color: var(--text-secondary);
+            margin-left: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .architecture-diagram {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .arch-box {
+            display: inline-block;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            margin: 0.5rem;
+            font-weight: 600;
+        }
+
+        .arch-unified { background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple)); }
+        .arch-source { background: var(--bg-card); border: 2px solid var(--border-color); }
+        .arch-db { background: rgba(16, 185, 129, 0.3); border: 2px solid var(--accent-green); }
+
+        .arrow {
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            margin: 0 0.5rem;
+        }
+
+        .layout-preview {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1rem;
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 1rem;
+            min-height: 400px;
+        }
+
+        .sidebar-preview {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .sidebar-item {
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .sidebar-item:hover, .sidebar-item.active {
+            background: rgba(0, 212, 255, 0.1);
+            color: var(--accent-cyan);
+        }
+
+        .main-preview {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .tab-bar {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+
+        .tab {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .tab.active {
+            background: rgba(0, 212, 255, 0.2);
+            color: var(--accent-cyan);
+        }
+
+        .checklist {
+            list-style: none;
+        }
+
+        .checklist li {
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .checklist li:last-child {
+            border-bottom: none;
+        }
+
+        .check {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+        }
+
+        .check-done { background: var(--accent-green); color: white; }
+        .check-progress { background: var(--accent-cyan); color: white; }
+        .check-pending { background: var(--border-color); color: var(--text-secondary); }
+
+        .feature-comparison {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .feature-comparison th,
+        .feature-comparison td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .feature-comparison th {
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+
+        .feature-comparison td {
+            color: var(--text-primary);
+        }
+
+        .highlight {
+            color: var(--accent-cyan);
+            font-weight: 600;
+        }
+
+        .research-source {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            background: var(--bg-card);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            color: var(--accent-purple);
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dashboard Improvement Plan</h1>
+        <p class="subtitle">Making Fast Brain's Unified Dashboard 100% Functional and Professional</p>
+
+        <!-- Issues Identified -->
+        <div class="section">
+            <div class="section-title">
+                <span class="icon icon-red">!</span>
+                Issues Identified
+            </div>
+            <div class="grid-2">
+                <div class="issue-card">
+                    <div class="card-title">
+                        <span>Tara Skill Missing from Golden Prompts</span>
+                        <span class="status-badge status-done">FIXED</span>
+                    </div>
+                    <div class="card-content">
+                        The tara-sales skill was defined in FAST_BRAIN_SKILLS but not in golden_prompts.py SKILL_MANUALS or the dropdown.
+                    </div>
+                </div>
+                <div class="issue-card">
+                    <div class="card-title">
+                        <span>No Data Persistence</span>
+                        <span class="status-badge status-done">FIXED</span>
+                    </div>
+                    <div class="card-content">
+                        All data stored in-memory (CUSTOM_PROMPTS = {}, API_KEYS = {}). Everything lost on server restart.
+                    </div>
+                </div>
+                <div class="issue-card">
+                    <div class="card-title">
+                        <span>Duplicate Skill Systems</span>
+                        <span class="status-badge status-pending">PENDING</span>
+                    </div>
+                    <div class="card-content">
+                        3 separate skill storage systems: FAST_BRAIN_SKILLS dict, SKILL_MANUALS dict, business_profiles/*.json files.
+                    </div>
+                </div>
+                <div class="issue-card">
+                    <div class="card-title">
+                        <span>Disconnected Features</span>
+                        <span class="status-badge status-pending">PENDING</span>
+                    </div>
+                    <div class="card-content">
+                        Multiple tabs with overlapping functionality that don't share data: Dashboard Skills vs Fast Brain Skills Manager vs Skill Factory.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Database Schema -->
+        <div class="section">
+            <div class="section-title">
+                <span class="icon icon-green">DB</span>
+                New SQLite Database Schema (Scalable Design)
+            </div>
+            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                <span class="research-source">Research Applied</span>
+                Based on SQLite schema design patterns: normalization with strategic denormalization, JSON for flexible attributes, proper indexes.
+            </p>
+            <div class="db-schema">
+                <div class="table-name">skills</div>
+                <div class="table-cols">id, name, description, business_type, system_prompt, greeting, personality, voice_description, knowledge (JSON), is_builtin, status, training_examples, created_at, updated_at</div>
+
+                <div class="table-name">custom_prompts</div>
+                <div class="table-cols">skill_id, content, tokens_estimate, created_at, updated_at</div>
+
+                <div class="table-name">api_keys (encrypted)</div>
+                <div class="table-cols">provider, api_key_encrypted, is_valid, last_verified, created_at, updated_at</div>
+
+                <div class="table-name">platform_connections</div>
+                <div class="table-cols">platform_id, name, description, status, config (JSON), last_connected, created_at, updated_at</div>
+
+                <div class="table-name">activity_log</div>
+                <div class="table-cols">id, message, icon, category, metadata (JSON), created_at</div>
+
+                <div class="table-name">voice_projects</div>
+                <div class="table-cols">id, name, description, base_provider, base_voice, settings (JSON), training_status, samples_count, created_at, updated_at</div>
+
+                <div class="table-name">training_data</div>
+                <div class="table-cols">id, skill_id (FK), file_path, examples_count, source, created_at</div>
+
+                <div class="table-name">dashboard_config</div>
+                <div class="table-cols">key, value, updated_at</div>
+            </div>
+        </div>
+
+        <!-- Unified Skill Architecture -->
+        <div class="section">
+            <div class="section-title">
+                <span class="icon icon-cyan">UNIFIED</span>
+                Unified Skill System Architecture
+            </div>
+            <div class="architecture-diagram">
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="color: var(--text-secondary); margin-bottom: 1rem;">BEFORE (Disconnected)</h3>
+                    <div class="arch-box arch-source">FAST_BRAIN_SKILLS</div>
+                    <div class="arch-box arch-source">SKILL_MANUALS</div>
+                    <div class="arch-box arch-source">business_profiles/*.json</div>
+                </div>
+                <div style="font-size: 2rem; color: var(--accent-green); margin: 1rem 0;">ARROW DOWN</div>
+                <div>
+                    <h3 style="color: var(--accent-green); margin-bottom: 1rem;">AFTER (Unified)</h3>
+                    <div class="arch-box arch-db">SQLite Database</div>
+                    <span class="arrow">ARROW</span>
+                    <div class="arch-box arch-unified">Unified Skills API</div>
+                    <span class="arrow">ARROW</span>
+                    <div style="display: inline-block;">
+                        <div class="arch-box arch-source" style="display: block; margin-bottom: 0.5rem;">Dashboard Tab</div>
+                        <div class="arch-box arch-source" style="display: block; margin-bottom: 0.5rem;">Fast Brain Tab</div>
+                        <div class="arch-box arch-source" style="display: block; margin-bottom: 0.5rem;">Skill Factory Tab</div>
+                        <div class="arch-box arch-source" style="display: block;">Golden Prompts</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Layout Improvements -->
+        <div class="section">
+            <div class="section-title">
+                <span class="icon icon-purple">UI</span>
+                Dashboard Layout Improvements
+            </div>
+            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                <span class="research-source">Vapi</span>
+                <span class="research-source">Retell AI</span>
+                <span class="research-source">Bland AI</span>
+                <span class="research-source">SaaS Best Practices</span>
+                Following industry standards: left-nav, single-click access, consistent layouts, role-based views.
+            </p>
+
+            <div class="layout-preview">
+                <div class="sidebar-preview">
+                    <div style="font-weight: 600; margin-bottom: 1rem; color: var(--accent-cyan);">Navigation</div>
+                    <div class="sidebar-item active">Dashboard</div>
+                    <div class="sidebar-item">Skills Manager</div>
+                    <div class="sidebar-item">Voice Lab</div>
+                    <div class="sidebar-item">Connections</div>
+                    <div class="sidebar-item">API & Testing</div>
+                    <div class="sidebar-item">Settings</div>
+                </div>
+                <div class="main-preview">
+                    <div style="font-weight: 600; margin-bottom: 1rem;">Skills Manager (Unified)</div>
+                    <div class="tab-bar">
+                        <div class="tab active">All Skills</div>
+                        <div class="tab">Golden Prompts</div>
+                        <div class="tab">Training</div>
+                        <div class="tab">Documents</div>
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: 0.9rem;">
+                        <p style="margin-bottom: 1rem;">Key improvements:</p>
+                        <ul style="margin-left: 1.5rem;">
+                            <li>Single source of truth for all skills</li>
+                            <li>Built-in skills vs Custom skills filter</li>
+                            <li>Edit golden prompts inline</li>
+                            <li>Status: Draft &rarr; Training &rarr; Deployed</li>
+                            <li>Training examples count auto-updated</li>
+                            <li>Test any skill directly from the table</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Feature Consolidation -->
+        <div class="section">
+            <div class="section-title">
+                <span class="icon icon-yellow">MERGE</span>
+                Feature Consolidation Plan
+            </div>
+            <table class="feature-comparison">
+                <thead>
+                    <tr>
+                        <th>Current Location</th>
+                        <th>Feature</th>
+                        <th>New Location</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Dashboard &rarr; Skills</td>
+                        <td>View skills list</td>
+                        <td class="highlight">Skills Manager &rarr; All Skills</td>
+                        <td><span class="status-badge status-pending">Pending</span></td>
+                    </tr>
+                    <tr>
+                        <td>Fast Brain &rarr; Skills Manager</td>
+                        <td>Create/manage skills</td>
+                        <td class="highlight">Skills Manager &rarr; All Skills</td>
+                        <td><span class="status-badge status-pending">Pending</span></td>
+                    </tr>
+                    <tr>
+                        <td>Skill Factory &rarr; Business Profile</td>
+                        <td>Create business profile</td>
+                        <td class="highlight">Skills Manager &rarr; New Skill</td>
+                        <td><span class="status-badge status-pending">Pending</span></td>
+                    </tr>
+                    <tr>
+                        <td>Skill Factory &rarr; Golden Prompts</td>
+                        <td>Edit golden prompts</td>
+                        <td class="highlight">Skills Manager &rarr; Golden Prompts</td>
+                        <td><span class="status-badge status-done">Fixed (Tara added)</span></td>
+                    </tr>
+                    <tr>
+                        <td>Skill Factory &rarr; Manage Skills</td>
+                        <td>Skills table</td>
+                        <td class="highlight">Skills Manager &rarr; All Skills</td>
+                        <td><span class="status-badge status-pending">Pending</span></td>
+                    </tr>
+                    <tr>
+                        <td>Voice Lab &rarr; Voice Projects</td>
+                        <td>Voice project creation</td>
+                        <td class="highlight">Voice Lab (Keep)</td>
+                        <td><span class="status-badge status-progress">In Progress</span></td>
+                    </tr>
+                    <tr>
+                        <td>Command Center &rarr; API Keys</td>
+                        <td>API key management</td>
+                        <td class="highlight">Settings &rarr; API Keys</td>
+                        <td><span class="status-badge status-done">DB Integrated</span></td>
+                    </tr>
+                    <tr>
+                        <td>Command Center &rarr; Voice Integration</td>
+                        <td>Platform connections</td>
+                        <td class="highlight">Connections (Main nav)</td>
+                        <td><span class="status-badge status-done">DB Integrated</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Progress Checklist -->
+        <div class="section">
+            <div class="section-title">
+                <span class="icon icon-green">CHECK</span>
+                Implementation Progress
+            </div>
+            <ul class="checklist">
+                <li>
+                    <span class="check check-done">OK</span>
+                    <span>Add Tara skill to golden_prompts.py SKILL_MANUALS and TOKEN_ESTIMATES</span>
+                </li>
+                <li>
+                    <span class="check check-done">OK</span>
+                    <span>Add Tara skill to Golden Prompts dropdown</span>
+                </li>
+                <li>
+                    <span class="check check-done">OK</span>
+                    <span>Create SQLite database module (dashboard_db.py) with scalable schema</span>
+                </li>
+                <li>
+                    <span class="check check-done">OK</span>
+                    <span>Integrate database for custom prompts persistence</span>
+                </li>
+                <li>
+                    <span class="check check-done">OK</span>
+                    <span>Integrate database for API keys (encrypted) persistence</span>
+                </li>
+                <li>
+                    <span class="check check-done">OK</span>
+                    <span>Integrate database for activity log persistence</span>
+                </li>
+                <li>
+                    <span class="check check-done">OK</span>
+                    <span>Integrate database for platform connections persistence</span>
+                </li>
+                <li>
+                    <span class="check check-progress">IN</span>
+                    <span>Unify skill systems - connect all skill sources to single database</span>
+                </li>
+                <li>
+                    <span class="check check-pending">--</span>
+                    <span>Consolidate duplicate features across tabs</span>
+                </li>
+                <li>
+                    <span class="check check-pending">--</span>
+                    <span>Add dynamic dropdown population from API (not hardcoded)</span>
+                </li>
+                <li>
+                    <span class="check check-pending">--</span>
+                    <span>Test all buttons and API endpoints</span>
+                </li>
+                <li>
+                    <span class="check check-pending">--</span>
+                    <span>Verify API readiness for external connections</span>
+                </li>
+            </ul>
+        </div>
+
+        <!-- API Endpoints Summary -->
+        <div class="section">
+            <div class="section-title">
+                <span class="icon icon-cyan">API</span>
+                API Endpoints (Ready for External Connections)
+            </div>
+            <div class="db-schema">
+                <div class="table-name">Skills API</div>
+                <div class="table-cols">
+                    GET  /api/skills          - List all skills<br>
+                    GET  /api/skills/{id}     - Get skill details<br>
+                    POST /api/create-skill    - Create new skill<br>
+                    DEL  /api/delete-skill/{id} - Delete skill
+                </div>
+
+                <div class="table-name">Golden Prompts API</div>
+                <div class="table-cols">
+                    GET  /api/golden-prompts           - List all prompts<br>
+                    GET  /api/golden-prompts/{id}      - Get prompt content<br>
+                    POST /api/golden-prompts/{id}      - Save custom prompt<br>
+                    POST /api/golden-prompts/{id}/reset - Reset to default<br>
+                    GET  /api/golden-prompts/export    - Export all prompts
+                </div>
+
+                <div class="table-name">Fast Brain API</div>
+                <div class="table-cols">
+                    GET  /api/fast-brain/health     - Health check<br>
+                    POST /api/fast-brain/chat       - Send chat request<br>
+                    GET  /api/fast-brain/skills     - List available skills<br>
+                    POST /api/fast-brain/skills     - Create skill dynamically
+                </div>
+
+                <div class="table-name">Platform Connections API</div>
+                <div class="table-cols">
+                    GET  /api/platforms                    - List all platforms<br>
+                    POST /api/platforms/{id}/connect       - Connect to platform<br>
+                    POST /api/platforms/{id}/disconnect    - Disconnect<br>
+                    POST /api/platforms/{id}/test          - Test connection
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+            Generated: December 18, 2024 | Fast Brain Unified Dashboard Improvement Plan
+        </div>
+    </div>
+</body>
+</html>
