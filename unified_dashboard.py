@@ -570,6 +570,7 @@ def save_api_keys():
     data = request.json
     saved = []
 
+    # LLM Providers
     if data.get('groq'):
         db.save_api_key('groq', data['groq'])
         API_KEYS['groq'] = data['groq']
@@ -582,6 +583,24 @@ def save_api_keys():
         db.save_api_key('anthropic', data['anthropic'])
         API_KEYS['anthropic'] = data['anthropic']
         saved.append('Anthropic')
+
+    # Voice Providers
+    if data.get('elevenlabs'):
+        db.save_api_key('elevenlabs', data['elevenlabs'])
+        API_KEYS['elevenlabs'] = data['elevenlabs']
+        saved.append('ElevenLabs')
+    if data.get('cartesia'):
+        db.save_api_key('cartesia', data['cartesia'])
+        API_KEYS['cartesia'] = data['cartesia']
+        saved.append('Cartesia')
+    if data.get('deepgram'):
+        db.save_api_key('deepgram', data['deepgram'])
+        API_KEYS['deepgram'] = data['deepgram']
+        saved.append('Deepgram')
+    if data.get('playht'):
+        db.save_api_key('playht', data['playht'])
+        API_KEYS['playht'] = data['playht']
+        saved.append('PlayHT')
 
     if saved:
         add_activity(f"API keys saved: {', '.join(saved)}", "", "api")
