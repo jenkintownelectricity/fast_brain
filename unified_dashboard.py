@@ -641,6 +641,48 @@ def debug_api_keys():
     return jsonify({"error": "Database not available"})
 
 
+@app.route('/api/debug-voice-train/<project_id>')
+def debug_voice_train(project_id):
+    """Debug endpoint to test voice training without UI."""
+    result = {"project_id": project_id}
+
+    if not USE_DATABASE:
+        result["error"] = "Database not available"
+        return jsonify(result)
+
+    # Get project
+    project = db.get_voice_project(project_id)
+    if not project:
+        result["error"] = "Project not found"
+        return jsonify(result)
+
+    result["project_name"] = project.get('name')
+    result["provider"] = project.get('provider', 'elevenlabs')
+    result["status"] = project.get('status')
+    result["voice_id"] = project.get('voice_id')
+
+    # Get samples
+    samples = db.get_voice_samples(project_id)
+    result["sample_count"] = len(samples)
+    result["samples"] = []
+
+    for s in samples:
+        sample_info = {
+            "filename": s.get('filename'),
+            "file_path": s.get('file_path'),
+            "file_exists": os.path.exists(s.get('file_path', '')) if s.get('file_path') else False
+        }
+        result["samples"].append(sample_info)
+
+    # Check API key
+    api_key = db.get_api_key('elevenlabs')
+    result["elevenlabs_key_set"] = bool(api_key)
+    if api_key:
+        result["elevenlabs_key_preview"] = f"{api_key[:4]}...{api_key[-4:]}"
+
+    return jsonify(result)
+
+
 @app.route('/api/test-llm', methods=['POST'])
 def test_llm():
     """Test a single LLM provider with real API call."""
