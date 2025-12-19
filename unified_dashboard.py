@@ -2461,15 +2461,20 @@ def test_voice_project_endpoint(project_id):
 
     try:
         audio_data = None
-        audio_url = None
+        synthesis_method = None
 
         if provider == 'elevenlabs' and voice_id:
             audio_data = _synthesize_elevenlabs(voice_id, text)
+            synthesis_method = 'elevenlabs'
         elif provider == 'cartesia' and voice_id:
             audio_data = _synthesize_cartesia(voice_id, text)
-        elif provider in free_providers or not voice_id:
-            # Use free TTS for testing (gTTS fallback)
+            synthesis_method = 'cartesia'
+        else:
+            # Use gTTS for all free providers or when no voice_id
             audio_data = _synthesize_edge_tts(project.get('base_voice', 'en-US-JennyNeural'), text)
+            synthesis_method = 'gtts'
+
+        print(f"Voice Lab Test: provider={provider}, voice_id={voice_id}, method={synthesis_method}, audio_len={len(audio_data) if audio_data else 0}")
 
         if audio_data and len(audio_data) > 100:
             import base64
@@ -2497,7 +2502,7 @@ def test_voice_project_endpoint(project_id):
             audio_len = len(audio_data) if audio_data else 0
             return jsonify({
                 "success": False,
-                "error": f"Could not generate audio (got {audio_len} bytes). Check your {provider} API key in Settings, or try a free provider like Edge TTS."
+                "error": f"Could not generate audio (got {audio_len} bytes, method={synthesis_method}, provider={provider}). Try again or check logs."
             }), 400
 
     except Exception as e:
