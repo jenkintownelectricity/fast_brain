@@ -822,8 +822,9 @@ def create_voice_project(
             now,
             now
         ))
+        conn.commit()  # Commit before reading back
 
-        return get_voice_project(project_id)
+    return get_voice_project(project_id)
 
 
 def get_voice_project(project_id: str) -> Optional[Dict]:
