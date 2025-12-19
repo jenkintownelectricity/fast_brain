@@ -626,6 +626,21 @@ def get_api_keys():
     return jsonify({})
 
 
+@app.route('/api/debug-api-keys')
+def debug_api_keys():
+    """Debug endpoint to check if API keys are saved (shows if key exists, not the actual key)."""
+    if USE_DATABASE:
+        result = {}
+        for provider in ['groq', 'openai', 'anthropic', 'elevenlabs', 'cartesia', 'deepgram', 'playht']:
+            key = db.get_api_key(provider)
+            if key:
+                result[provider] = f"SET ({len(key)} chars, starts with {key[:4]}...)"
+            else:
+                result[provider] = "NOT SET"
+        return jsonify(result)
+    return jsonify({"error": "Database not available"})
+
+
 @app.route('/api/test-llm', methods=['POST'])
 def test_llm():
     """Test a single LLM provider with real API call."""
