@@ -2511,38 +2511,39 @@ def _train_cartesia_voice(project, samples):
 
     try:
         import requests
-        import base64
 
-        # Cartesia uses a different cloning approach
-        # First sample is used as reference
+        # Cartesia requires multipart form data with the audio file
         if samples and samples[0].get('file_path') and os.path.exists(samples[0]['file_path']):
             file_path = samples[0]['file_path']
+            filename = samples[0].get('filename', 'audio.mp3')
 
-            # Read audio file and base64 encode it
-            with open(file_path, 'rb') as f:
-                audio_data = f.read()
-
-            audio_base64 = base64.b64encode(audio_data).decode('utf-8')
-
-            # Cartesia clone endpoint expects JSON with base64 audio
-            response = requests.post(
-                'https://api.cartesia.ai/voices/clone/clip',
-                headers={
-                    'X-API-Key': api_key,
-                    'Cartesia-Version': '2024-06-10',
-                    'Content-Type': 'application/json'
-                },
-                json={
-                    'clip': audio_base64,
-                    'name': project['name'],
-                    'description': project.get('description', 'Cloned voice')[:500],
-                    'language': 'en'
+            # Open file for multipart upload
+            with open(file_path, 'rb') as audio_file:
+                files = {
+                    'clip': (filename, audio_file, 'audio/mpeg')
                 }
-            )
+                data = {
+                    'name': project['name'][:100],
+                    'language': 'en',
+                    'mode': 'similarity'  # or 'stability'
+                }
+                if project.get('description'):
+                    data['description'] = project['description'][:500]
 
-            if response.status_code == 200:
+                response = requests.post(
+                    'https://api.cartesia.ai/voices/clone',
+                    headers={
+                        'X-API-Key': api_key,
+                        'Cartesia-Version': '2024-11-13'
+                    },
+                    files=files,
+                    data=data
+                )
+
+            if response.status_code == 200 or response.status_code == 201:
                 result = response.json()
-                return result.get('id'), f"Voice cloned with Cartesia: {result.get('id')}"
+                voice_id = result.get('id')
+                return voice_id, f"Voice cloned with Cartesia: {voice_id}"
             else:
                 return None, f"Cartesia error ({response.status_code}): {response.text}"
 
