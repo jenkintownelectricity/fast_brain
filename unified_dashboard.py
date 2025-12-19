@@ -1080,6 +1080,188 @@ def test_voice():
                 "error": f"Parler TTS failed: {str(e)}"
             }), 500
 
+    # ElevenLabs TTS
+    if provider == 'elevenlabs':
+        try:
+            import httpx
+            api_key = db.get_api_key('elevenlabs') if USE_DATABASE else None
+            if not api_key:
+                return jsonify({"success": False, "error": "ElevenLabs API key not configured"}), 400
+
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(
+                    f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+                    headers={
+                        "xi-api-key": api_key,
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "text": text[:5000],
+                        "model_id": "eleven_monolingual_v1",
+                        "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}
+                    }
+                )
+
+                if response.status_code == 200:
+                    audio_bytes = response.content
+                    duration_ms = int((time.time() - start_time) * 1000)
+                    audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+                    # Cache the audio
+                    TTS_CACHE.set(text, voice_id, provider, audio_bytes, "audio/mpeg")
+
+                    return jsonify({
+                        "success": True,
+                        "voice_id": voice_id,
+                        "provider": "elevenlabs",
+                        "text": text,
+                        "duration_ms": duration_ms,
+                        "audio_base64": audio_base64,
+                        "audio_format": "audio/mpeg",
+                        "cached": False,
+                        "message": f"Generated with ElevenLabs ({duration_ms}ms)"
+                    })
+                else:
+                    return jsonify({"success": False, "error": f"ElevenLabs error: {response.status_code}"}), 500
+        except Exception as e:
+            return jsonify({"success": False, "error": f"ElevenLabs failed: {str(e)}"}), 500
+
+    # Cartesia TTS
+    if provider == 'cartesia':
+        try:
+            import httpx
+            api_key = db.get_api_key('cartesia') if USE_DATABASE else None
+            if not api_key:
+                return jsonify({"success": False, "error": "Cartesia API key not configured"}), 400
+
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(
+                    "https://api.cartesia.ai/tts/bytes",
+                    headers={
+                        "X-API-Key": api_key,
+                        "Cartesia-Version": "2024-11-13",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model_id": "sonic-english",
+                        "transcript": text[:5000],
+                        "voice": {"mode": "id", "id": voice_id},
+                        "output_format": {"container": "mp3", "sample_rate": 44100}
+                    }
+                )
+
+                if response.status_code == 200:
+                    audio_bytes = response.content
+                    duration_ms = int((time.time() - start_time) * 1000)
+                    audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+                    # Cache the audio
+                    TTS_CACHE.set(text, voice_id, provider, audio_bytes, "audio/mpeg")
+
+                    return jsonify({
+                        "success": True,
+                        "voice_id": voice_id,
+                        "provider": "cartesia",
+                        "text": text,
+                        "duration_ms": duration_ms,
+                        "audio_base64": audio_base64,
+                        "audio_format": "audio/mpeg",
+                        "cached": False,
+                        "message": f"Generated with Cartesia ({duration_ms}ms)"
+                    })
+                else:
+                    return jsonify({"success": False, "error": f"Cartesia error: {response.status_code} - {response.text[:200]}"}), 500
+        except Exception as e:
+            return jsonify({"success": False, "error": f"Cartesia failed: {str(e)}"}), 500
+
+    # Deepgram Aura TTS
+    if provider == 'deepgram':
+        try:
+            import httpx
+            api_key = db.get_api_key('deepgram') if USE_DATABASE else None
+            if not api_key:
+                return jsonify({"success": False, "error": "Deepgram API key not configured"}), 400
+
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(
+                    f"https://api.deepgram.com/v1/speak?model={voice_id}",
+                    headers={
+                        "Authorization": f"Token {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={"text": text[:5000]}
+                )
+
+                if response.status_code == 200:
+                    audio_bytes = response.content
+                    duration_ms = int((time.time() - start_time) * 1000)
+                    audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+                    # Cache the audio
+                    TTS_CACHE.set(text, voice_id, provider, audio_bytes, "audio/mpeg")
+
+                    return jsonify({
+                        "success": True,
+                        "voice_id": voice_id,
+                        "provider": "deepgram",
+                        "text": text,
+                        "duration_ms": duration_ms,
+                        "audio_base64": audio_base64,
+                        "audio_format": "audio/mpeg",
+                        "cached": False,
+                        "message": f"Generated with Deepgram Aura ({duration_ms}ms)"
+                    })
+                else:
+                    return jsonify({"success": False, "error": f"Deepgram error: {response.status_code}"}), 500
+        except Exception as e:
+            return jsonify({"success": False, "error": f"Deepgram failed: {str(e)}"}), 500
+
+    # OpenAI TTS
+    if provider == 'openai':
+        try:
+            import httpx
+            api_key = db.get_api_key('openai') if USE_DATABASE else None
+            if not api_key:
+                return jsonify({"success": False, "error": "OpenAI API key not configured"}), 400
+
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(
+                    "https://api.openai.com/v1/audio/speech",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "tts-1",
+                        "input": text[:4096],
+                        "voice": voice_id
+                    }
+                )
+
+                if response.status_code == 200:
+                    audio_bytes = response.content
+                    duration_ms = int((time.time() - start_time) * 1000)
+                    audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+                    # Cache the audio
+                    TTS_CACHE.set(text, voice_id, provider, audio_bytes, "audio/mpeg")
+
+                    return jsonify({
+                        "success": True,
+                        "voice_id": voice_id,
+                        "provider": "openai",
+                        "text": text,
+                        "duration_ms": duration_ms,
+                        "audio_base64": audio_base64,
+                        "audio_format": "audio/mpeg",
+                        "cached": False,
+                        "message": f"Generated with OpenAI TTS ({duration_ms}ms)"
+                    })
+                else:
+                    return jsonify({"success": False, "error": f"OpenAI error: {response.status_code}"}), 500
+        except Exception as e:
+            return jsonify({"success": False, "error": f"OpenAI TTS failed: {str(e)}"}), 500
+
     # Map voice IDs to gTTS language/accent codes
     VOICE_TO_GTTS = {
         # Edge TTS voices -> gTTS (all use 'en' but we track the original)
@@ -5634,6 +5816,42 @@ pipeline = Pipeline([
                         </div>
                         <div id="create-skill-message" style="margin-top: 1rem;"></div>
                     </div>
+
+                    <!-- Edit Skill Form (Modal-like) -->
+                    <div class="glass-card card-full" id="fb-edit-skill-form" style="display: none;">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">EDIT</span> Edit Skill</div>
+                            <button class="btn btn-sm" onclick="hideEditSkillModal()" style="background: transparent; color: var(--text-secondary);">✕</button>
+                        </div>
+                        <input type="hidden" id="edit-skill-id">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Skill ID</label>
+                                <input type="text" class="form-input" id="edit-skill-id-display" disabled style="opacity: 0.6;">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Display Name</label>
+                                <input type="text" class="form-input" id="edit-skill-name" placeholder="My Custom Skill">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Description</label>
+                            <input type="text" class="form-input" id="edit-skill-description" placeholder="Brief description of what this skill does">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">System Prompt</label>
+                            <textarea class="form-textarea" id="edit-skill-prompt" rows="8" placeholder="You are an AI assistant specialized in..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Knowledge Base (one item per line)</label>
+                            <textarea class="form-textarea" id="edit-skill-knowledge" rows="4" placeholder="Pricing: $100-500&#10;Hours: Mon-Fri 9am-5pm&#10;Service area: Philadelphia metro"></textarea>
+                        </div>
+                        <div class="form-row">
+                            <button class="btn btn-primary" onclick="saveEditedSkill()">Save Changes</button>
+                            <button class="btn btn-secondary" onclick="hideEditSkillModal()">Cancel</button>
+                        </div>
+                        <div id="edit-skill-message" style="margin-top: 1rem;"></div>
+                    </div>
                 </div>
             </div>
 
@@ -7032,8 +7250,91 @@ print("Training complete: adapters/${skillId}")`;
             renderSkillsTable(filtered);
         }
 
-        function editSkill(id) {
-            alert('Edit skill: ' + id);
+        async function editSkill(id) {
+            // Fetch skill data from cache or API
+            let skill = fbSkillsCache[id];
+
+            if (!skill) {
+                // Try to fetch from API
+                try {
+                    const res = await fetch(`/api/fast-brain/skills/${id}`);
+                    const data = await res.json();
+                    if (data.skill) {
+                        skill = data.skill;
+                    }
+                } catch (e) {
+                    console.error('Failed to fetch skill:', e);
+                }
+            }
+
+            if (!skill) {
+                alert('Skill not found: ' + id);
+                return;
+            }
+
+            // Populate edit form
+            document.getElementById('edit-skill-id').value = id;
+            document.getElementById('edit-skill-id-display').value = id;
+            document.getElementById('edit-skill-name').value = skill.name || '';
+            document.getElementById('edit-skill-description').value = skill.description || '';
+            document.getElementById('edit-skill-prompt').value = skill.system_prompt || '';
+
+            // Handle knowledge array
+            const knowledge = skill.knowledge || [];
+            document.getElementById('edit-skill-knowledge').value = Array.isArray(knowledge) ? knowledge.join('\\n') : knowledge;
+
+            // Show edit form
+            document.getElementById('fb-edit-skill-form').style.display = 'block';
+            document.getElementById('fb-create-skill-form').style.display = 'none';
+            document.getElementById('edit-skill-message').innerHTML = '';
+        }
+
+        function hideEditSkillModal() {
+            document.getElementById('fb-edit-skill-form').style.display = 'none';
+            document.getElementById('edit-skill-id').value = '';
+            document.getElementById('edit-skill-id-display').value = '';
+            document.getElementById('edit-skill-name').value = '';
+            document.getElementById('edit-skill-description').value = '';
+            document.getElementById('edit-skill-prompt').value = '';
+            document.getElementById('edit-skill-knowledge').value = '';
+            document.getElementById('edit-skill-message').innerHTML = '';
+        }
+
+        async function saveEditedSkill() {
+            const messageEl = document.getElementById('edit-skill-message');
+            messageEl.innerHTML = '<div style="color: var(--neon-cyan);">Saving changes...</div>';
+
+            const skillId = document.getElementById('edit-skill-id').value;
+            const knowledge = document.getElementById('edit-skill-knowledge').value
+                .split('\\n')
+                .map(s => s.trim())
+                .filter(s => s.length > 0);
+
+            try {
+                const res = await fetch(`/api/fast-brain/skills/${skillId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: document.getElementById('edit-skill-name').value,
+                        description: document.getElementById('edit-skill-description').value,
+                        system_prompt: document.getElementById('edit-skill-prompt').value,
+                        knowledge: knowledge,
+                    })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    messageEl.innerHTML = '<div style="color: var(--neon-green);">Skill updated successfully!</div>';
+                    setTimeout(() => {
+                        hideEditSkillModal();
+                        loadFastBrainSkills();
+                    }, 1000);
+                } else {
+                    messageEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${result.error}</div>`;
+                }
+            } catch (e) {
+                messageEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
+            }
         }
 
         async function deleteSkill(id) {
@@ -8024,8 +8325,9 @@ print("Training complete! Adapter saved to adapters/${skill}")
                                 ${skill.knowledge.length} knowledge items
                             </div>
                         ` : ''}
-                        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+                        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                             <button class="btn btn-sm btn-secondary" onclick="selectSkillForChat('${skill.id}')">Use in Chat</button>
+                            <button class="btn btn-sm btn-primary" onclick="editSkill('${skill.id}')">Edit</button>
                             ${!skill.is_builtin ? `<button class="btn btn-sm" onclick="deleteSkill('${skill.id}')" style="background: var(--neon-orange); color: white;">Delete</button>` : ''}
                         </div>
                     </div>
@@ -8824,15 +9126,18 @@ print("Training complete! Adapter saved to adapters/${skill}")
             voicesEl.innerHTML = voices.map(voice => {
                 const genderIcon = voice.gender === 'male' ? '♂' : voice.gender === 'female' ? '♀' : '◎';
                 const genderColor = voice.gender === 'male' ? 'var(--neon-cyan)' : voice.gender === 'female' ? 'var(--neon-pink)' : 'var(--neon-purple)';
-                const previewButton = voice.preview_url ? `<button class="btn btn-secondary btn-sm" onclick="playVoicePreview('${voice.preview_url}')" title="Preview">▶</button>` : '';
+                const previewButton = voice.preview_url ? `<button class="btn btn-secondary btn-sm" onclick="playVoicePreview('${voice.preview_url}')" title="Provider Sample">▶</button>` : '';
 
                 // Special styling for custom/owned voices
                 const isCustom = voice.is_owner;
                 const cardBorder = isCustom ? 'border: 2px solid var(--neon-green);' : '';
                 const customBadge = isCustom ? '<span style="background: var(--neon-green); color: #000; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; margin-left: 8px;">CUSTOM</span>' : '';
 
+                // Get current provider for test button
+                const provider = document.getElementById('vl-browse-provider').value;
+
                 return `
-                    <div class="glass-card voice-card" style="padding: 1rem; background: var(--glass-surface); ${cardBorder}">
+                    <div class="glass-card voice-card" style="padding: 1rem; background: var(--glass-surface); ${cardBorder}" id="voice-card-${voice.id}">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
                             <div>
                                 <div style="font-weight: 600; color: var(--text-primary);">
@@ -8842,6 +9147,7 @@ print("Training complete! Adapter saved to adapters/${skill}")
                             </div>
                             <div style="display: flex; gap: 0.25rem;">
                                 ${previewButton}
+                                <button class="btn btn-secondary btn-sm" onclick="testBrowseVoice('${voice.id}', '${provider}', this)" title="Generate Test Audio">🔊 Test</button>
                                 <button class="btn btn-primary btn-sm" onclick="useVoiceForProject('${voice.id}', '${(voice.name || '').replace(/'/g, "\\'")}')" title="Use in Project">Use</button>
                             </div>
                         </div>
@@ -8853,9 +9159,53 @@ print("Training complete! Adapter saved to adapters/${skill}")
                         </div>
                         ${voice.category && !isCustom ? `<div style="font-size: 0.75rem; color: var(--neon-orange); margin-top: 0.25rem;">${voice.category}</div>` : ''}
                         ${voice.languages ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Languages: ${Array.isArray(voice.languages) ? voice.languages.join(', ') : voice.languages}</div>` : ''}
+                        <div id="voice-test-${voice.id}" style="margin-top: 0.5rem;"></div>
                     </div>
                 `;
             }).join('');
+        }
+
+        async function testBrowseVoice(voiceId, provider, btn) {
+            const testEl = document.getElementById('voice-test-' + voiceId);
+            const originalText = btn.innerHTML;
+
+            btn.disabled = true;
+            btn.innerHTML = '⏳';
+            testEl.innerHTML = '<span style="color: var(--neon-cyan); font-size: 0.8rem;">Generating...</span>';
+
+            try {
+                const res = await fetch('/api/voice/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        voice_id: voiceId,
+                        text: 'Hello! This is a test of my voice. How does it sound?',
+                        provider: provider
+                    })
+                });
+                const result = await res.json();
+
+                if (result.success && result.audio_base64) {
+                    const audio = new Audio('data:' + result.audio_format + ';base64,' + result.audio_base64);
+                    const cacheStatus = result.cached ? '(cached)' : `(${result.duration_ms}ms)`;
+
+                    audio.onended = () => {
+                        testEl.innerHTML = `<span style="color: var(--neon-green); font-size: 0.8rem;">✓ Played ${cacheStatus}</span>`;
+                    };
+                    audio.onerror = () => {
+                        testEl.innerHTML = '<span style="color: var(--neon-orange); font-size: 0.8rem;">Playback error</span>';
+                    };
+                    audio.play();
+                    testEl.innerHTML = `<span style="color: var(--neon-cyan); font-size: 0.8rem;">▶ Playing... ${cacheStatus}</span>`;
+                } else {
+                    testEl.innerHTML = `<span style="color: var(--neon-orange); font-size: 0.8rem;">${result.error || 'Test failed'}</span>`;
+                }
+            } catch (e) {
+                testEl.innerHTML = `<span style="color: var(--neon-orange); font-size: 0.8rem;">Error: ${e.message}</span>`;
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = originalText;
         }
 
         function playVoicePreview(url) {

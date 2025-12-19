@@ -40,11 +40,37 @@
 - **Customer Pain Points**: Billing surprises, credit systems, quality degradation
 - **2025 Breakthroughs**: Fish Speech V1.5, IndexTTS-2 (emotion/identity separation), Bland AI
 
+4. **feat: Prioritize custom Cartesia voices in Browse Voices**
+   - Updated `fetch_cartesia_voices()` to identify owned voices via `is_owner` field
+   - Custom voices appear first in list with green border and "CUSTOM" badge
+   - Shows `custom_count` in API response
+
+5. **feat: Add voice preview and skill editing features**
+   - Added `testBrowseVoice()` function with "Test" button in Browse Voices
+   - Added ElevenLabs, Cartesia, Deepgram, OpenAI TTS support to `/api/voice/test`
+   - Added Edit button to skill cards
+   - Implemented `editSkill()`, `hideEditSkillModal()`, `saveEditedSkill()` functions
+   - Added Edit Skill modal form with pre-populated data
+
+6. **docs: Create HIVE215 integration guide**
+   - Created comprehensive `docs/HIVE215_INTEGRATION_GUIDE.md`
+   - Covers all API endpoints, integration patterns, best practices
+   - Includes sample code for LiveKit voice agents
+   - Documents filler phrase strategy and skill-based routing
+
+#### Research Summary (Skills/Training Competitors):
+- **Vapi AI**: Squads (multi-agent), Flow Studio (visual builder), A/B testing
+- **Retell AI**: Node-based flows, Node KB (skill-specific knowledge), 700-800ms latency
+- **Bland AI**: Custom fine-tuning, proprietary models, $150K+ enterprise
+- **Key Trends**: Multi-agent orchestration, LoRA hotswapping (73% latency reduction), RAG knowledge bases
+- **Opportunity Gaps**: Knowledge base integration, visual flow builder, multi-skill routing
+
 #### Files Modified:
-- `unified_dashboard.py` - Voice Lab, caching, browse UI (+700 lines)
+- `unified_dashboard.py` - Voice Lab, caching, browse UI, skill editing (+800 lines)
 - `database.py` - Voice sample CRUD methods (+107 lines)
 - `README.md` - Updated with new features
-- `docs/visuals/voice-lab-guide.html` - (pending update)
+- `docs/HIVE215_INTEGRATION_GUIDE.md` - NEW: Full integration documentation
+- `docs/visuals/voice-lab-guide.html` - Updated with Browse Voices
 
 ---
 
