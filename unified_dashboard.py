@@ -2407,14 +2407,21 @@ def _train_elevenlabs_voice(project, samples):
 
         # Prepare files for upload
         files = []
+        missing_files = []
         for sample in samples:
-            if sample.get('file_path') and os.path.exists(sample['file_path']):
-                files.append(
-                    ('files', (sample['filename'], open(sample['file_path'], 'rb'), 'audio/mpeg'))
-                )
+            file_path = sample.get('file_path')
+            if file_path:
+                if os.path.exists(file_path):
+                    files.append(
+                        ('files', (sample['filename'], open(file_path, 'rb'), 'audio/mpeg'))
+                    )
+                else:
+                    missing_files.append(file_path)
+            else:
+                missing_files.append(f"No path for {sample.get('filename', 'unknown')}")
 
         if not files:
-            return None, "No audio files found for training"
+            return None, f"No audio files found. Missing: {missing_files}. Try re-uploading samples."
 
         # Create voice clone
         response = requests.post(
