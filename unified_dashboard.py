@@ -1952,6 +1952,8 @@ def create_fast_brain_skill():
             skill_type=data.get('skill_type', 'custom'),
             system_prompt=data.get('system_prompt', ''),
             knowledge=data.get('knowledge', []),
+            voice_provider=data.get('voice_provider'),
+            voice_id=data.get('voice_id'),
             is_builtin=False
         )
     else:
@@ -2009,7 +2011,7 @@ def update_fast_brain_skill(skill_id):
 
         # Update allowed fields
         update_data = {}
-        for field in ['name', 'description', 'system_prompt', 'knowledge', 'skill_type']:
+        for field in ['name', 'description', 'system_prompt', 'knowledge', 'skill_type', 'voice_provider', 'voice_id']:
             if field in data:
                 update_data[field] = data[field]
 
@@ -5001,6 +5003,64 @@ DASHBOARD_HTML = '''
 
                     <button class="btn btn-primary" onclick="saveApiKeys()" style="margin-top: 1rem;">Save All API Keys</button>
                 </div>
+
+                <!-- API Endpoints Card -->
+                <div class="glass-card" style="margin-top: 1rem;">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">API</span> API Endpoints</div>
+                        <button class="btn btn-secondary btn-sm" onclick="checkApiHealth()">Check Health</button>
+                    </div>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Use these URLs to connect external services to your HIVE215 platform.</p>
+
+                    <!-- Fast Brain API URL -->
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem;">
+                            Fast Brain API
+                            <span id="api-health-fast-brain" class="health-indicator" style="width: 8px; height: 8px; border-radius: 50%; background: var(--text-secondary);"></span>
+                        </label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" class="form-input" id="api-url-fast-brain" value="https://jenkintownelectricity--fast-brain-lpu-fastapi-app.modal.run" readonly style="flex: 1; font-family: monospace; font-size: 0.85rem;">
+                            <button class="btn btn-secondary btn-sm" onclick="copyApiUrl('api-url-fast-brain')" title="Copy to clipboard">Copy</button>
+                        </div>
+                        <div id="api-status-fast-brain" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;"></div>
+                    </div>
+
+                    <!-- Dashboard URL -->
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem;">
+                            Dashboard URL
+                            <span id="api-health-dashboard" class="health-indicator" style="width: 8px; height: 8px; border-radius: 50%; background: var(--text-secondary);"></span>
+                        </label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" class="form-input" id="api-url-dashboard" value="https://jenkintownelectricity--hive215-dashboard-flask-app.modal.run" readonly style="flex: 1; font-family: monospace; font-size: 0.85rem;">
+                            <button class="btn btn-secondary btn-sm" onclick="copyApiUrl('api-url-dashboard')" title="Copy to clipboard">Copy</button>
+                        </div>
+                        <div id="api-status-dashboard" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;"></div>
+                    </div>
+
+                    <!-- Quick Reference -->
+                    <div style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; margin-top: 1rem;">
+                        <h4 style="color: var(--neon-cyan); margin-bottom: 0.5rem; font-size: 0.9rem;">Quick Reference</h4>
+                        <table style="width: 100%; font-size: 0.85rem;">
+                            <tr>
+                                <td style="color: var(--text-secondary); padding: 0.25rem 0;">Health Check:</td>
+                                <td style="font-family: monospace;"><code style="color: var(--neon-green);">GET /health</code></td>
+                            </tr>
+                            <tr>
+                                <td style="color: var(--text-secondary); padding: 0.25rem 0;">Hybrid Chat:</td>
+                                <td style="font-family: monospace;"><code style="color: var(--neon-green);">POST /v1/chat/hybrid</code></td>
+                            </tr>
+                            <tr>
+                                <td style="color: var(--text-secondary); padding: 0.25rem 0;">Voice Chat:</td>
+                                <td style="font-family: monospace;"><code style="color: var(--neon-green);">POST /v1/chat/voice</code></td>
+                            </tr>
+                            <tr>
+                                <td style="color: var(--text-secondary); padding: 0.25rem 0;">List Skills:</td>
+                                <td style="font-family: monospace;"><code style="color: var(--neon-green);">GET /v1/skills</code></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
             </div>
 
             <!-- Test LLM -->
@@ -5810,7 +5870,38 @@ pipeline = Pipeline([
                             <label class="form-label">Knowledge Base (one item per line)</label>
                             <textarea class="form-textarea" id="new-skill-knowledge" rows="4" placeholder="Pricing: $100-500&#10;Hours: Mon-Fri 9am-5pm&#10;Service area: Philadelphia metro"></textarea>
                         </div>
-                        <div class="form-row">
+
+                        <!-- Voice Assignment Section -->
+                        <div style="border-top: 1px solid var(--glass-border); margin-top: 1rem; padding-top: 1rem;">
+                            <h4 style="color: var(--neon-purple); margin-bottom: 0.75rem; font-size: 0.9rem;">Voice Assignment (Optional)</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Voice Provider</label>
+                                    <select class="form-select" id="new-skill-voice-provider" onchange="loadSkillVoices('new')">
+                                        <option value="">Select provider...</option>
+                                        <optgroup label="Premium (API Key Required)">
+                                            <option value="elevenlabs">ElevenLabs</option>
+                                            <option value="cartesia">Cartesia</option>
+                                            <option value="deepgram">Deepgram (Aura)</option>
+                                            <option value="openai">OpenAI TTS</option>
+                                        </optgroup>
+                                        <optgroup label="Free / Open Source">
+                                            <option value="edge_tts">Edge TTS (Microsoft)</option>
+                                            <option value="parler">Parler TTS (GPU)</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Voice</label>
+                                    <select class="form-select" id="new-skill-voice-id" disabled>
+                                        <option value="">Select provider first...</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="new-skill-voice-preview" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;"></div>
+                        </div>
+
+                        <div class="form-row" style="margin-top: 1rem;">
                             <button class="btn btn-primary" onclick="createCustomSkill()">Create Skill</button>
                             <button class="btn btn-secondary" onclick="hideCreateSkillModal()">Cancel</button>
                         </div>
@@ -5846,7 +5937,38 @@ pipeline = Pipeline([
                             <label class="form-label">Knowledge Base (one item per line)</label>
                             <textarea class="form-textarea" id="edit-skill-knowledge" rows="4" placeholder="Pricing: $100-500&#10;Hours: Mon-Fri 9am-5pm&#10;Service area: Philadelphia metro"></textarea>
                         </div>
-                        <div class="form-row">
+
+                        <!-- Voice Assignment Section -->
+                        <div style="border-top: 1px solid var(--glass-border); margin-top: 1rem; padding-top: 1rem;">
+                            <h4 style="color: var(--neon-purple); margin-bottom: 0.75rem; font-size: 0.9rem;">Voice Assignment</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Voice Provider</label>
+                                    <select class="form-select" id="edit-skill-voice-provider" onchange="loadSkillVoices('edit')">
+                                        <option value="">No voice assigned</option>
+                                        <optgroup label="Premium (API Key Required)">
+                                            <option value="elevenlabs">ElevenLabs</option>
+                                            <option value="cartesia">Cartesia</option>
+                                            <option value="deepgram">Deepgram (Aura)</option>
+                                            <option value="openai">OpenAI TTS</option>
+                                        </optgroup>
+                                        <optgroup label="Free / Open Source">
+                                            <option value="edge_tts">Edge TTS (Microsoft)</option>
+                                            <option value="parler">Parler TTS (GPU)</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Voice</label>
+                                    <select class="form-select" id="edit-skill-voice-id" disabled>
+                                        <option value="">Select provider first...</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="edit-skill-voice-preview" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;"></div>
+                        </div>
+
+                        <div class="form-row" style="margin-top: 1rem;">
                             <button class="btn btn-primary" onclick="saveEditedSkill()">Save Changes</button>
                             <button class="btn btn-secondary" onclick="hideEditSkillModal()">Cancel</button>
                         </div>
@@ -7283,6 +7405,21 @@ print("Training complete: adapters/${skillId}")`;
             const knowledge = skill.knowledge || [];
             document.getElementById('edit-skill-knowledge').value = Array.isArray(knowledge) ? knowledge.join('\\n') : knowledge;
 
+            // Handle voice assignment
+            const voiceProvider = skill.voice_provider || '';
+            document.getElementById('edit-skill-voice-provider').value = voiceProvider;
+            if (voiceProvider) {
+                // Load voices for this provider, then set the selected voice
+                await loadSkillVoices('edit', skill.voice_id);
+            } else {
+                document.getElementById('edit-skill-voice-id').value = '';
+                document.getElementById('edit-skill-voice-id').disabled = true;
+                document.getElementById('edit-skill-voice-id').innerHTML = '<option value="">Select provider first...</option>';
+            }
+            document.getElementById('edit-skill-voice-preview').innerHTML = skill.voice_provider && skill.voice_id
+                ? `<span style="color: var(--neon-green);">Current: ${skill.voice_provider} / ${skill.voice_id}</span>`
+                : '';
+
             // Show edit form
             document.getElementById('fb-edit-skill-form').style.display = 'block';
             document.getElementById('fb-create-skill-form').style.display = 'none';
@@ -7297,6 +7434,11 @@ print("Training complete: adapters/${skillId}")`;
             document.getElementById('edit-skill-description').value = '';
             document.getElementById('edit-skill-prompt').value = '';
             document.getElementById('edit-skill-knowledge').value = '';
+            document.getElementById('edit-skill-voice-provider').value = '';
+            document.getElementById('edit-skill-voice-id').value = '';
+            document.getElementById('edit-skill-voice-id').disabled = true;
+            document.getElementById('edit-skill-voice-id').innerHTML = '<option value="">Select provider first...</option>';
+            document.getElementById('edit-skill-voice-preview').innerHTML = '';
             document.getElementById('edit-skill-message').innerHTML = '';
         }
 
@@ -7310,6 +7452,9 @@ print("Training complete: adapters/${skillId}")`;
                 .map(s => s.trim())
                 .filter(s => s.length > 0);
 
+            const voiceProvider = document.getElementById('edit-skill-voice-provider').value;
+            const voiceId = document.getElementById('edit-skill-voice-id').value;
+
             try {
                 const res = await fetch(`/api/fast-brain/skills/${skillId}`, {
                     method: 'PUT',
@@ -7319,6 +7464,8 @@ print("Training complete: adapters/${skillId}")`;
                         description: document.getElementById('edit-skill-description').value,
                         system_prompt: document.getElementById('edit-skill-prompt').value,
                         knowledge: knowledge,
+                        voice_provider: voiceProvider || null,
+                        voice_id: voiceId || null,
                     })
                 });
                 const result = await res.json();
@@ -7334,6 +7481,66 @@ print("Training complete: adapters/${skillId}")`;
                 }
             } catch (e) {
                 messageEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${e.message}</div>`;
+            }
+        }
+
+        // Load voices for skill voice assignment dropdowns
+        async function loadSkillVoices(mode, preselectedVoiceId = null) {
+            const providerSelect = document.getElementById(`${mode}-skill-voice-provider`);
+            const voiceSelect = document.getElementById(`${mode}-skill-voice-id`);
+            const previewEl = document.getElementById(`${mode}-skill-voice-preview`);
+
+            const provider = providerSelect.value;
+
+            if (!provider) {
+                voiceSelect.disabled = true;
+                voiceSelect.innerHTML = '<option value="">Select provider first...</option>';
+                previewEl.innerHTML = '';
+                return;
+            }
+
+            voiceSelect.disabled = true;
+            voiceSelect.innerHTML = '<option value="">Loading voices...</option>';
+            previewEl.innerHTML = '<span style="color: var(--text-secondary);">Fetching voices from ' + provider + '...</span>';
+
+            try {
+                const res = await fetch(`/api/voice-lab/provider-voices/${provider}`);
+                const data = await res.json();
+
+                if (data.error) {
+                    voiceSelect.innerHTML = `<option value="">Error: ${data.error}</option>`;
+                    previewEl.innerHTML = `<span style="color: var(--neon-orange);">${data.error}</span>`;
+                    return;
+                }
+
+                const voices = data.voices || [];
+                if (voices.length === 0) {
+                    voiceSelect.innerHTML = '<option value="">No voices available</option>';
+                    previewEl.innerHTML = '<span style="color: var(--text-secondary);">No voices found for this provider. Check your API key.</span>';
+                    return;
+                }
+
+                // Populate voice dropdown
+                voiceSelect.innerHTML = '<option value="">Select a voice...</option>';
+                voices.forEach(voice => {
+                    const opt = document.createElement('option');
+                    opt.value = voice.voice_id || voice.id;
+                    opt.textContent = voice.name + (voice.labels?.accent ? ` (${voice.labels.accent})` : '');
+                    voiceSelect.appendChild(opt);
+                });
+
+                voiceSelect.disabled = false;
+                previewEl.innerHTML = `<span style="color: var(--neon-green);">${voices.length} voices available</span>`;
+
+                // If preselected voice ID provided, select it
+                if (preselectedVoiceId) {
+                    voiceSelect.value = preselectedVoiceId;
+                }
+
+            } catch (e) {
+                console.error('Failed to load voices:', e);
+                voiceSelect.innerHTML = '<option value="">Error loading voices</option>';
+                previewEl.innerHTML = `<span style="color: var(--neon-orange);">Failed: ${e.message}</span>`;
             }
         }
 
@@ -7394,6 +7601,87 @@ print("Training complete: adapters/${skillId}")`;
                 }
             } catch (e) {
                 document.getElementById('keys-message').innerHTML = '<div class="message error">Error: ' + e.message + '</div>';
+            }
+        }
+
+        // Copy API URL to clipboard
+        function copyApiUrl(inputId) {
+            const input = document.getElementById(inputId);
+            input.select();
+            input.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(input.value).then(() => {
+                // Show brief success indicator
+                const btn = input.nextElementSibling;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                btn.style.background = 'var(--neon-green)';
+                btn.style.color = '#000';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '';
+                    btn.style.color = '';
+                }, 1500);
+            }).catch(err => {
+                console.error('Copy failed:', err);
+                alert('Failed to copy. Please copy manually.');
+            });
+        }
+
+        // Check health of API endpoints
+        async function checkApiHealth() {
+            const endpoints = [
+                {
+                    id: 'fast-brain',
+                    url: document.getElementById('api-url-fast-brain').value,
+                    healthPath: '/health'
+                },
+                {
+                    id: 'dashboard',
+                    url: document.getElementById('api-url-dashboard').value,
+                    healthPath: '/api/health'
+                }
+            ];
+
+            for (const endpoint of endpoints) {
+                const indicator = document.getElementById(`api-health-${endpoint.id}`);
+                const statusEl = document.getElementById(`api-status-${endpoint.id}`);
+
+                // Set checking state
+                indicator.style.background = 'var(--neon-orange)';
+                statusEl.textContent = 'Checking...';
+
+                try {
+                    const startTime = Date.now();
+                    const response = await fetch(`${endpoint.url}${endpoint.healthPath}`, {
+                        method: 'GET',
+                        mode: 'cors',
+                        signal: AbortSignal.timeout(10000)
+                    });
+                    const latency = Date.now() - startTime;
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        indicator.style.background = 'var(--neon-green)';
+                        statusEl.innerHTML = `<span style="color: var(--neon-green);">Online</span> - ${latency}ms`;
+                        if (data.skills) {
+                            statusEl.innerHTML += ` - ${data.skills.length} skills loaded`;
+                        }
+                    } else {
+                        indicator.style.background = 'var(--neon-orange)';
+                        statusEl.innerHTML = `<span style="color: var(--neon-orange);">Error ${response.status}</span>`;
+                    }
+                } catch (e) {
+                    indicator.style.background = 'var(--neon-pink)';
+                    if (e.name === 'TimeoutError') {
+                        statusEl.innerHTML = `<span style="color: var(--neon-pink);">Timeout</span> - Cold start may be needed`;
+                    } else if (e.message.includes('CORS') || e.message.includes('Failed to fetch')) {
+                        // CORS error likely means the endpoint is up but blocking cross-origin
+                        indicator.style.background = 'var(--neon-orange)';
+                        statusEl.innerHTML = `<span style="color: var(--neon-orange);">CORS blocked</span> - Endpoint may be reachable`;
+                    } else {
+                        statusEl.innerHTML = `<span style="color: var(--neon-pink);">Offline</span> - ${e.message}`;
+                    }
+                }
             }
         }
 
@@ -8390,6 +8678,11 @@ print("Training complete! Adapter saved to adapters/${skill}")
             document.getElementById('new-skill-description').value = '';
             document.getElementById('new-skill-prompt').value = '';
             document.getElementById('new-skill-knowledge').value = '';
+            document.getElementById('new-skill-voice-provider').value = '';
+            document.getElementById('new-skill-voice-id').value = '';
+            document.getElementById('new-skill-voice-id').disabled = true;
+            document.getElementById('new-skill-voice-id').innerHTML = '<option value="">Select provider first...</option>';
+            document.getElementById('new-skill-voice-preview').innerHTML = '';
             document.getElementById('create-skill-message').innerHTML = '';
         }
 
@@ -8402,6 +8695,9 @@ print("Training complete! Adapter saved to adapters/${skill}")
                 .map(s => s.trim())
                 .filter(s => s.length > 0);
 
+            const voiceProvider = document.getElementById('new-skill-voice-provider').value;
+            const voiceId = document.getElementById('new-skill-voice-id').value;
+
             try {
                 const res = await fetch('/api/fast-brain/skills', {
                     method: 'POST',
@@ -8412,6 +8708,8 @@ print("Training complete! Adapter saved to adapters/${skill}")
                         description: document.getElementById('new-skill-description').value,
                         system_prompt: document.getElementById('new-skill-prompt').value,
                         knowledge: knowledge,
+                        voice_provider: voiceProvider || null,
+                        voice_id: voiceId || null,
                     })
                 });
                 const result = await res.json();

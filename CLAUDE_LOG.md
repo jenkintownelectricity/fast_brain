@@ -1,5 +1,34 @@
 # Claude Development Log
 
+## 2024-12-19: Settings & Voice Assignment Updates
+
+### Session: `claude/unified-dashboard-AJdAZ`
+
+#### Commits Made:
+1. **feat: Add API Endpoints card to Settings page**
+   - Added "API Endpoints" card in Command Center → API Keys section
+   - Displays Fast Brain API URL with copy button
+   - Displays Dashboard URL with copy button
+   - Health check button with status indicators (green/orange/red)
+   - Quick reference table for common API endpoints
+
+2. **feat: Add voice assignment to Skills Manager**
+   - Added `voice_provider` and `voice_id` columns to skills database table
+   - Migration script for existing databases (ALTER TABLE)
+   - Voice Provider dropdown (ElevenLabs, Cartesia, Deepgram, OpenAI, Edge TTS, Parler)
+   - Voice ID dropdown (dynamically loads from /api/voice-lab/provider-voices/<provider>)
+   - Create Skill form now includes optional voice assignment
+   - Edit Skill form includes voice assignment with pre-populated values
+   - Backend API updated to accept and save voice_provider/voice_id
+
+#### Files Modified:
+- `unified_dashboard.py` - Settings API card, Voice Assignment UI, JavaScript functions
+- `database.py` - Added voice_provider and voice_id columns to skills table
+- `CLAUDE_LOG.md` - Session notes
+- `TODO.md` - Updated status
+
+---
+
 ## 2024-12-19: Voice Provider Integration & Caching
 
 ### Session: `claude/add-voice-providers-g9dDC`

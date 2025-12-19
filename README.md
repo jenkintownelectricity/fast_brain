@@ -203,8 +203,25 @@ Full voice cloning and synthesis:
 | LLM | Groq, OpenAI, Anthropic |
 | Voice | ElevenLabs, Cartesia, Deepgram, PlayHT |
 
+**API Endpoints:**
+Display and copy your deployed API URLs:
+- **Fast Brain API**: `https://jenkintownelectricity--fast-brain-lpu-fastapi-app.modal.run`
+- **Dashboard URL**: `https://jenkintownelectricity--hive215-dashboard-flask-app.modal.run`
+- One-click copy buttons for each URL
+- Health check with status indicators (green=online, orange=warning, red=offline)
+- Quick reference for common API endpoints
+
 **Platform Connections:**
 - LiveKit, Twilio, Vapi, Retell AI, Daily.co
+
+### Skills Tab
+
+**Voice Assignment (NEW):**
+Skills now support voice provider and voice ID assignment:
+- **Voice Provider dropdown**: ElevenLabs, Cartesia, Deepgram, OpenAI, Edge TTS, Parler
+- **Voice ID dropdown**: Dynamically loads voices from selected provider
+- Voice assignments saved to database with skill
+- Available in both Create Skill and Edit Skill forms
 
 ### Outgoing API Connections
 
@@ -486,6 +503,8 @@ model="claude-sonnet-4-5-20250929"
 - **SQLite Database**: Persistent storage on Modal volume for all data
 - **7 API Key Providers**: Groq, OpenAI, Anthropic, ElevenLabs, Cartesia, Deepgram, PlayHT
 - **tara-sales skill**: TheDashTool sales assistant for voice demos
+- **API Endpoints Card**: Display/copy Fast Brain API and Dashboard URLs with health check
+- **Voice Assignment for Skills**: Assign voice provider and voice ID to each skill
 
 **Voice Providers Supported:**
 | Provider | Type | Features |

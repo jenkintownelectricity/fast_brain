@@ -21,6 +21,14 @@
 - [x] Activity logging
 - [x] 7 API key providers
 - [x] Edit skill functionality (edit modal, pre-populated form, save to API)
+- [x] API Endpoints card in Settings (Fast Brain API URL, Dashboard URL, copy buttons, health check)
+- [x] Voice assignment in Skills Manager (voice_provider, voice_id dropdowns)
+
+### Skills Manager
+- [x] Voice Provider dropdown in Create/Edit Skill forms
+- [x] Voice ID dropdown (dynamically loaded from provider APIs)
+- [x] Database columns: voice_provider, voice_id in skills table
+- [x] Backend API support for voice assignment
 
 ### Documentation
 - [x] HIVE215 Integration Guide (`docs/HIVE215_INTEGRATION_GUIDE.md`)
