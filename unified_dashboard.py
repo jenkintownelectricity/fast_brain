@@ -2370,7 +2370,7 @@ def fetch_elevenlabs_voices():
 
 
 def fetch_cartesia_voices():
-    """Fetch voices from Cartesia API."""
+    """Fetch voices from Cartesia API - custom/owned voices first, then public library."""
     try:
         import httpx
         api_key = db.get_api_key('cartesia') if USE_DATABASE else None
@@ -2379,6 +2379,10 @@ def fetch_cartesia_voices():
 
         with httpx.Client(timeout=30.0) as client:
             all_voices = []
+            owned_ids = set()
+
+            # First, fetch ALL voices and identify owned ones
+            # Cartesia API returns is_owner field for each voice
             has_more = True
             starting_after = None
 
@@ -2401,16 +2405,25 @@ def fetch_cartesia_voices():
                     voices_data = data if isinstance(data, list) else data.get("data", data.get("voices", []))
 
                     for voice in voices_data:
-                        all_voices.append({
+                        is_owner = voice.get("is_owner", False)
+                        voice_entry = {
                             "id": voice.get("id"),
                             "name": voice.get("name"),
                             "gender": voice.get("gender", "unknown"),
                             "style": voice.get("description", "natural")[:50] if voice.get("description") else "natural",
                             "language": voice.get("language", "en"),
                             "is_public": voice.get("is_public", False),
-                            "is_owner": voice.get("is_owner", False),
+                            "is_owner": is_owner,
+                            "category": "⭐ Your Custom Voices" if is_owner else "Public Library",
                             "description": voice.get("description", "")
-                        })
+                        }
+
+                        if is_owner:
+                            owned_ids.add(voice.get("id"))
+                            # Add owned voices at the beginning
+                            all_voices.insert(0, voice_entry)
+                        else:
+                            all_voices.append(voice_entry)
 
                     # Handle pagination
                     has_more = data.get("has_more", False) if isinstance(data, dict) else False
@@ -2421,7 +2434,15 @@ def fetch_cartesia_voices():
                 else:
                     return {"error": f"Cartesia API error: {response.status_code}", "voices": all_voices}
 
-            return {"success": True, "voices": all_voices, "provider": "cartesia"}
+            # Sort so owned voices are first
+            all_voices.sort(key=lambda v: (0 if v.get("is_owner") else 1, v.get("name", "")))
+
+            return {
+                "success": True,
+                "voices": all_voices,
+                "provider": "cartesia",
+                "custom_count": len(owned_ids)
+            }
     except Exception as e:
         return {"error": str(e), "voices": []}
 
@@ -8756,7 +8777,9 @@ print("Training complete! Adapter saved to adapters/${skill}")
 
                 currentBrowseVoices = data.voices || [];
                 const isStatic = data.static ? ' (cached)' : ' (live)';
-                statusEl.innerHTML = `<span style="color: var(--neon-green);">Loaded ${currentBrowseVoices.length} voices${isStatic}</span>`;
+                const customCount = data.custom_count || currentBrowseVoices.filter(v => v.is_owner).length;
+                const customText = customCount > 0 ? ` <span style="color: var(--neon-green);">★ ${customCount} custom</span>` : '';
+                statusEl.innerHTML = `<span style="color: var(--neon-green);">Loaded ${currentBrowseVoices.length} voices${isStatic}</span>${customText}`;
                 filtersEl.style.display = 'block';
                 document.getElementById('vl-browse-search').value = '';
                 document.getElementById('vl-browse-gender').value = '';
@@ -8787,7 +8810,11 @@ print("Training complete! Adapter saved to adapters/${skill}")
         function renderBrowseVoices(voices) {
             const voicesEl = document.getElementById('vl-browse-voices');
             const countEl = document.getElementById('vl-browse-count');
-            countEl.textContent = `${voices.length} voice${voices.length !== 1 ? 's' : ''}`;
+
+            // Count custom voices
+            const customCount = voices.filter(v => v.is_owner).length;
+            const customText = customCount > 0 ? ` (${customCount} custom)` : '';
+            countEl.textContent = `${voices.length} voice${voices.length !== 1 ? 's' : ''}${customText}`;
 
             if (voices.length === 0) {
                 voicesEl.innerHTML = '<div style="color: var(--text-secondary); padding: 2rem; text-align: center; grid-column: 1 / -1;">No voices match your filters</div>';
@@ -8799,11 +8826,18 @@ print("Training complete! Adapter saved to adapters/${skill}")
                 const genderColor = voice.gender === 'male' ? 'var(--neon-cyan)' : voice.gender === 'female' ? 'var(--neon-pink)' : 'var(--neon-purple)';
                 const previewButton = voice.preview_url ? `<button class="btn btn-secondary btn-sm" onclick="playVoicePreview('${voice.preview_url}')" title="Preview">▶</button>` : '';
 
+                // Special styling for custom/owned voices
+                const isCustom = voice.is_owner;
+                const cardBorder = isCustom ? 'border: 2px solid var(--neon-green);' : '';
+                const customBadge = isCustom ? '<span style="background: var(--neon-green); color: #000; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; margin-left: 8px;">CUSTOM</span>' : '';
+
                 return `
-                    <div class="glass-card voice-card" style="padding: 1rem; background: var(--glass-surface);">
+                    <div class="glass-card voice-card" style="padding: 1rem; background: var(--glass-surface); ${cardBorder}">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
                             <div>
-                                <div style="font-weight: 600; color: var(--text-primary);">${voice.name || 'Unknown'}</div>
+                                <div style="font-weight: 600; color: var(--text-primary);">
+                                    ${voice.name || 'Unknown'}${customBadge}
+                                </div>
                                 <div style="font-size: 0.85rem; color: ${genderColor};">${genderIcon} ${voice.gender || 'unknown'}</div>
                             </div>
                             <div style="display: flex; gap: 0.25rem;">
@@ -8817,7 +8851,7 @@ print("Training complete! Adapter saved to adapters/${skill}")
                         <div style="font-size: 0.75rem; color: var(--text-muted);">
                             ID: <code style="background: var(--glass-surface); padding: 0 4px; border-radius: 3px;">${voice.id}</code>
                         </div>
-                        ${voice.category ? `<div style="font-size: 0.75rem; color: var(--neon-orange); margin-top: 0.25rem;">${voice.category}</div>` : ''}
+                        ${voice.category && !isCustom ? `<div style="font-size: 0.75rem; color: var(--neon-orange); margin-top: 0.25rem;">${voice.category}</div>` : ''}
                         ${voice.languages ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Languages: ${Array.isArray(voice.languages) ? voice.languages.join(', ') : voice.languages}</div>` : ''}
                     </div>
                 `;
