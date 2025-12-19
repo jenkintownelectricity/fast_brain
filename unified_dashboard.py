@@ -6005,7 +6005,7 @@ pipeline = Pipeline([
                             </div>
                             <div class="form-group">
                                 <label class="form-label">Text to Speak</label>
-                                <textarea class="form-textarea" id="voice-test-text" rows="2" placeholder="Hello! This is a test of the voice synthesis. You can type any text here to hear how it sounds."></textarea>
+                                <textarea class="form-textarea" id="voice-test-chat-text" rows="2" placeholder="Hello! This is a test of the voice synthesis. You can type any text here to hear how it sounds."></textarea>
                             </div>
                             <div style="display: flex; gap: 0.5rem; align-items: center;">
                                 <button class="btn btn-secondary" id="voice-test-btn" onclick="testVoiceTTS()">Test Voice</button>
@@ -7495,7 +7495,7 @@ print("Training complete: adapters/${skillId}")`;
         async function testVoiceTTS() {
             const provider = document.getElementById('voice-test-provider').value;
             const voiceId = document.getElementById('voice-test-voice-id').value;
-            const text = document.getElementById('voice-test-text').value || 'Hello! This is a test of the voice synthesis.';
+            const text = document.getElementById('voice-test-chat-text').value || 'Hello! This is a test of the voice synthesis.';
             const statusEl = document.getElementById('voice-test-status');
             const audioEl = document.getElementById('voice-test-audio');
             const btn = document.getElementById('voice-test-btn');
