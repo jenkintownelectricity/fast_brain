@@ -271,7 +271,9 @@
     <nav class="nav">
         <a href="index.html">← Back to Docs</a>
         <a href="#workflow">Workflow</a>
+        <a href="#browse">Browse Voices</a>
         <a href="#providers">Providers</a>
+        <a href="#caching">Caching</a>
         <a href="#quick-start">Quick Start</a>
         <a href="#settings">Settings</a>
         <a href="#troubleshooting">Troubleshooting</a>
@@ -303,6 +305,115 @@
                         <div class="step-desc">Test synthesis, link to skill/agent</div>
                     </div>
                 </div>
+            </div>
+        </section>
+
+        <section id="browse" class="section">
+            <h2 class="section-title">Browse Voices</h2>
+            <div class="workflow">
+                <p style="color: #8b949e; margin-bottom: 24px;">
+                    The Browse Voices tab lets you explore all available voices from each provider in real-time.
+                    Voices are fetched live from provider APIs, so you always see the latest options.
+                </p>
+                <div class="workflow-steps">
+                    <div class="workflow-step">
+                        <div class="step-number">1</div>
+                        <div class="step-title">Select Provider</div>
+                        <div class="step-desc">Choose from ElevenLabs, Cartesia, Deepgram, OpenAI, or free options</div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="step-number">2</div>
+                        <div class="step-title">Browse & Filter</div>
+                        <div class="step-desc">Search by name, filter by gender, see voice details</div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="step-number">3</div>
+                        <div class="step-title">Preview</div>
+                        <div class="step-desc">Click play to hear provider sample audio</div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="step-number">4</div>
+                        <div class="step-title">Use Voice</div>
+                        <div class="step-desc">Click "Use" to add voice to a new project</div>
+                    </div>
+                </div>
+            </div>
+            <div class="quick-start">
+                <h4>Dynamic Voice Fetching</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Provider</th>
+                            <th>API Endpoint</th>
+                            <th>Features</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>ElevenLabs</strong></td>
+                            <td><code>GET /v1/voices</code></td>
+                            <td>Preview URLs, labels, categories</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Cartesia</strong></td>
+                            <td><code>GET /voices</code></td>
+                            <td>Paginated, gender, descriptions</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Deepgram</strong></td>
+                            <td><code>GET /v1/models</code></td>
+                            <td>Aura TTS voices, accents, samples</td>
+                        </tr>
+                        <tr>
+                            <td><strong>OpenAI</strong></td>
+                            <td>Static list</td>
+                            <td>11 voices: alloy, echo, nova, etc.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="caching" class="section">
+            <h2 class="section-title">TTS Audio Caching</h2>
+            <div class="workflow">
+                <p style="color: #8b949e; margin-bottom: 24px;">
+                    Voice Lab includes intelligent caching to dramatically reduce latency for repeated phrases.
+                    First synthesis takes 500-2000ms, but cached playback is instant (&lt;5ms).
+                </p>
+                <div class="providers-grid">
+                    <div class="provider-card free">
+                        <div class="provider-header">
+                            <span class="provider-name">Cache Stats</span>
+                            <span class="provider-badge free">Performance</span>
+                        </div>
+                        <ul class="provider-features">
+                            <li>500 items max capacity</li>
+                            <li>1-hour TTL (time to live)</li>
+                            <li>LRU eviction policy</li>
+                            <li>SHA256 key hashing</li>
+                        </ul>
+                    </div>
+                    <div class="provider-card premium">
+                        <div class="provider-header">
+                            <span class="provider-name">Latency</span>
+                            <span class="provider-badge premium">Speed</span>
+                        </div>
+                        <ul class="provider-features">
+                            <li>Cache hit: &lt;5ms</li>
+                            <li>Fresh synthesis: 500-2000ms</li>
+                            <li>100x faster on repeat</li>
+                            <li>UI shows "CACHED" status</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="quick-start">
+                <h4>Cache API Endpoints</h4>
+                <ol>
+                    <li><code>GET /api/voice/cache-stats</code> - View hit rate, size, and stats</li>
+                    <li><code>POST /api/voice/cache-clear</code> - Clear the entire cache</li>
+                </ol>
             </div>
         </section>
 
@@ -362,6 +473,62 @@
                         <li>Voice cloning support</li>
                         <li>Streaming audio</li>
                         <li>Requires API key</li>
+                    </ul>
+                </div>
+
+                <div class="provider-card premium">
+                    <div class="provider-header">
+                        <span class="provider-name">Deepgram</span>
+                        <span class="provider-badge premium">Premium</span>
+                    </div>
+                    <p class="provider-desc">Enterprise-grade Aura TTS voices</p>
+                    <ul class="provider-features">
+                        <li>12 Aura voices (Asteria, Luna, Orion, etc.)</li>
+                        <li>Multiple accents (American, British, Irish)</li>
+                        <li>Reliable uptime and scalability</li>
+                        <li>Requires API key</li>
+                    </ul>
+                </div>
+
+                <div class="provider-card premium">
+                    <div class="provider-header">
+                        <span class="provider-name">OpenAI</span>
+                        <span class="provider-badge premium">Premium</span>
+                    </div>
+                    <p class="provider-desc">High-quality TTS from OpenAI</p>
+                    <ul class="provider-features">
+                        <li>11 voices (alloy, echo, nova, shimmer, etc.)</li>
+                        <li>Natural prosody and intonation</li>
+                        <li>Consistent quality</li>
+                        <li>Requires API key</li>
+                    </ul>
+                </div>
+
+                <div class="provider-card free">
+                    <div class="provider-header">
+                        <span class="provider-name">Kokoro</span>
+                        <span class="provider-badge free">Free</span>
+                    </div>
+                    <p class="provider-desc">High-quality open source TTS</p>
+                    <ul class="provider-features">
+                        <li>No API key required</li>
+                        <li>American and British voices</li>
+                        <li>Male and female options</li>
+                        <li>Great quality for free</li>
+                    </ul>
+                </div>
+
+                <div class="provider-card free">
+                    <div class="provider-header">
+                        <span class="provider-name">Edge TTS</span>
+                        <span class="provider-badge free">Free</span>
+                    </div>
+                    <p class="provider-desc">Microsoft's neural voices</p>
+                    <ul class="provider-features">
+                        <li>No API key required</li>
+                        <li>12+ voices (US, UK, AU)</li>
+                        <li>Neural quality</li>
+                        <li>Multiple accents</li>
                     </ul>
                 </div>
             </div>
@@ -461,7 +628,8 @@
 
     <footer>
         <p>HIVE215 Voice Platform | Fast Brain LPU</p>
-        <p style="margin-top: 8px;">Last updated: December 2024</p>
+        <p style="margin-top: 8px;">Last updated: December 19, 2024</p>
+        <p style="margin-top: 4px; font-size: 0.85rem;">New: Browse Voices, TTS Caching, Deepgram & OpenAI support</p>
     </footer>
 </body>
 </html>

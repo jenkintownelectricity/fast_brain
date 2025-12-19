@@ -476,12 +476,34 @@ model="claude-sonnet-4-5-20250929"
 
 **New Features:**
 - **Voice Lab**: Full voice cloning workflow with ElevenLabs, Cartesia, and free gTTS
+- **Dynamic Voice Fetching**: Live voice lists from ElevenLabs, Cartesia, Deepgram, OpenAI APIs
+- **Browse Voices Tab**: Search and filter voices from all providers with preview playback
+- **TTS Audio Caching**: In-memory cache for instant playback of repeated phrases (<5ms vs 500-2000ms)
+- **Voice Preview**: One-click preview of provider sample audio
 - **Outgoing API Connections**: Connect agents to external REST APIs with auth support
 - **Dark/Light Mode**: Slack-inspired light theme with localStorage persistence
 - **Four Pillars Navigation**: Consolidated from 6 tabs to 4 main sections
 - **SQLite Database**: Persistent storage on Modal volume for all data
 - **7 API Key Providers**: Groq, OpenAI, Anthropic, ElevenLabs, Cartesia, Deepgram, PlayHT
 - **tara-sales skill**: TheDashTool sales assistant for voice demos
+
+**Voice Providers Supported:**
+| Provider | Type | Features |
+|----------|------|----------|
+| ElevenLabs | Premium | Voice cloning, 70+ languages, emotional range |
+| Cartesia | Premium | Sub-100ms latency, 3-second voice cloning |
+| Deepgram | Premium | Aura TTS, enterprise-grade reliability |
+| OpenAI | Premium | 11 voices (alloy, echo, nova, etc.) |
+| Parler TTS | Free (GPU) | Expressive synthesis, emotion control |
+| Edge TTS | Free | Microsoft voices, multiple accents |
+| Kokoro | Free | High-quality open source |
+| gTTS | Free | Google TTS, reliable fallback |
+
+**Performance Improvements:**
+- TTS cache: 500 items, 1-hour TTL, LRU eviction
+- Voice list cache: 5-minute client-side TTL
+- Cache hit latency: <5ms (vs 500-2000ms for fresh synthesis)
+- Common phrases pre-cached for instant response
 
 **Improvements:**
 - Removed all placeholder/test data for production readiness
