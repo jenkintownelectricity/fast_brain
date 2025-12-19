@@ -908,6 +908,113 @@ def update_voice_project(project_id, **kwargs):
 
 
 # =============================================================================
+# VOICE SAMPLES CRUD
+# =============================================================================
+
+def add_voice_sample(
+    project_id: str,
+    sample_id: str,
+    filename: str,
+    file_path: str,
+    transcript: str = "",
+    duration_ms: int = 0,
+    emotion: str = "neutral"
+) -> Dict:
+    """Add a voice sample to a project."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+
+        cursor.execute('''
+            INSERT INTO voice_samples
+            (id, project_id, filename, file_path, transcript, duration_ms, emotion, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (sample_id, project_id, filename, file_path, transcript, duration_ms, emotion, now))
+        conn.commit()
+
+        return {
+            'id': sample_id,
+            'project_id': project_id,
+            'filename': filename,
+            'file_path': file_path,
+            'transcript': transcript,
+            'duration_ms': duration_ms,
+            'emotion': emotion,
+            'created_at': now
+        }
+
+
+def get_voice_samples(project_id: str) -> List[Dict]:
+    """Get all voice samples for a project."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT * FROM voice_samples WHERE project_id = ? ORDER BY created_at',
+            (project_id,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def get_voice_sample(sample_id: str) -> Optional[Dict]:
+    """Get a specific voice sample by ID."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM voice_samples WHERE id = ?', (sample_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def delete_voice_sample(sample_id: str) -> bool:
+    """Delete a voice sample."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM voice_samples WHERE id = ?', (sample_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def delete_voice_project(project_id: str) -> bool:
+    """Delete a voice project and all its samples."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        # Delete samples first
+        cursor.execute('DELETE FROM voice_samples WHERE project_id = ?', (project_id,))
+        # Delete project
+        cursor.execute('DELETE FROM voice_projects WHERE id = ?', (project_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def link_voice_to_skill(project_id: str, skill_id: str) -> bool:
+    """Link a voice project to a skill."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            'UPDATE voice_projects SET skill_id = ?, updated_at = ? WHERE id = ?',
+            (skill_id, datetime.now().isoformat(), project_id)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def get_voice_projects_for_skill(skill_id: str) -> List[Dict]:
+    """Get all voice projects linked to a skill."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT * FROM voice_projects WHERE skill_id = ? ORDER BY updated_at DESC',
+            (skill_id,)
+        )
+        projects = []
+        for row in cursor.fetchall():
+            project = dict(row)
+            project['settings'] = json.loads(project['settings'] or '{}')
+            project['samples'] = json.loads(project['samples'] or '[]')
+            projects.append(project)
+        return projects
+
+
+# =============================================================================
 # API CONNECTIONS - Outgoing integrations
 # =============================================================================
 

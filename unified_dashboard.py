@@ -121,18 +121,6 @@ VOICE_CHOICES = {
             {"id": "chatterbox_energetic", "name": "Energetic", "gender": "female", "style": "upbeat"},
         ]
     },
-    "kokoro": {
-        "name": "Kokoro",
-        "provider": "Kokoro TTS",
-        "voices": [
-            {"id": "af_bella", "name": "Bella", "gender": "female", "style": "american"},
-            {"id": "af_nicole", "name": "Nicole", "gender": "female", "style": "american"},
-            {"id": "am_adam", "name": "Adam", "gender": "male", "style": "american"},
-            {"id": "am_michael", "name": "Michael", "gender": "male", "style": "american"},
-            {"id": "bf_emma", "name": "Emma", "gender": "female", "style": "british"},
-            {"id": "bm_george", "name": "George", "gender": "male", "style": "british"},
-        ]
-    },
     "xtts": {
         "name": "XTTS-v2",
         "provider": "Coqui AI",
@@ -4787,21 +4775,21 @@ DASHBOARD_HTML = '''
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">TTS Provider</label>
-                            <select class="form-select" id="voice-provider" onchange="loadProviderVoices()">
+                            <select class="form-select" id="voice-provider" onchange="loadVoiceSettingsVoices()">
                                 <option value="">Select a provider...</option>
+                                <optgroup label="Premium (Live API)">
+                                    <option value="elevenlabs">ElevenLabs</option>
+                                    <option value="cartesia">Cartesia</option>
+                                    <option value="deepgram">Deepgram (Aura)</option>
+                                    <option value="openai">OpenAI TTS</option>
+                                </optgroup>
                                 <optgroup label="Free / Open Source">
                                     <option value="parler_tts">Parler TTS (Expressive - GPU)</option>
                                     <option value="edge_tts">Edge TTS (Microsoft - Free)</option>
-                                    <option value="kokoro">Kokoro (Edge TTS Fallback)</option>
+                                    <option value="kokoro">Kokoro</option>
                                     <option value="chatterbox">Chatterbox (Resemble AI)</option>
                                     <option value="xtts">XTTS-v2 (Coqui AI)</option>
                                     <option value="openvoice">OpenVoice (MyShell)</option>
-                                </optgroup>
-                                <optgroup label="Paid Services">
-                                    <option value="elevenlabs">ElevenLabs</option>
-                                    <option value="openai">OpenAI TTS</option>
-                                    <option value="azure">Azure TTS</option>
-                                    <option value="cartesia">Cartesia</option>
                                 </optgroup>
                             </select>
                         </div>
@@ -7078,22 +7066,51 @@ print("Training complete: adapters/${skillId}")`;
             }
         }
 
-        function loadProviderVoices() {
+        async function loadVoiceSettingsVoices() {
             const provider = document.getElementById('voice-provider').value;
             const voiceSelect = document.getElementById('voice-select');
 
-            voiceSelect.innerHTML = '<option value="">Select a voice...</option>';
+            voiceSelect.innerHTML = '<option value="">Loading voices...</option>';
             document.getElementById('voice-details').style.display = 'none';
 
-            if (!provider || !voiceProviders[provider]) return;
+            if (!provider) {
+                voiceSelect.innerHTML = '<option value="">Select a provider first...</option>';
+                return;
+            }
 
-            const providerData = voiceProviders[provider];
-            providerData.voices.forEach(voice => {
-                const option = document.createElement('option');
-                option.value = voice.id;
-                option.textContent = `${voice.name} (${voice.gender}, ${voice.style})`;
-                voiceSelect.appendChild(option);
-            });
+            try {
+                // Use dynamic API endpoint for premium providers
+                const res = await fetch(`/api/voice-lab/provider-voices/${provider}`);
+                const data = await res.json();
+
+                voiceSelect.innerHTML = '<option value="">Select a voice...</option>';
+
+                const voices = data.voices || [];
+                if (voices.length === 0 && data.error) {
+                    // Fall back to static if available
+                    if (voiceProviders[provider]) {
+                        voiceProviders[provider].voices.forEach(voice => {
+                            const option = document.createElement('option');
+                            option.value = voice.id;
+                            option.textContent = `${voice.name} (${voice.gender}, ${voice.style})`;
+                            voiceSelect.appendChild(option);
+                        });
+                    }
+                    return;
+                }
+
+                voices.forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.id;
+                    const gender = voice.gender || 'unknown';
+                    const style = voice.style || voice.description?.substring(0, 20) || 'default';
+                    option.textContent = `${voice.name} (${gender}, ${style})`;
+                    voiceSelect.appendChild(option);
+                });
+            } catch (e) {
+                console.error('Failed to load provider voices:', e);
+                voiceSelect.innerHTML = '<option value="">Error loading voices</option>';
+            }
         }
 
         function selectVoice() {
