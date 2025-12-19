@@ -7510,23 +7510,30 @@ print("Training complete: adapters/${skillId}")`;
             statusEl.innerHTML = '<span style="color: var(--neon-cyan);">Synthesizing audio...</span>';
 
             try {
-                const res = await fetch('/api/voice-lab/synthesize', {
+                const res = await fetch('/api/voice/test', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ provider, voice_id: voiceId, text })
                 });
 
-                if (!res.ok) {
-                    const err = await res.json();
-                    throw new Error(err.error || 'Synthesis failed');
-                }
+                const result = await res.json();
 
-                const blob = await res.blob();
-                const url = URL.createObjectURL(blob);
-                audioEl.src = url;
-                audioEl.style.display = 'block';
-                audioEl.play();
-                statusEl.innerHTML = '<span style="color: var(--neon-green);">Audio ready!</span>';
+                if (result.success && result.audio_base64) {
+                    const cacheStatus = result.cached ? '(cached)' : `(${result.duration_ms}ms)`;
+                    const audio = new Audio('data:' + result.audio_format + ';base64,' + result.audio_base64);
+
+                    audio.onended = () => {
+                        statusEl.innerHTML = `<span style="color: var(--neon-green);">✓ Played ${cacheStatus}</span>`;
+                    };
+                    audio.onerror = () => {
+                        statusEl.innerHTML = '<span style="color: var(--neon-orange);">Playback error</span>';
+                    };
+                    audio.play();
+                    audioEl.style.display = 'none';
+                    statusEl.innerHTML = `<span style="color: var(--neon-cyan);">▶ Playing... ${cacheStatus}</span>`;
+                } else {
+                    throw new Error(result.error || 'Synthesis failed');
+                }
             } catch (e) {
                 statusEl.innerHTML = `<span style="color: var(--neon-orange);">Error: ${e.message}</span>`;
             } finally {
