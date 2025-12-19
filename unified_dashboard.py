@@ -1952,8 +1952,6 @@ def create_fast_brain_skill():
             skill_type=data.get('skill_type', 'custom'),
             system_prompt=data.get('system_prompt', ''),
             knowledge=data.get('knowledge', []),
-            voice_provider=data.get('voice_provider'),
-            voice_id=data.get('voice_id'),
             is_builtin=False
         )
     else:
@@ -2011,7 +2009,7 @@ def update_fast_brain_skill(skill_id):
 
         # Update allowed fields
         update_data = {}
-        for field in ['name', 'description', 'system_prompt', 'knowledge', 'skill_type', 'voice_provider', 'voice_id']:
+        for field in ['name', 'description', 'system_prompt', 'knowledge', 'skill_type']:
             if field in data:
                 update_data[field] = data[field]
 
@@ -5870,38 +5868,7 @@ pipeline = Pipeline([
                             <label class="form-label">Knowledge Base (one item per line)</label>
                             <textarea class="form-textarea" id="new-skill-knowledge" rows="4" placeholder="Pricing: $100-500&#10;Hours: Mon-Fri 9am-5pm&#10;Service area: Philadelphia metro"></textarea>
                         </div>
-
-                        <!-- Voice Assignment Section -->
-                        <div style="border-top: 1px solid var(--glass-border); margin-top: 1rem; padding-top: 1rem;">
-                            <h4 style="color: var(--neon-purple); margin-bottom: 0.75rem; font-size: 0.9rem;">Voice Assignment (Optional)</h4>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label class="form-label">Voice Provider</label>
-                                    <select class="form-select" id="new-skill-voice-provider" onchange="loadSkillVoices('new')">
-                                        <option value="">Select provider...</option>
-                                        <optgroup label="Premium (API Key Required)">
-                                            <option value="elevenlabs">ElevenLabs</option>
-                                            <option value="cartesia">Cartesia</option>
-                                            <option value="deepgram">Deepgram (Aura)</option>
-                                            <option value="openai">OpenAI TTS</option>
-                                        </optgroup>
-                                        <optgroup label="Free / Open Source">
-                                            <option value="edge_tts">Edge TTS (Microsoft)</option>
-                                            <option value="parler">Parler TTS (GPU)</option>
-                                        </optgroup>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Voice</label>
-                                    <select class="form-select" id="new-skill-voice-id" disabled>
-                                        <option value="">Select provider first...</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div id="new-skill-voice-preview" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;"></div>
-                        </div>
-
-                        <div class="form-row" style="margin-top: 1rem;">
+                        <div class="form-row">
                             <button class="btn btn-primary" onclick="createCustomSkill()">Create Skill</button>
                             <button class="btn btn-secondary" onclick="hideCreateSkillModal()">Cancel</button>
                         </div>
@@ -5937,38 +5904,7 @@ pipeline = Pipeline([
                             <label class="form-label">Knowledge Base (one item per line)</label>
                             <textarea class="form-textarea" id="edit-skill-knowledge" rows="4" placeholder="Pricing: $100-500&#10;Hours: Mon-Fri 9am-5pm&#10;Service area: Philadelphia metro"></textarea>
                         </div>
-
-                        <!-- Voice Assignment Section -->
-                        <div style="border-top: 1px solid var(--glass-border); margin-top: 1rem; padding-top: 1rem;">
-                            <h4 style="color: var(--neon-purple); margin-bottom: 0.75rem; font-size: 0.9rem;">Voice Assignment</h4>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label class="form-label">Voice Provider</label>
-                                    <select class="form-select" id="edit-skill-voice-provider" onchange="loadSkillVoices('edit')">
-                                        <option value="">No voice assigned</option>
-                                        <optgroup label="Premium (API Key Required)">
-                                            <option value="elevenlabs">ElevenLabs</option>
-                                            <option value="cartesia">Cartesia</option>
-                                            <option value="deepgram">Deepgram (Aura)</option>
-                                            <option value="openai">OpenAI TTS</option>
-                                        </optgroup>
-                                        <optgroup label="Free / Open Source">
-                                            <option value="edge_tts">Edge TTS (Microsoft)</option>
-                                            <option value="parler">Parler TTS (GPU)</option>
-                                        </optgroup>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Voice</label>
-                                    <select class="form-select" id="edit-skill-voice-id" disabled>
-                                        <option value="">Select provider first...</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div id="edit-skill-voice-preview" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;"></div>
-                        </div>
-
-                        <div class="form-row" style="margin-top: 1rem;">
+                        <div class="form-row">
                             <button class="btn btn-primary" onclick="saveEditedSkill()">Save Changes</button>
                             <button class="btn btn-secondary" onclick="hideEditSkillModal()">Cancel</button>
                         </div>
@@ -6036,6 +5972,46 @@ pipeline = Pipeline([
                             <div class="console" id="fb-response" style="min-height: 100px;">Waiting for request...</div>
                         </div>
                         <div id="fb-metrics" style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;"></div>
+
+                        <!-- Voice Test Section (Optional) -->
+                        <div style="border-top: 1px solid var(--glass-border); margin-top: 1.5rem; padding-top: 1rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h4 style="color: var(--neon-purple); margin: 0; font-size: 0.95rem;">Test with Voice (Optional)</h4>
+                                <span id="voice-test-status" style="font-size: 0.8rem; color: var(--text-secondary);"></span>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group" style="flex: 1;">
+                                    <label class="form-label">Voice Provider</label>
+                                    <select class="form-select" id="voice-test-provider" onchange="loadVoiceTestVoices()">
+                                        <option value="">Select provider...</option>
+                                        <optgroup label="Premium (API Key Required)">
+                                            <option value="elevenlabs">ElevenLabs</option>
+                                            <option value="cartesia">Cartesia</option>
+                                            <option value="deepgram">Deepgram (Aura)</option>
+                                            <option value="openai">OpenAI TTS</option>
+                                        </optgroup>
+                                        <optgroup label="Free / Open Source">
+                                            <option value="edge_tts">Edge TTS (Microsoft)</option>
+                                            <option value="parler">Parler TTS (GPU)</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="flex: 1;">
+                                    <label class="form-label">Voice</label>
+                                    <select class="form-select" id="voice-test-voice-id" disabled>
+                                        <option value="">Select provider first...</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Text to Speak</label>
+                                <textarea class="form-textarea" id="voice-test-text" rows="2" placeholder="Hello! This is a test of the voice synthesis. You can type any text here to hear how it sounds."></textarea>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <button class="btn btn-secondary" id="voice-test-btn" onclick="testVoiceTTS()">Test Voice</button>
+                                <audio id="voice-test-audio" controls style="display: none; height: 32px;"></audio>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -7405,21 +7381,6 @@ print("Training complete: adapters/${skillId}")`;
             const knowledge = skill.knowledge || [];
             document.getElementById('edit-skill-knowledge').value = Array.isArray(knowledge) ? knowledge.join('\\n') : knowledge;
 
-            // Handle voice assignment
-            const voiceProvider = skill.voice_provider || '';
-            document.getElementById('edit-skill-voice-provider').value = voiceProvider;
-            if (voiceProvider) {
-                // Load voices for this provider, then set the selected voice
-                await loadSkillVoices('edit', skill.voice_id);
-            } else {
-                document.getElementById('edit-skill-voice-id').value = '';
-                document.getElementById('edit-skill-voice-id').disabled = true;
-                document.getElementById('edit-skill-voice-id').innerHTML = '<option value="">Select provider first...</option>';
-            }
-            document.getElementById('edit-skill-voice-preview').innerHTML = skill.voice_provider && skill.voice_id
-                ? `<span style="color: var(--neon-green);">Current: ${skill.voice_provider} / ${skill.voice_id}</span>`
-                : '';
-
             // Show edit form
             document.getElementById('fb-edit-skill-form').style.display = 'block';
             document.getElementById('fb-create-skill-form').style.display = 'none';
@@ -7434,11 +7395,6 @@ print("Training complete: adapters/${skillId}")`;
             document.getElementById('edit-skill-description').value = '';
             document.getElementById('edit-skill-prompt').value = '';
             document.getElementById('edit-skill-knowledge').value = '';
-            document.getElementById('edit-skill-voice-provider').value = '';
-            document.getElementById('edit-skill-voice-id').value = '';
-            document.getElementById('edit-skill-voice-id').disabled = true;
-            document.getElementById('edit-skill-voice-id').innerHTML = '<option value="">Select provider first...</option>';
-            document.getElementById('edit-skill-voice-preview').innerHTML = '';
             document.getElementById('edit-skill-message').innerHTML = '';
         }
 
@@ -7452,9 +7408,6 @@ print("Training complete: adapters/${skillId}")`;
                 .map(s => s.trim())
                 .filter(s => s.length > 0);
 
-            const voiceProvider = document.getElementById('edit-skill-voice-provider').value;
-            const voiceId = document.getElementById('edit-skill-voice-id').value;
-
             try {
                 const res = await fetch(`/api/fast-brain/skills/${skillId}`, {
                     method: 'PUT',
@@ -7464,8 +7417,6 @@ print("Training complete: adapters/${skillId}")`;
                         description: document.getElementById('edit-skill-description').value,
                         system_prompt: document.getElementById('edit-skill-prompt').value,
                         knowledge: knowledge,
-                        voice_provider: voiceProvider || null,
-                        voice_id: voiceId || null,
                     })
                 });
                 const result = await res.json();
@@ -7484,24 +7435,26 @@ print("Training complete: adapters/${skillId}")`;
             }
         }
 
-        // Load voices for skill voice assignment dropdowns
-        async function loadSkillVoices(mode, preselectedVoiceId = null) {
-            const providerSelect = document.getElementById(`${mode}-skill-voice-provider`);
-            const voiceSelect = document.getElementById(`${mode}-skill-voice-id`);
-            const previewEl = document.getElementById(`${mode}-skill-voice-preview`);
+        // ============================================================
+        // VOICE TEST ENVIRONMENT
+        // ============================================================
+        async function loadVoiceTestVoices() {
+            const providerSelect = document.getElementById('voice-test-provider');
+            const voiceSelect = document.getElementById('voice-test-voice-id');
+            const statusEl = document.getElementById('voice-test-status');
 
             const provider = providerSelect.value;
 
             if (!provider) {
                 voiceSelect.disabled = true;
                 voiceSelect.innerHTML = '<option value="">Select provider first...</option>';
-                previewEl.innerHTML = '';
+                if (statusEl) statusEl.innerHTML = '';
                 return;
             }
 
             voiceSelect.disabled = true;
             voiceSelect.innerHTML = '<option value="">Loading voices...</option>';
-            previewEl.innerHTML = '<span style="color: var(--text-secondary);">Fetching voices from ' + provider + '...</span>';
+            if (statusEl) statusEl.innerHTML = '<span style="color: var(--text-secondary);">Fetching voices...</span>';
 
             try {
                 const res = await fetch(`/api/voice-lab/provider-voices/${provider}`);
@@ -7509,14 +7462,14 @@ print("Training complete: adapters/${skillId}")`;
 
                 if (data.error) {
                     voiceSelect.innerHTML = `<option value="">Error: ${data.error}</option>`;
-                    previewEl.innerHTML = `<span style="color: var(--neon-orange);">${data.error}</span>`;
+                    if (statusEl) statusEl.innerHTML = `<span style="color: var(--neon-orange);">${data.error}</span>`;
                     return;
                 }
 
                 const voices = data.voices || [];
                 if (voices.length === 0) {
                     voiceSelect.innerHTML = '<option value="">No voices available</option>';
-                    previewEl.innerHTML = '<span style="color: var(--text-secondary);">No voices found for this provider. Check your API key.</span>';
+                    if (statusEl) statusEl.innerHTML = '<span style="color: var(--text-secondary);">No voices found. Check API key.</span>';
                     return;
                 }
 
@@ -7530,17 +7483,55 @@ print("Training complete: adapters/${skillId}")`;
                 });
 
                 voiceSelect.disabled = false;
-                previewEl.innerHTML = `<span style="color: var(--neon-green);">${voices.length} voices available</span>`;
-
-                // If preselected voice ID provided, select it
-                if (preselectedVoiceId) {
-                    voiceSelect.value = preselectedVoiceId;
-                }
+                if (statusEl) statusEl.innerHTML = `<span style="color: var(--neon-green);">${voices.length} voices</span>`;
 
             } catch (e) {
                 console.error('Failed to load voices:', e);
                 voiceSelect.innerHTML = '<option value="">Error loading voices</option>';
-                previewEl.innerHTML = `<span style="color: var(--neon-orange);">Failed: ${e.message}</span>`;
+                if (statusEl) statusEl.innerHTML = `<span style="color: var(--neon-orange);">Failed: ${e.message}</span>`;
+            }
+        }
+
+        async function testVoiceTTS() {
+            const provider = document.getElementById('voice-test-provider').value;
+            const voiceId = document.getElementById('voice-test-voice-id').value;
+            const text = document.getElementById('voice-test-text').value || 'Hello! This is a test of the voice synthesis.';
+            const statusEl = document.getElementById('voice-test-status');
+            const audioEl = document.getElementById('voice-test-audio');
+            const btn = document.getElementById('voice-test-btn');
+
+            if (!provider || !voiceId) {
+                alert('Please select a provider and voice first');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            statusEl.innerHTML = '<span style="color: var(--neon-cyan);">Synthesizing audio...</span>';
+
+            try {
+                const res = await fetch('/api/voice-lab/synthesize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider, voice_id: voiceId, text })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Synthesis failed');
+                }
+
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                audioEl.src = url;
+                audioEl.style.display = 'block';
+                audioEl.play();
+                statusEl.innerHTML = '<span style="color: var(--neon-green);">Audio ready!</span>';
+            } catch (e) {
+                statusEl.innerHTML = `<span style="color: var(--neon-orange);">Error: ${e.message}</span>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Test Voice';
             }
         }
 
@@ -8678,11 +8669,6 @@ print("Training complete! Adapter saved to adapters/${skill}")
             document.getElementById('new-skill-description').value = '';
             document.getElementById('new-skill-prompt').value = '';
             document.getElementById('new-skill-knowledge').value = '';
-            document.getElementById('new-skill-voice-provider').value = '';
-            document.getElementById('new-skill-voice-id').value = '';
-            document.getElementById('new-skill-voice-id').disabled = true;
-            document.getElementById('new-skill-voice-id').innerHTML = '<option value="">Select provider first...</option>';
-            document.getElementById('new-skill-voice-preview').innerHTML = '';
             document.getElementById('create-skill-message').innerHTML = '';
         }
 
@@ -8695,9 +8681,6 @@ print("Training complete! Adapter saved to adapters/${skill}")
                 .map(s => s.trim())
                 .filter(s => s.length > 0);
 
-            const voiceProvider = document.getElementById('new-skill-voice-provider').value;
-            const voiceId = document.getElementById('new-skill-voice-id').value;
-
             try {
                 const res = await fetch('/api/fast-brain/skills', {
                     method: 'POST',
@@ -8708,8 +8691,6 @@ print("Training complete! Adapter saved to adapters/${skill}")
                         description: document.getElementById('new-skill-description').value,
                         system_prompt: document.getElementById('new-skill-prompt').value,
                         knowledge: knowledge,
-                        voice_provider: voiceProvider || null,
-                        voice_id: voiceId || null,
                     })
                 });
                 const result = await res.json();

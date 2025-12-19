@@ -64,8 +64,6 @@ def init_db():
                 system_prompt TEXT,
                 knowledge TEXT,  -- JSON array
                 voice_config TEXT,  -- JSON object
-                voice_provider TEXT,  -- Voice provider (elevenlabs, cartesia, deepgram, openai, edge_tts, parler)
-                voice_id TEXT,  -- Voice ID from the selected provider
                 is_builtin INTEGER DEFAULT 0,
                 is_active INTEGER DEFAULT 1,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -77,16 +75,6 @@ def init_db():
                 satisfaction_rate REAL DEFAULT 0
             )
         ''')
-
-        # Add voice_provider and voice_id columns if they don't exist (migration)
-        try:
-            cursor.execute('ALTER TABLE skills ADD COLUMN voice_provider TEXT')
-        except sqlite3.OperationalError:
-            pass  # Column already exists
-        try:
-            cursor.execute('ALTER TABLE skills ADD COLUMN voice_id TEXT')
-        except sqlite3.OperationalError:
-            pass  # Column already exists
 
         # =================================================================
         # GOLDEN PROMPTS TABLE - Custom prompt overrides
@@ -259,8 +247,6 @@ def create_skill(
     system_prompt: str = "",
     knowledge: List[str] = None,
     voice_config: Dict = None,
-    voice_provider: str = None,
-    voice_id: str = None,
     is_builtin: bool = False
 ) -> Dict:
     """Create a new skill."""
@@ -270,8 +256,8 @@ def create_skill(
 
         cursor.execute('''
             INSERT OR REPLACE INTO skills
-            (id, name, description, skill_type, system_prompt, knowledge, voice_config, voice_provider, voice_id, is_builtin, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, name, description, skill_type, system_prompt, knowledge, voice_config, is_builtin, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             skill_id,
             name,
@@ -280,8 +266,6 @@ def create_skill(
             system_prompt,
             json.dumps(knowledge or []),
             json.dumps(voice_config or {}),
-            voice_provider,
-            voice_id,
             1 if is_builtin else 0,
             now,
             now

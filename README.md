@@ -214,14 +214,15 @@ Display and copy your deployed API URLs:
 **Platform Connections:**
 - LiveKit, Twilio, Vapi, Retell AI, Daily.co
 
-### Skills Tab
+### Test Chat
 
-**Voice Assignment (NEW):**
-Skills now support voice provider and voice ID assignment:
+**Voice Test (Optional):**
+Test any voice with custom text:
 - **Voice Provider dropdown**: ElevenLabs, Cartesia, Deepgram, OpenAI, Edge TTS, Parler
 - **Voice ID dropdown**: Dynamically loads voices from selected provider
-- Voice assignments saved to database with skill
-- Available in both Create Skill and Edit Skill forms
+- **Text input**: Enter any text to hear it synthesized
+- **Audio playback**: Instant playback with HTML5 audio player
+- Similar styling to Golden Prompts optional section
 
 ### Outgoing API Connections
 
@@ -504,7 +505,7 @@ model="claude-sonnet-4-5-20250929"
 - **7 API Key Providers**: Groq, OpenAI, Anthropic, ElevenLabs, Cartesia, Deepgram, PlayHT
 - **tara-sales skill**: TheDashTool sales assistant for voice demos
 - **API Endpoints Card**: Display/copy Fast Brain API and Dashboard URLs with health check
-- **Voice Assignment for Skills**: Assign voice provider and voice ID to each skill
+- **Voice Test in Test Chat**: Test any voice with custom text (optional section)
 
 **Voice Providers Supported:**
 | Provider | Type | Features |

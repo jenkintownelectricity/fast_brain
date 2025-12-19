@@ -1,6 +1,6 @@
 # Claude Development Log
 
-## 2024-12-19: Settings & Voice Assignment Updates
+## 2024-12-19: Settings & Voice Test Environment Updates
 
 ### Session: `claude/unified-dashboard-AJdAZ`
 
@@ -12,18 +12,16 @@
    - Health check button with status indicators (green/orange/red)
    - Quick reference table for common API endpoints
 
-2. **feat: Add voice assignment to Skills Manager**
-   - Added `voice_provider` and `voice_id` columns to skills database table
-   - Migration script for existing databases (ALTER TABLE)
+2. **feat: Add Voice Test section to Test Chat**
+   - Added "Test with Voice (Optional)" section at bottom of Test Chat tab
    - Voice Provider dropdown (ElevenLabs, Cartesia, Deepgram, OpenAI, Edge TTS, Parler)
-   - Voice ID dropdown (dynamically loads from /api/voice-lab/provider-voices/<provider>)
-   - Create Skill form now includes optional voice assignment
-   - Edit Skill form includes voice assignment with pre-populated values
-   - Backend API updated to accept and save voice_provider/voice_id
+   - Voice ID dropdown (dynamically loads voices from selected provider)
+   - Text input for custom test phrases
+   - Test Voice button with audio playback
+   - Similar styling to Golden Prompts optional feature
 
 #### Files Modified:
-- `unified_dashboard.py` - Settings API card, Voice Assignment UI, JavaScript functions
-- `database.py` - Added voice_provider and voice_id columns to skills table
+- `unified_dashboard.py` - Settings API card, Voice Test UI in Test Chat
 - `CLAUDE_LOG.md` - Session notes
 - `TODO.md` - Updated status
 
