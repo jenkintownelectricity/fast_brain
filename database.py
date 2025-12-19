@@ -890,8 +890,9 @@ def update_voice_project(project_id: str, **kwargs) -> Optional[Dict]:
             cursor.execute(f'''
                 UPDATE voice_projects SET {', '.join(updates)} WHERE id = ?
             ''', values)
+            conn.commit()  # Commit before reading back
 
-        return get_voice_project(project_id)
+    return get_voice_project(project_id)
 
 
 def delete_voice_project(project_id: str) -> bool:
