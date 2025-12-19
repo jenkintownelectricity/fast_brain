@@ -865,144 +865,46 @@ def get_all_voice_projects(status: str = None) -> List[Dict]:
         return projects
 
 
-def update_voice_project(project_id: str, **kwargs) -> Optional[Dict]:
-    """Update a voice project."""
-    with get_db() as conn:
-        cursor = conn.cursor()
-
-        allowed_fields = ['name', 'description', 'provider', 'base_voice', 'status',
-                         'settings', 'voice_id', 'skill_id', 'training_started', 'training_completed']
-
+def update_voice_project(project_id, **kwargs):
+    """Update a voice project with proper commit."""
+    import sqlite3
+    from datetime import datetime
+    
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    try:
         updates = []
         values = []
-
+        
+        allowed_fields = ['name', 'description', 'provider', 'base_voice', 'voice_id', 
+                         'status', 'settings', 'skill_id', 'training_started', 'training_completed']
+        
         for key, value in kwargs.items():
             if key in allowed_fields:
                 if key == 'settings' and isinstance(value, dict):
+                    import json
                     value = json.dumps(value)
-                updates.append(f"{key} = ?")
+                updates.append(f'{key} = ?')
                 values.append(value)
-
+        
         if updates:
-            updates.append("updated_at = ?")
+            updates.append('updated_at = ?')
             values.append(datetime.now().isoformat())
             values.append(project_id)
-
-            cursor.execute(f'''
-                UPDATE voice_projects SET {', '.join(updates)} WHERE id = ?
-            ''', values)
-            conn.commit()  # Commit before reading back
-
-    return get_voice_project(project_id)
-
-
-def delete_voice_project(project_id: str) -> bool:
-    """Delete a voice project and its samples."""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        # Delete samples first
-        cursor.execute('DELETE FROM voice_samples WHERE project_id = ?', (project_id,))
-        # Delete project
-        cursor.execute('DELETE FROM voice_projects WHERE id = ?', (project_id,))
-        return cursor.rowcount > 0
-
-
-def add_voice_sample(
-    project_id: str,
-    sample_id: str,
-    filename: str,
-    file_path: str = None,
-    transcript: str = "",
-    duration_ms: int = 0,
-    emotion: str = "neutral"
-) -> Dict:
-    """Add a voice sample to a project."""
-    with get_db() as conn:
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            INSERT INTO voice_samples
-            (id, project_id, filename, file_path, transcript, duration_ms, emotion, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            sample_id,
-            project_id,
-            filename,
-            file_path,
-            transcript,
-            duration_ms,
-            emotion,
-            datetime.now().isoformat()
-        ))
-
-        # Update project updated_at
-        cursor.execute('UPDATE voice_projects SET updated_at = ? WHERE id = ?',
-                      (datetime.now().isoformat(), project_id))
-
-        cursor.execute('SELECT * FROM voice_samples WHERE id = ?', (sample_id,))
-        return dict(cursor.fetchone())
-
-
-def get_voice_samples(project_id: str) -> List[Dict]:
-    """Get all samples for a voice project."""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM voice_samples WHERE project_id = ? ORDER BY created_at', (project_id,))
-        return [dict(row) for row in cursor.fetchall()]
-
-
-def delete_voice_sample(sample_id: str) -> bool:
-    """Delete a voice sample."""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM voice_samples WHERE id = ?', (sample_id,))
-        return cursor.rowcount > 0
-
-
-def get_voice_projects_for_skill(skill_id: str) -> List[Dict]:
-    """Get all trained voice projects linked to a skill."""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT * FROM voice_projects
-            WHERE skill_id = ? AND status = 'trained'
-            ORDER BY updated_at DESC
-        ''', (skill_id,))
-
-        projects = []
-        for row in cursor.fetchall():
-            project = dict(row)
-            project['settings'] = json.loads(project['settings'] or '{}')
-            projects.append(project)
-
-        return projects
-
-
-def link_voice_to_skill(project_id: str, skill_id: str) -> bool:
-    """Link a trained voice project to a skill."""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE voice_projects SET skill_id = ?, updated_at = ? WHERE id = ?
-        ''', (skill_id, datetime.now().isoformat(), project_id))
-
-        # Also update the skill's voice_config
-        project = get_voice_project(project_id)
-        if project:
-            cursor.execute('''
-                UPDATE skills SET voice_config = ?, updated_at = ? WHERE id = ?
-            ''', (
-                json.dumps({
-                    'voice_project_id': project_id,
-                    'voice_id': project.get('voice_id'),
-                    'provider': project.get('provider'),
-                    'settings': project.get('settings')
-                }),
-                datetime.now().isoformat(),
-                skill_id
-            ))
-
-        return cursor.rowcount > 0
+            
+            sql = f'UPDATE voice_projects SET {", ".join(updates)} WHERE id = ?'
+            cursor.execute(sql, values)
+            conn.commit()
+        
+        conn.close()
+        return get_voice_project(project_id)
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        raise
 
 
 # =============================================================================
