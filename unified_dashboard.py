@@ -64,6 +64,107 @@ VOICE_CONFIG = {
     }
 }
 
+# =============================================================================
+# TTS AUDIO CACHE - Low latency for common phrases
+# =============================================================================
+import hashlib
+from collections import OrderedDict
+import threading
+
+class TTSCache:
+    """In-memory cache for synthesized audio to reduce latency."""
+
+    def __init__(self, max_size=500, ttl_seconds=3600):
+        self.cache = OrderedDict()
+        self.max_size = max_size
+        self.ttl = ttl_seconds
+        self.lock = threading.Lock()
+        self.stats = {"hits": 0, "misses": 0}
+
+    def _make_key(self, text, voice_id, provider, **kwargs):
+        """Create a unique cache key from synthesis parameters."""
+        # Normalize text (lowercase, strip whitespace)
+        normalized = text.lower().strip()
+        key_data = f"{normalized}|{voice_id}|{provider}"
+        # Include relevant kwargs that affect output
+        for k in sorted(kwargs.keys()):
+            if k in ['emotion', 'speed', 'pitch']:
+                key_data += f"|{k}={kwargs[k]}"
+        return hashlib.sha256(key_data.encode()).hexdigest()[:32]
+
+    def get(self, text, voice_id, provider, **kwargs):
+        """Get cached audio if available and not expired."""
+        key = self._make_key(text, voice_id, provider, **kwargs)
+        with self.lock:
+            if key in self.cache:
+                entry = self.cache[key]
+                # Check TTL
+                import time
+                if time.time() - entry['timestamp'] < self.ttl:
+                    self.stats["hits"] += 1
+                    # Move to end (LRU)
+                    self.cache.move_to_end(key)
+                    return entry['audio'], entry['format']
+                else:
+                    # Expired
+                    del self.cache[key]
+            self.stats["misses"] += 1
+            return None, None
+
+    def set(self, text, voice_id, provider, audio_bytes, audio_format='audio/mp3', **kwargs):
+        """Cache synthesized audio."""
+        import time
+        key = self._make_key(text, voice_id, provider, **kwargs)
+        with self.lock:
+            # Remove oldest if at capacity
+            while len(self.cache) >= self.max_size:
+                self.cache.popitem(last=False)
+
+            self.cache[key] = {
+                'audio': audio_bytes,
+                'format': audio_format,
+                'timestamp': time.time(),
+                'text': text[:100],  # Store truncated text for debugging
+                'voice_id': voice_id,
+                'provider': provider
+            }
+
+    def get_stats(self):
+        """Get cache statistics."""
+        with self.lock:
+            total = self.stats["hits"] + self.stats["misses"]
+            hit_rate = (self.stats["hits"] / total * 100) if total > 0 else 0
+            return {
+                "hits": self.stats["hits"],
+                "misses": self.stats["misses"],
+                "hit_rate": f"{hit_rate:.1f}%",
+                "size": len(self.cache),
+                "max_size": self.max_size
+            }
+
+    def clear(self):
+        """Clear the cache."""
+        with self.lock:
+            self.cache.clear()
+            self.stats = {"hits": 0, "misses": 0}
+
+# Global TTS cache instance
+TTS_CACHE = TTSCache(max_size=500, ttl_seconds=3600)  # 1 hour TTL
+
+# Common phrases to pre-cache (will be populated on first synthesis)
+COMMON_PHRASES = [
+    "Hello! How can I help you today?",
+    "Thank you for calling. How may I assist you?",
+    "I understand. Let me help you with that.",
+    "One moment please while I look that up.",
+    "Is there anything else I can help you with?",
+    "Thank you for your patience.",
+    "I'll transfer you to the right department.",
+    "Your appointment has been confirmed.",
+    "We'll send you a confirmation shortly.",
+    "Have a great day!",
+]
+
 VOICE_CHOICES = {
     "parler_tts": {
         "name": "Parler TTS",
@@ -865,9 +966,22 @@ def save_voice_config():
     return jsonify({"success": True, "config": VOICE_CONFIG})
 
 
+@app.route('/api/voice/cache-stats')
+def get_voice_cache_stats():
+    """Get TTS cache statistics."""
+    return jsonify(TTS_CACHE.get_stats())
+
+
+@app.route('/api/voice/cache-clear', methods=['POST'])
+def clear_voice_cache():
+    """Clear the TTS cache."""
+    TTS_CACHE.clear()
+    return jsonify({"success": True, "message": "TTS cache cleared"})
+
+
 @app.route('/api/voice/test', methods=['POST'])
 def test_voice():
-    """Test a voice with sample text - generates real audio."""
+    """Test a voice with sample text - generates real audio with caching."""
     import base64
     import time
 
@@ -877,8 +991,29 @@ def test_voice():
     provider = data.get('provider', 'edge_tts')
     emotion = data.get('emotion', 'neutral')
     skill_id = data.get('skill_id', 'general')
+    skip_cache = data.get('skip_cache', False)
 
     start_time = time.time()
+
+    # Check TTS cache first (unless explicitly skipped)
+    if not skip_cache:
+        cached_audio, cached_format = TTS_CACHE.get(
+            text, voice_id, provider, emotion=emotion
+        )
+        if cached_audio:
+            duration_ms = int((time.time() - start_time) * 1000)
+            audio_base64 = base64.b64encode(cached_audio).decode('utf-8') if isinstance(cached_audio, bytes) else cached_audio
+            return jsonify({
+                "success": True,
+                "voice_id": voice_id,
+                "provider": provider,
+                "text": text,
+                "duration_ms": duration_ms,
+                "audio_base64": audio_base64,
+                "audio_format": cached_format,
+                "cached": True,
+                "message": f"Served from cache ({duration_ms}ms)"
+            })
 
     # Parler TTS - Expressive voices via Modal GPU
     if provider == 'parler_tts':
@@ -912,6 +1047,11 @@ def test_voice():
                         duration_ms = int((time.time() - start_time) * 1000)
                         audio_base64 = base64.b64encode(audio_bytes).decode('utf-8') if isinstance(audio_bytes, bytes) else result[0]
 
+                        # Cache the synthesized audio
+                        if isinstance(audio_bytes, bytes):
+                            TTS_CACHE.set(text, f"{skill_id}_{emotion}", "parler_tts",
+                                         audio_bytes, "audio/wav", emotion=emotion)
+
                         add_activity(f"Parler TTS: {skill_id}/{emotion} ({duration_ms}ms)", "")
                         return jsonify({
                             "success": True,
@@ -921,6 +1061,7 @@ def test_voice():
                             "duration_ms": duration_ms,
                             "audio_base64": audio_base64,
                             "audio_format": "audio/wav",
+                            "cached": False,
                             "message": f"Generated with Parler TTS: {description}"
                         })
                     else:
@@ -991,6 +1132,9 @@ def test_voice():
         duration_ms = int((time.time() - start_time) * 1000)
         audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
 
+        # Cache the synthesized audio
+        TTS_CACHE.set(text, voice_id, provider, audio_bytes, "audio/mpeg", emotion=emotion)
+
         # Determine display provider name
         if voice_id.startswith('af_') or voice_id.startswith('am_') or voice_id.startswith('bf_') or voice_id.startswith('bm_'):
             display_provider = f"kokoro (via Google TTS)"
@@ -1008,6 +1152,7 @@ def test_voice():
             "duration_ms": duration_ms,
             "audio_base64": audio_base64,
             "audio_format": "audio/mpeg",
+            "cached": False,
             "message": message
         })
     except Exception as e:
@@ -4807,7 +4952,12 @@ DASHBOARD_HTML = '''
                                 <strong id="voice-name" style="color: var(--neon-cyan);"></strong>
                                 <span id="voice-meta" style="color: var(--text-secondary); margin-left: 0.5rem;"></span>
                             </div>
-                            <span id="voice-status" class="table-status deployed">Selected</span>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <button id="voice-preview-btn" class="btn btn-secondary btn-sm" style="display: none;" title="Play provider preview">
+                                    ▶ Preview
+                                </button>
+                                <span id="voice-status" class="table-status deployed">Selected</span>
+                            </div>
                         </div>
                     </div>
 
@@ -7053,81 +7203,165 @@ print("Training complete: adapters/${skillId}")`;
         }
 
         // ============================================================
-        // VOICE MANAGEMENT
+        // VOICE MANAGEMENT (Unified with Dynamic Fetching & Caching)
         // ============================================================
+
+        // Voice cache - stores dynamically fetched voices per provider
+        const voiceCache = {
+            providers: {},      // Cached voice lists by provider
+            timestamps: {},     // When each provider was last fetched
+            cacheDuration: 5 * 60 * 1000,  // 5 minute cache
+
+            get(provider) {
+                const cached = this.providers[provider];
+                const timestamp = this.timestamps[provider];
+                if (cached && timestamp && (Date.now() - timestamp) < this.cacheDuration) {
+                    return cached;
+                }
+                return null;
+            },
+
+            set(provider, voices) {
+                this.providers[provider] = voices;
+                this.timestamps[provider] = Date.now();
+            },
+
+            getVoice(provider, voiceId) {
+                const voices = this.providers[provider];
+                if (!voices) return null;
+                return voices.find(v => v.id === voiceId);
+            }
+        };
+
+        // Legacy fallback - static voice data
         let voiceProviders = {};
 
         async function loadVoiceProviders() {
+            // Load static providers as fallback (only needed once)
+            if (Object.keys(voiceProviders).length > 0) return;
             try {
                 const res = await fetch('/api/voice/providers');
                 voiceProviders = await res.json();
             } catch (e) {
-                console.error('Failed to load voice providers:', e);
+                console.error('Failed to load static voice providers:', e);
             }
         }
 
         async function loadVoiceSettingsVoices() {
             const provider = document.getElementById('voice-provider').value;
             const voiceSelect = document.getElementById('voice-select');
+            const detailsEl = document.getElementById('voice-details');
 
-            voiceSelect.innerHTML = '<option value="">Loading voices...</option>';
-            document.getElementById('voice-details').style.display = 'none';
+            if (detailsEl) detailsEl.style.display = 'none';
 
             if (!provider) {
                 voiceSelect.innerHTML = '<option value="">Select a provider first...</option>';
                 return;
             }
 
+            // Check cache first
+            const cached = voiceCache.get(provider);
+            if (cached) {
+                populateVoiceSelect(voiceSelect, cached, provider);
+                return;
+            }
+
+            voiceSelect.innerHTML = '<option value="">Loading voices...</option>';
+
             try {
-                // Use dynamic API endpoint for premium providers
+                // Fetch dynamically from unified endpoint
                 const res = await fetch(`/api/voice-lab/provider-voices/${provider}`);
                 const data = await res.json();
 
-                voiceSelect.innerHTML = '<option value="">Select a voice...</option>';
+                let voices = data.voices || [];
 
-                const voices = data.voices || [];
+                // If dynamic fetch failed, try static fallback
                 if (voices.length === 0 && data.error) {
-                    // Fall back to static if available
-                    if (voiceProviders[provider]) {
-                        voiceProviders[provider].voices.forEach(voice => {
-                            const option = document.createElement('option');
-                            option.value = voice.id;
-                            option.textContent = `${voice.name} (${voice.gender}, ${voice.style})`;
-                            voiceSelect.appendChild(option);
-                        });
+                    await loadVoiceProviders();  // Ensure static data loaded
+                    if (voiceProviders[provider]?.voices) {
+                        voices = voiceProviders[provider].voices;
                     }
-                    return;
                 }
 
-                voices.forEach(voice => {
-                    const option = document.createElement('option');
-                    option.value = voice.id;
-                    const gender = voice.gender || 'unknown';
-                    const style = voice.style || voice.description?.substring(0, 20) || 'default';
-                    option.textContent = `${voice.name} (${gender}, ${style})`;
-                    voiceSelect.appendChild(option);
-                });
+                // Cache the results
+                voiceCache.set(provider, voices);
+                populateVoiceSelect(voiceSelect, voices, provider);
+
             } catch (e) {
                 console.error('Failed to load provider voices:', e);
                 voiceSelect.innerHTML = '<option value="">Error loading voices</option>';
             }
         }
 
-        function selectVoice() {
-            const provider = document.getElementById('voice-provider').value;
-            const voiceId = document.getElementById('voice-select').value;
+        function populateVoiceSelect(selectEl, voices, provider) {
+            selectEl.innerHTML = '<option value="">Select a voice...</option>';
 
-            if (!provider || !voiceId || !voiceProviders[provider]) {
-                document.getElementById('voice-details').style.display = 'none';
+            if (!voices || voices.length === 0) {
+                selectEl.innerHTML = '<option value="">No voices available</option>';
                 return;
             }
 
-            const voice = voiceProviders[provider].voices.find(v => v.id === voiceId);
-            if (voice) {
-                document.getElementById('voice-details').style.display = 'block';
-                document.getElementById('voice-name').textContent = voice.name;
-                document.getElementById('voice-meta').textContent = `${voiceProviders[provider].name} | ${voice.gender} | ${voice.style}`;
+            voices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.id;
+                const gender = voice.gender || 'unknown';
+                const style = voice.style || voice.description?.substring(0, 20) || 'default';
+                option.textContent = `${voice.name} (${gender}, ${style})`;
+                // Store preview URL as data attribute if available
+                if (voice.preview_url) {
+                    option.dataset.previewUrl = voice.preview_url;
+                }
+                selectEl.appendChild(option);
+            });
+        }
+
+        function selectVoice() {
+            const provider = document.getElementById('voice-provider').value;
+            const voiceId = document.getElementById('voice-select').value;
+            const detailsEl = document.getElementById('voice-details');
+
+            if (!provider || !voiceId) {
+                if (detailsEl) detailsEl.style.display = 'none';
+                return;
             }
+
+            // Try cache first (dynamic voices)
+            let voice = voiceCache.getVoice(provider, voiceId);
+            let providerName = provider;
+
+            // Fallback to static data
+            if (!voice && voiceProviders[provider]) {
+                voice = voiceProviders[provider].voices?.find(v => v.id === voiceId);
+                providerName = voiceProviders[provider].name || provider;
+            }
+
+            if (voice && detailsEl) {
+                detailsEl.style.display = 'block';
+                document.getElementById('voice-name').textContent = voice.name;
+                document.getElementById('voice-meta').textContent =
+                    `${providerName} | ${voice.gender || 'unknown'} | ${voice.style || 'default'}`;
+
+                // Show/update preview button if preview URL available
+                const previewBtn = document.getElementById('voice-preview-btn');
+                if (previewBtn) {
+                    if (voice.preview_url) {
+                        previewBtn.style.display = 'inline-block';
+                        previewBtn.onclick = () => playVoicePreviewUrl(voice.preview_url);
+                    } else {
+                        previewBtn.style.display = 'none';
+                    }
+                }
+            }
+        }
+
+        // Play preview audio from provider URL
+        function playVoicePreviewUrl(url) {
+            if (!url) return;
+            const audio = new Audio(url);
+            audio.play().catch(e => {
+                console.error('Failed to play preview:', e);
+                alert('Could not play preview audio');
+            });
         }
 
         async function testVoice() {
@@ -7169,16 +7403,18 @@ print("Training complete: adapters/${skillId}")`;
                 if (result.success && result.audio_base64) {
                     // Create audio element and play
                     const audio = new Audio('data:' + result.audio_format + ';base64,' + result.audio_base64);
+                    const cacheStatus = result.cached ? '<span style="color: var(--neon-green);">CACHED</span>' : '<span style="color: var(--text-muted);">generated</span>';
                     audio.onended = () => {
-                        resultEl.innerHTML = `<div style="color: var(--neon-green);">&#9658; Audio played! (${result.duration_ms}ms to generate)</div>`;
+                        resultEl.innerHTML = `<div style="color: var(--neon-green);">&#9658; Audio played! (${result.duration_ms}ms - ${cacheStatus})</div>`;
                     };
                     audio.onerror = (e) => {
                         resultEl.innerHTML = `<div style="color: var(--neon-orange);">Playback error</div>`;
                     };
                     audio.play();
-                    resultEl.innerHTML = `<div style="color: var(--neon-cyan);">&#9658; Playing ${result.provider} audio...</div>`;
+                    resultEl.innerHTML = `<div style="color: var(--neon-cyan);">&#9658; Playing ${result.provider} audio... (${cacheStatus})</div>`;
                 } else if (result.success) {
-                    resultEl.innerHTML = `<div style="color: var(--neon-green);">Voice test completed in ${result.duration_ms}ms</div>`;
+                    const cacheStatus = result.cached ? 'from cache' : 'generated';
+                    resultEl.innerHTML = `<div style="color: var(--neon-green);">Voice test completed in ${result.duration_ms}ms (${cacheStatus})</div>`;
                 } else {
                     resultEl.innerHTML = `<div style="color: var(--neon-orange);">Error: ${result.error || result.message}</div>`;
                 }
