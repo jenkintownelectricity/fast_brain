@@ -2528,15 +2528,33 @@ def _train_elevenlabs_voice(project, samples):
 
 def _train_cartesia_voice(project, samples):
     """Clone a voice using Cartesia API."""
+    print(f"[CARTESIA DEBUG] Starting voice clone for project: {project.get('name')}")
+    print(f"[CARTESIA DEBUG] Samples count: {len(samples) if samples else 0}")
+
     api_key = None
     if USE_DATABASE:
         api_key = db.get_api_key('cartesia')
 
+    print(f"[CARTESIA DEBUG] API key set: {bool(api_key)}")
     if not api_key:
         return None, "Cartesia API key not configured"
 
     try:
         import requests
+
+        # Debug sample info
+        if samples:
+            sample = samples[0]
+            file_path = sample.get('file_path')
+            print(f"[CARTESIA DEBUG] Sample file_path: {file_path}")
+            print(f"[CARTESIA DEBUG] File exists: {os.path.exists(file_path) if file_path else 'N/A'}")
+            if file_path:
+                # List contents of the voice samples directory
+                samples_dir = Path("/data/voice_samples")
+                if samples_dir.exists():
+                    print(f"[CARTESIA DEBUG] Files in {samples_dir}: {list(samples_dir.iterdir())[:5]}")
+                else:
+                    print(f"[CARTESIA DEBUG] Directory {samples_dir} does not exist!")
 
         # Cartesia requires multipart form data with the audio file
         if samples and samples[0].get('file_path') and os.path.exists(samples[0]['file_path']):
@@ -2566,16 +2584,21 @@ def _train_cartesia_voice(project, samples):
                     data=data
                 )
 
+            print(f"[CARTESIA DEBUG] Response status: {response.status_code}")
             if response.status_code == 200 or response.status_code == 201:
                 result = response.json()
                 voice_id = result.get('id')
+                print(f"[CARTESIA DEBUG] Success! voice_id: {voice_id}")
                 return voice_id, f"Voice cloned with Cartesia: {voice_id}"
             else:
+                print(f"[CARTESIA DEBUG] Error response: {response.text}")
                 return None, f"Cartesia error ({response.status_code}): {response.text}"
 
-        return None, "No audio samples available"
+        print(f"[CARTESIA DEBUG] No audio samples available - file check failed")
+        return None, "No audio samples available - file not found on server"
 
     except Exception as e:
+        print(f"[CARTESIA DEBUG] Exception: {str(e)}")
         return None, f"Cartesia API error: {str(e)}"
 
 
