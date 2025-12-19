@@ -2511,13 +2511,20 @@ def _train_cartesia_voice(project, samples):
 
     try:
         import requests
+        import base64
 
         # Cartesia uses a different cloning approach
         # First sample is used as reference
         if samples and samples[0].get('file_path') and os.path.exists(samples[0]['file_path']):
-            with open(samples[0]['file_path'], 'rb') as f:
+            file_path = samples[0]['file_path']
+
+            # Read audio file and base64 encode it
+            with open(file_path, 'rb') as f:
                 audio_data = f.read()
 
+            audio_base64 = base64.b64encode(audio_data).decode('utf-8')
+
+            # Cartesia clone endpoint expects JSON with base64 audio
             response = requests.post(
                 'https://api.cartesia.ai/voices/clone/clip',
                 headers={
@@ -2526,8 +2533,10 @@ def _train_cartesia_voice(project, samples):
                     'Content-Type': 'application/json'
                 },
                 json={
-                    'clip': audio_data.hex(),  # Cartesia expects hex-encoded audio
+                    'clip': audio_base64,
                     'name': project['name'],
+                    'description': project.get('description', 'Cloned voice')[:500],
+                    'language': 'en'
                 }
             )
 
@@ -2535,7 +2544,7 @@ def _train_cartesia_voice(project, samples):
                 result = response.json()
                 return result.get('id'), f"Voice cloned with Cartesia: {result.get('id')}"
             else:
-                return None, f"Cartesia error: {response.text}"
+                return None, f"Cartesia error ({response.status_code}): {response.text}"
 
         return None, "No audio samples available"
 
