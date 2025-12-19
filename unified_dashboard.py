@@ -2578,7 +2578,8 @@ def test_voice_project_endpoint(project_id):
         if not voice_id and status != 'trained':
             return jsonify({
                 "success": False,
-                "error": f"Voice not trained. Add your {provider.title()} API key in Settings → API Keys, then click Train Voice."
+                "error": f"Voice not trained. Add your {provider.title()} API key in Settings → API Keys, then click Train Voice.",
+                "debug": {"provider": provider, "voice_id": voice_id, "status": status}
             }), 400
 
     try:
