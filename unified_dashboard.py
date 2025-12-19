@@ -2472,21 +2472,9 @@ def test_voice_project_endpoint(project_id):
             audio_data = _synthesize_edge_tts(project.get('base_voice', 'en-US-JennyNeural'), text)
 
         if audio_data and len(audio_data) > 100:
-            # Save to temporary file and return URL
-            audio_filename = f"test_{project_id}_{datetime.now().strftime('%H%M%S')}.mp3"
-            audio_path = VOICE_SAMPLES_DIR / audio_filename
-            with open(audio_path, 'wb') as f:
-                f.write(audio_data)
-
-            # Verify file was written
-            if not audio_path.exists() or audio_path.stat().st_size < 100:
-                return jsonify({
-                    "success": False,
-                    "error": "Audio file could not be saved. Check server logs."
-                }), 500
-
-            audio_url = f"/api/voice-lab/audio/{audio_filename}"
+            import base64
             audio_size = len(audio_data)
+            audio_base64 = base64.b64encode(audio_data).decode('utf-8')
 
             add_activity(f"Voice test: {project['name']}", "", "voice")
 
@@ -2499,7 +2487,8 @@ def test_voice_project_endpoint(project_id):
                 "text": text,
                 "duration_ms": estimated_duration_ms,
                 "audio_size_bytes": audio_size,
-                "audio_url": audio_url,
+                "audio_base64": audio_base64,
+                "audio_format": "audio/mpeg",
                 "provider": provider,
                 "message": f"Voice '{project['name']}' synthesized successfully ({audio_size:,} bytes)"
             })
@@ -8218,31 +8207,21 @@ print("Training complete! Adapter saved to adapters/${skill}")
                 });
                 const result = await res.json();
 
-                if (result.success && result.audio_url) {
+                if (result.success && result.audio_base64) {
+                    // Play base64 audio directly (like Settings voice test)
                     const audioPlayer = document.getElementById('vl-edit-audio-player');
-                    const audio = document.getElementById('vl-edit-audio');
+                    const audioEl = document.getElementById('vl-edit-audio');
 
-                    // Clear old handlers
-                    audio.oncanplaythrough = null;
-                    audio.onerror = null;
-
-                    // Set up new handlers before loading
-                    audio.oncanplaythrough = function() {
-                        console.log('Audio loaded, duration:', audio.duration);
-                        audio.play().catch(e => {
-                            console.error('Play error:', e);
-                            showEditMessage('Playback blocked. Click the audio player to play.', 'info');
-                        });
-                    };
-                    audio.onerror = function(e) {
-                        console.error('Audio load error:', e);
-                        showEditMessage('Audio failed to load. Try again.', 'error');
-                    };
-
-                    // Set source and load
-                    audio.src = result.audio_url;
-                    audio.load();
+                    // Create audio from base64
+                    const audioSrc = 'data:' + result.audio_format + ';base64,' + result.audio_base64;
+                    audioEl.src = audioSrc;
                     audioPlayer.style.display = 'block';
+
+                    // Auto-play
+                    audioEl.play().catch(e => {
+                        console.error('Play error:', e);
+                        showEditMessage('Click the audio player to play.', 'info');
+                    });
 
                     const sizeInfo = result.audio_size_bytes ? ` (${(result.audio_size_bytes / 1024).toFixed(1)} KB)` : '';
                     showEditMessage((result.message || 'Audio generated!') + sizeInfo, 'success');
