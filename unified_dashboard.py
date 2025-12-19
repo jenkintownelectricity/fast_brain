@@ -683,6 +683,16 @@ def debug_voice_train(project_id):
     return jsonify(result)
 
 
+@app.route('/api/fix-voice-provider/<project_id>/<provider>')
+def fix_voice_provider(project_id, provider):
+    """Force-update voice project provider (debug helper)."""
+    if USE_DATABASE:
+        project = db.update_voice_project(project_id, provider=provider, status='draft')
+        if project:
+            return jsonify({"success": True, "message": f"Provider changed to {provider}", "project": project})
+    return jsonify({"error": "Failed to update provider"})
+
+
 @app.route('/api/test-llm', methods=['POST'])
 def test_llm():
     """Test a single LLM provider with real API call."""
