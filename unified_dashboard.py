@@ -674,11 +674,24 @@ def debug_voice_train(project_id):
         }
         result["samples"].append(sample_info)
 
-    # Check API key
-    api_key = db.get_api_key('elevenlabs')
-    result["elevenlabs_key_set"] = bool(api_key)
+    # Check API keys
+    provider_key = project.get('provider', 'elevenlabs')
+    api_key = db.get_api_key(provider_key)
+    result[f"{provider_key}_key_set"] = bool(api_key)
     if api_key:
-        result["elevenlabs_key_preview"] = f"{api_key[:4]}...{api_key[-4:]}"
+        result[f"{provider_key}_key_preview"] = f"{api_key[:4]}...{api_key[-4:]}"
+
+    # Also check Cartesia if not already the provider
+    if provider_key != 'cartesia':
+        cartesia_key = db.get_api_key('cartesia')
+        result["cartesia_key_set"] = bool(cartesia_key)
+        if cartesia_key:
+            result["cartesia_key_preview"] = f"{cartesia_key[:4]}...{cartesia_key[-4:]}"
+
+    # Add training timestamps
+    result["training_started"] = project.get('training_started')
+    result["training_completed"] = project.get('training_completed')
+    result["updated_at"] = project.get('updated_at')
 
     return jsonify(result)
 
@@ -2400,12 +2413,19 @@ def train_voice_endpoint(project_id):
             message = f"Voice configured for {provider}"
 
         if voice_id:
-            db.update_voice_project(
+            print(f"[TRAIN DEBUG] Got voice_id: {voice_id}, updating project {project_id}")
+            updated_project = db.update_voice_project(
                 project_id,
                 status='trained',
                 voice_id=voice_id,
                 training_completed=datetime.now().isoformat()
             )
+            print(f"[TRAIN DEBUG] update_voice_project returned: status={updated_project.get('status') if updated_project else 'None'}, voice_id={updated_project.get('voice_id') if updated_project else 'None'}")
+
+            # Verify the update persisted by reading again
+            verify_project = db.get_voice_project(project_id)
+            print(f"[TRAIN DEBUG] Verification read: status={verify_project.get('status') if verify_project else 'None'}, voice_id={verify_project.get('voice_id') if verify_project else 'None'}")
+
             job['status'] = 'completed'
             job['progress'] = 100
 
@@ -2415,7 +2435,13 @@ def train_voice_endpoint(project_id):
                 "success": True,
                 "message": message,
                 "voice_id": voice_id,
-                "provider": provider
+                "provider": provider,
+                "debug": {
+                    "updated_status": updated_project.get('status') if updated_project else None,
+                    "updated_voice_id": updated_project.get('voice_id') if updated_project else None,
+                    "verified_status": verify_project.get('status') if verify_project else None,
+                    "verified_voice_id": verify_project.get('voice_id') if verify_project else None
+                }
             })
         else:
             # Training failed - no voice_id returned (usually missing API key)
@@ -2560,6 +2586,7 @@ def test_voice_project_endpoint(project_id):
         return jsonify({"error": "Database not available"}), 500
 
     project = db.get_voice_project(project_id)
+    print(f"[TEST DEBUG] Project {project_id}: status={project.get('status') if project else 'None'}, voice_id={project.get('voice_id') if project else 'None'}, provider={project.get('provider') if project else 'None'}")
     if not project:
         return jsonify({"error": "Project not found"}), 404
 
@@ -2569,6 +2596,7 @@ def test_voice_project_endpoint(project_id):
     provider = project.get('provider', 'elevenlabs')
     voice_id = project.get('voice_id')
     status = project.get('status', 'draft')
+    print(f"[TEST DEBUG] Checking: provider={provider}, voice_id={voice_id}, status={status}")
 
     # Free providers that don't need voice cloning/training
     free_providers = ['edge_tts', 'parler_tts', 'kokoro', 'chatterbox', 'gtts']
