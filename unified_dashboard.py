@@ -193,6 +193,24 @@ VOICE_CHOICES = {
             {"id": "cartesia_default", "name": "Default", "gender": "neutral", "style": "natural"},
             {"id": "cartesia_custom", "name": "Custom Voice", "gender": "custom", "style": "cloned"},
         ]
+    },
+    "deepgram": {
+        "name": "Deepgram Aura",
+        "provider": "Deepgram (Paid)",
+        "voices": [
+            {"id": "aura-asteria-en", "name": "Asteria", "gender": "female", "style": "american"},
+            {"id": "aura-luna-en", "name": "Luna", "gender": "female", "style": "american"},
+            {"id": "aura-stella-en", "name": "Stella", "gender": "female", "style": "american"},
+            {"id": "aura-athena-en", "name": "Athena", "gender": "female", "style": "british"},
+            {"id": "aura-hera-en", "name": "Hera", "gender": "female", "style": "american"},
+            {"id": "aura-orion-en", "name": "Orion", "gender": "male", "style": "american"},
+            {"id": "aura-arcas-en", "name": "Arcas", "gender": "male", "style": "american"},
+            {"id": "aura-perseus-en", "name": "Perseus", "gender": "male", "style": "american"},
+            {"id": "aura-angus-en", "name": "Angus", "gender": "male", "style": "irish"},
+            {"id": "aura-orpheus-en", "name": "Orpheus", "gender": "male", "style": "american"},
+            {"id": "aura-helios-en", "name": "Helios", "gender": "male", "style": "british"},
+            {"id": "aura-zeus-en", "name": "Zeus", "gender": "male", "style": "american"},
+        ]
     }
 }
 
@@ -2177,6 +2195,225 @@ def get_fast_brain_errors():
         "errors": FAST_BRAIN_CONFIG['stats'].get('errors', [])[-20:],  # Last 20 errors
         "total": len(FAST_BRAIN_CONFIG['stats'].get('errors', [])),
     })
+
+
+# =============================================================================
+# API ENDPOINTS - VOICE PROVIDER DYNAMIC FETCHING
+# =============================================================================
+
+def fetch_elevenlabs_voices():
+    """Fetch voices from ElevenLabs API."""
+    try:
+        import httpx
+        api_key = db.get_api_key('elevenlabs') if USE_DATABASE else None
+        if not api_key:
+            return {"error": "ElevenLabs API key not configured", "voices": []}
+
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(
+                "https://api.elevenlabs.io/v1/voices",
+                headers={"xi-api-key": api_key}
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                voices = []
+                for voice in data.get("voices", []):
+                    voices.append({
+                        "id": voice.get("voice_id"),
+                        "name": voice.get("name"),
+                        "gender": voice.get("labels", {}).get("gender", "unknown"),
+                        "style": voice.get("labels", {}).get("use_case", voice.get("labels", {}).get("description", "general")),
+                        "category": voice.get("category", "premade"),
+                        "preview_url": voice.get("preview_url"),
+                        "description": voice.get("description", ""),
+                        "labels": voice.get("labels", {})
+                    })
+                return {"success": True, "voices": voices, "provider": "elevenlabs"}
+            else:
+                return {"error": f"ElevenLabs API error: {response.status_code}", "voices": []}
+    except Exception as e:
+        return {"error": str(e), "voices": []}
+
+
+def fetch_cartesia_voices():
+    """Fetch voices from Cartesia API."""
+    try:
+        import httpx
+        api_key = db.get_api_key('cartesia') if USE_DATABASE else None
+        if not api_key:
+            return {"error": "Cartesia API key not configured", "voices": []}
+
+        with httpx.Client(timeout=30.0) as client:
+            all_voices = []
+            has_more = True
+            starting_after = None
+
+            while has_more:
+                params = {"limit": 100}
+                if starting_after:
+                    params["starting_after"] = starting_after
+
+                response = client.get(
+                    "https://api.cartesia.ai/voices",
+                    headers={
+                        "X-API-Key": api_key,
+                        "Cartesia-Version": "2024-11-13"
+                    },
+                    params=params
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    voices_data = data if isinstance(data, list) else data.get("data", data.get("voices", []))
+
+                    for voice in voices_data:
+                        all_voices.append({
+                            "id": voice.get("id"),
+                            "name": voice.get("name"),
+                            "gender": voice.get("gender", "unknown"),
+                            "style": voice.get("description", "natural")[:50] if voice.get("description") else "natural",
+                            "language": voice.get("language", "en"),
+                            "is_public": voice.get("is_public", False),
+                            "is_owner": voice.get("is_owner", False),
+                            "description": voice.get("description", "")
+                        })
+
+                    # Handle pagination
+                    has_more = data.get("has_more", False) if isinstance(data, dict) else False
+                    if has_more and voices_data:
+                        starting_after = voices_data[-1].get("id")
+                    else:
+                        has_more = False
+                else:
+                    return {"error": f"Cartesia API error: {response.status_code}", "voices": all_voices}
+
+            return {"success": True, "voices": all_voices, "provider": "cartesia"}
+    except Exception as e:
+        return {"error": str(e), "voices": []}
+
+
+def fetch_deepgram_voices():
+    """Fetch voices from Deepgram API (TTS/Aura voices)."""
+    try:
+        import httpx
+        api_key = db.get_api_key('deepgram') if USE_DATABASE else None
+        if not api_key:
+            return {"error": "Deepgram API key not configured", "voices": []}
+
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(
+                "https://api.deepgram.com/v1/models",
+                headers={"Authorization": f"Token {api_key}"}
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                voices = []
+
+                # Extract TTS models from response
+                tts_models = data.get("tts", [])
+                for model in tts_models:
+                    metadata = model.get("metadata", {})
+                    voices.append({
+                        "id": model.get("canonical_name", model.get("name")),
+                        "name": model.get("name", "").title(),
+                        "gender": "male" if "masculine" in metadata.get("tags", []) else "female" if "feminine" in metadata.get("tags", []) else "neutral",
+                        "style": metadata.get("accent", "american"),
+                        "languages": model.get("languages", ["en"]),
+                        "preview_url": metadata.get("sample"),
+                        "image_url": metadata.get("image"),
+                        "version": model.get("version", "")
+                    })
+
+                return {"success": True, "voices": voices, "provider": "deepgram"}
+            else:
+                return {"error": f"Deepgram API error: {response.status_code}", "voices": []}
+    except Exception as e:
+        return {"error": str(e), "voices": []}
+
+
+def get_openai_voices():
+    """Return OpenAI TTS voices (static list - OpenAI doesn't have a list endpoint)."""
+    voices = [
+        {"id": "alloy", "name": "Alloy", "gender": "neutral", "style": "balanced", "description": "Balanced, versatile voice"},
+        {"id": "ash", "name": "Ash", "gender": "male", "style": "conversational", "description": "Warm conversational voice"},
+        {"id": "ballad", "name": "Ballad", "gender": "male", "style": "narrative", "description": "Expressive storytelling voice"},
+        {"id": "coral", "name": "Coral", "gender": "female", "style": "warm", "description": "Friendly warm voice"},
+        {"id": "echo", "name": "Echo", "gender": "male", "style": "neutral", "description": "Clear neutral voice"},
+        {"id": "fable", "name": "Fable", "gender": "neutral", "style": "storytelling", "description": "Expressive British accent"},
+        {"id": "onyx", "name": "Onyx", "gender": "male", "style": "deep", "description": "Deep authoritative voice"},
+        {"id": "nova", "name": "Nova", "gender": "female", "style": "warm", "description": "Warm friendly voice"},
+        {"id": "sage", "name": "Sage", "gender": "female", "style": "professional", "description": "Professional clear voice"},
+        {"id": "shimmer", "name": "Shimmer", "gender": "female", "style": "expressive", "description": "Bright expressive voice"},
+        {"id": "verse", "name": "Verse", "gender": "male", "style": "dynamic", "description": "Dynamic engaging voice"},
+    ]
+    return {"success": True, "voices": voices, "provider": "openai"}
+
+
+def get_static_voices(provider):
+    """Return static voice list for providers without dynamic API."""
+    if provider in VOICE_CHOICES:
+        return {
+            "success": True,
+            "voices": VOICE_CHOICES[provider]["voices"],
+            "provider": provider,
+            "static": True
+        }
+    return {"error": f"Unknown provider: {provider}", "voices": []}
+
+
+@app.route('/api/voice-lab/provider-voices/<provider>')
+def get_provider_voices(provider):
+    """Fetch voices dynamically from a specific provider's API."""
+    try:
+        # Providers with dynamic API fetching
+        if provider == "elevenlabs":
+            result = fetch_elevenlabs_voices()
+        elif provider == "cartesia":
+            result = fetch_cartesia_voices()
+        elif provider == "deepgram":
+            result = fetch_deepgram_voices()
+        elif provider == "openai":
+            result = get_openai_voices()
+        # Providers with static voice lists
+        elif provider in VOICE_CHOICES:
+            result = get_static_voices(provider)
+        else:
+            return jsonify({"error": f"Unknown provider: {provider}", "voices": []}), 400
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e), "voices": []}), 500
+
+
+@app.route('/api/voice-lab/all-provider-voices')
+def get_all_provider_voices():
+    """Fetch voices from all configured providers."""
+    results = {}
+
+    # Dynamic providers
+    dynamic_providers = ["elevenlabs", "cartesia", "deepgram", "openai"]
+    for provider in dynamic_providers:
+        try:
+            if provider == "elevenlabs":
+                results[provider] = fetch_elevenlabs_voices()
+            elif provider == "cartesia":
+                results[provider] = fetch_cartesia_voices()
+            elif provider == "deepgram":
+                results[provider] = fetch_deepgram_voices()
+            elif provider == "openai":
+                results[provider] = get_openai_voices()
+        except Exception as e:
+            results[provider] = {"error": str(e), "voices": []}
+
+    # Static providers
+    static_providers = ["edge_tts", "parler_tts", "kokoro", "azure"]
+    for provider in static_providers:
+        if provider in VOICE_CHOICES:
+            results[provider] = get_static_voices(provider)
+
+    return jsonify(results)
 
 
 # =============================================================================
@@ -5569,6 +5806,7 @@ pipeline = Pipeline([
             <!-- Sub-tabs -->
             <div class="sub-tabs">
                 <button class="sub-tab-btn active" onclick="showVoiceLabTab('projects')">Voice Projects</button>
+                <button class="sub-tab-btn" onclick="showVoiceLabTab('browse')">Browse Voices</button>
                 <button class="sub-tab-btn" onclick="showVoiceLabTab('create')">Create Voice</button>
                 <button class="sub-tab-btn" onclick="showVoiceLabTab('training')">Training Queue</button>
                 <button class="sub-tab-btn" onclick="showVoiceLabTab('skills')">Skill Training</button>
@@ -5584,6 +5822,51 @@ pipeline = Pipeline([
                     <div id="voice-projects-list" class="skills-grid">
                         <div style="color: var(--text-secondary); padding: 2rem; text-align: center;">
                             No voice projects yet. Click "New Voice" to create one.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Browse Voices from Providers -->
+            <div id="voicelab-browse" class="sub-tab-content">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">Browse</span> Voice Library</div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <select class="form-select" id="vl-browse-provider" onchange="loadProviderVoices()" style="width: auto;">
+                                <option value="">-- Select Provider --</option>
+                                <optgroup label="Premium (API Key Required)">
+                                    <option value="elevenlabs">ElevenLabs</option>
+                                    <option value="cartesia">Cartesia</option>
+                                    <option value="deepgram">Deepgram (Aura)</option>
+                                    <option value="openai">OpenAI TTS</option>
+                                </optgroup>
+                                <optgroup label="Free / Built-in">
+                                    <option value="edge_tts">Edge TTS (Microsoft)</option>
+                                    <option value="parler_tts">Parler TTS (GPU)</option>
+                                    <option value="kokoro">Kokoro</option>
+                                    <option value="azure">Azure TTS</option>
+                                </optgroup>
+                            </select>
+                            <button class="btn btn-secondary btn-sm" onclick="loadProviderVoices()">Refresh</button>
+                        </div>
+                    </div>
+                    <div id="vl-browse-status" style="margin: 1rem 0; color: var(--text-secondary);"></div>
+                    <div id="vl-browse-filters" style="margin-bottom: 1rem; display: none;">
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                            <input type="text" class="form-input" id="vl-browse-search" placeholder="Search voices..." style="width: 200px;" oninput="filterBrowseVoices()">
+                            <select class="form-select" id="vl-browse-gender" style="width: auto;" onchange="filterBrowseVoices()">
+                                <option value="">All Genders</option>
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                                <option value="neutral">Neutral</option>
+                            </select>
+                            <span id="vl-browse-count" style="color: var(--neon-cyan);"></span>
+                        </div>
+                    </div>
+                    <div id="vl-browse-voices" class="voice-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+                        <div style="color: var(--text-secondary); padding: 2rem; text-align: center; grid-column: 1 / -1;">
+                            Select a provider above to browse available voices.
                         </div>
                     </div>
                 </div>
@@ -5618,12 +5901,19 @@ pipeline = Pipeline([
                                 <div class="form-group">
                                     <label class="form-label">Provider</label>
                                     <select class="form-select" id="vl-edit-provider">
-                                        <option value="elevenlabs">ElevenLabs</option>
-                                        <option value="cartesia">Cartesia</option>
-                                        <option value="edge_tts">Edge TTS (Free)</option>
-                                        <option value="parler_tts">Parler TTS</option>
-                                        <option value="xtts">XTTS-v2</option>
-                                        <option value="openvoice">OpenVoice</option>
+                                        <optgroup label="Premium (Live API)">
+                                            <option value="elevenlabs">ElevenLabs</option>
+                                            <option value="cartesia">Cartesia</option>
+                                            <option value="deepgram">Deepgram (Aura)</option>
+                                            <option value="openai">OpenAI TTS</option>
+                                        </optgroup>
+                                        <optgroup label="Free / Open Source">
+                                            <option value="parler_tts">Parler TTS</option>
+                                            <option value="edge_tts">Edge TTS (Free)</option>
+                                            <option value="kokoro">Kokoro</option>
+                                            <option value="xtts">XTTS-v2</option>
+                                            <option value="openvoice">OpenVoice</option>
+                                        </optgroup>
                                     </select>
                                 </div>
                                 <div class="form-group">
@@ -5748,17 +6038,19 @@ pipeline = Pipeline([
                             <div class="form-group">
                                 <label class="form-label">Base Voice Provider</label>
                                 <select class="form-select" id="vl-provider" onchange="loadVLProviderVoices()">
+                                    <optgroup label="Premium (Live API)">
+                                        <option value="elevenlabs">ElevenLabs</option>
+                                        <option value="cartesia">Cartesia</option>
+                                        <option value="deepgram">Deepgram (Aura)</option>
+                                        <option value="openai">OpenAI TTS</option>
+                                    </optgroup>
                                     <optgroup label="Free / Open Source">
                                         <option value="parler_tts">Parler TTS (Expressive - GPU)</option>
                                         <option value="edge_tts">Edge TTS (Microsoft - Free)</option>
-                                        <option value="kokoro">Kokoro (Edge TTS Fallback)</option>
+                                        <option value="kokoro">Kokoro</option>
                                         <option value="chatterbox">Chatterbox</option>
                                         <option value="xtts">XTTS-v2 (Coqui)</option>
                                         <option value="openvoice">OpenVoice</option>
-                                    </optgroup>
-                                    <optgroup label="Paid Services">
-                                        <option value="elevenlabs">ElevenLabs</option>
-                                        <option value="cartesia">Cartesia</option>
                                     </optgroup>
                                 </select>
                             </div>
@@ -8119,33 +8411,188 @@ print("Training complete! Adapter saved to adapters/${skill}")
             }
         }
 
-        // Voice Lab - Load provider voices for dropdown
-        function loadVLProviderVoices() {
+        // Voice Lab - Load provider voices for dropdown (Dynamic API)
+        let dynamicVoiceCache = {};  // Cache for dynamically loaded voices
+        let currentBrowseVoices = []; // Current voices for filtering in browse tab
+
+        async function loadVLProviderVoices() {
             const provider = document.getElementById('vl-provider').value;
+            const voiceSelect = document.getElementById('vl-base-voice');
+            voiceSelect.innerHTML = '<option value="">Loading voices...</option>';
+
+            if (!provider) {
+                voiceSelect.innerHTML = '<option value="">Select a provider first...</option>';
+                return;
+            }
+
+            try {
+                // Use dynamic API endpoint
+                const res = await fetch(`/api/voice-lab/provider-voices/${provider}`);
+                const data = await res.json();
+
+                if (data.error) {
+                    voiceSelect.innerHTML = `<option value="">${data.error}</option>`;
+                    // Fall back to static if available
+                    if (voiceProviders[provider]) {
+                        populateVLVoices(provider, voiceProviders[provider].voices);
+                    }
+                    return;
+                }
+
+                // Cache the dynamic voices
+                dynamicVoiceCache[provider] = data.voices;
+                populateVLVoices(provider, data.voices);
+            } catch (e) {
+                console.error('Failed to load provider voices:', e);
+                voiceSelect.innerHTML = '<option value="">Error loading voices</option>';
+                // Fall back to static
+                if (voiceProviders[provider]) {
+                    populateVLVoices(provider, voiceProviders[provider].voices);
+                }
+            }
+        }
+
+        function populateVLVoices(provider, voices) {
             const voiceSelect = document.getElementById('vl-base-voice');
             voiceSelect.innerHTML = '<option value="">Select a voice...</option>';
 
-            if (!provider || !voiceProviders[provider]) {
-                // Load providers if not already loaded
-                fetch('/api/voice/providers').then(r => r.json()).then(data => {
-                    voiceProviders = data;
-                    populateVLVoices(provider);
-                });
+            if (!voices || voices.length === 0) {
+                voiceSelect.innerHTML = '<option value="">No voices available</option>';
                 return;
             }
-            populateVLVoices(provider);
-        }
 
-        function populateVLVoices(provider) {
-            const voiceSelect = document.getElementById('vl-base-voice');
-            if (!voiceProviders[provider]) return;
-
-            voiceProviders[provider].voices.forEach(voice => {
+            voices.forEach(voice => {
                 const option = document.createElement('option');
                 option.value = voice.id;
-                option.textContent = `${voice.name} (${voice.gender}, ${voice.style})`;
+                const gender = voice.gender || 'unknown';
+                const style = voice.style || voice.description?.substring(0, 20) || 'default';
+                option.textContent = `${voice.name} (${gender}, ${style})`;
                 voiceSelect.appendChild(option);
             });
+        }
+
+        // Browse Voices from Providers
+        async function loadProviderVoices() {
+            const provider = document.getElementById('vl-browse-provider').value;
+            const statusEl = document.getElementById('vl-browse-status');
+            const filtersEl = document.getElementById('vl-browse-filters');
+            const voicesEl = document.getElementById('vl-browse-voices');
+
+            if (!provider) {
+                statusEl.innerHTML = '';
+                filtersEl.style.display = 'none';
+                voicesEl.innerHTML = '<div style="color: var(--text-secondary); padding: 2rem; text-align: center; grid-column: 1 / -1;">Select a provider above to browse available voices.</div>';
+                return;
+            }
+
+            statusEl.innerHTML = '<span style="color: var(--neon-cyan);">Loading voices from ' + provider + '...</span>';
+            voicesEl.innerHTML = '<div style="color: var(--text-secondary); padding: 2rem; text-align: center; grid-column: 1 / -1;"><div class="loading-spinner"></div> Loading...</div>';
+
+            try {
+                const res = await fetch(`/api/voice-lab/provider-voices/${provider}`);
+                const data = await res.json();
+
+                if (data.error && (!data.voices || data.voices.length === 0)) {
+                    statusEl.innerHTML = `<span style="color: var(--neon-orange);">${data.error}</span>`;
+                    voicesEl.innerHTML = `<div style="color: var(--text-secondary); padding: 2rem; text-align: center; grid-column: 1 / -1;">
+                        ${data.error.includes('API key') ? 'Configure your API key in Settings → API Keys' : 'No voices found'}
+                    </div>`;
+                    filtersEl.style.display = 'none';
+                    return;
+                }
+
+                currentBrowseVoices = data.voices || [];
+                const isStatic = data.static ? ' (cached)' : ' (live)';
+                statusEl.innerHTML = `<span style="color: var(--neon-green);">Loaded ${currentBrowseVoices.length} voices${isStatic}</span>`;
+                filtersEl.style.display = 'block';
+                document.getElementById('vl-browse-search').value = '';
+                document.getElementById('vl-browse-gender').value = '';
+                renderBrowseVoices(currentBrowseVoices);
+            } catch (e) {
+                console.error('Failed to load provider voices:', e);
+                statusEl.innerHTML = `<span style="color: var(--neon-pink);">Error: ${e.message}</span>`;
+                voicesEl.innerHTML = '<div style="color: var(--text-secondary); padding: 2rem; text-align: center; grid-column: 1 / -1;">Failed to load voices</div>';
+            }
+        }
+
+        function filterBrowseVoices() {
+            const search = document.getElementById('vl-browse-search').value.toLowerCase();
+            const gender = document.getElementById('vl-browse-gender').value;
+
+            let filtered = currentBrowseVoices.filter(voice => {
+                const matchesSearch = !search ||
+                    voice.name?.toLowerCase().includes(search) ||
+                    voice.description?.toLowerCase().includes(search) ||
+                    voice.style?.toLowerCase().includes(search);
+                const matchesGender = !gender || voice.gender?.toLowerCase() === gender;
+                return matchesSearch && matchesGender;
+            });
+
+            renderBrowseVoices(filtered);
+        }
+
+        function renderBrowseVoices(voices) {
+            const voicesEl = document.getElementById('vl-browse-voices');
+            const countEl = document.getElementById('vl-browse-count');
+            countEl.textContent = `${voices.length} voice${voices.length !== 1 ? 's' : ''}`;
+
+            if (voices.length === 0) {
+                voicesEl.innerHTML = '<div style="color: var(--text-secondary); padding: 2rem; text-align: center; grid-column: 1 / -1;">No voices match your filters</div>';
+                return;
+            }
+
+            voicesEl.innerHTML = voices.map(voice => {
+                const genderIcon = voice.gender === 'male' ? '♂' : voice.gender === 'female' ? '♀' : '◎';
+                const genderColor = voice.gender === 'male' ? 'var(--neon-cyan)' : voice.gender === 'female' ? 'var(--neon-pink)' : 'var(--neon-purple)';
+                const previewButton = voice.preview_url ? `<button class="btn btn-secondary btn-sm" onclick="playVoicePreview('${voice.preview_url}')" title="Preview">▶</button>` : '';
+
+                return `
+                    <div class="glass-card voice-card" style="padding: 1rem; background: var(--glass-surface);">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                            <div>
+                                <div style="font-weight: 600; color: var(--text-primary);">${voice.name || 'Unknown'}</div>
+                                <div style="font-size: 0.85rem; color: ${genderColor};">${genderIcon} ${voice.gender || 'unknown'}</div>
+                            </div>
+                            <div style="display: flex; gap: 0.25rem;">
+                                ${previewButton}
+                                <button class="btn btn-primary btn-sm" onclick="useVoiceForProject('${voice.id}', '${(voice.name || '').replace(/'/g, "\\'")}')" title="Use in Project">Use</button>
+                            </div>
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                            ${voice.style || voice.description?.substring(0, 80) || 'No description'}
+                        </div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">
+                            ID: <code style="background: var(--glass-surface); padding: 0 4px; border-radius: 3px;">${voice.id}</code>
+                        </div>
+                        ${voice.category ? `<div style="font-size: 0.75rem; color: var(--neon-orange); margin-top: 0.25rem;">${voice.category}</div>` : ''}
+                        ${voice.languages ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Languages: ${Array.isArray(voice.languages) ? voice.languages.join(', ') : voice.languages}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function playVoicePreview(url) {
+            const audio = new Audio(url);
+            audio.play().catch(e => console.error('Failed to play preview:', e));
+        }
+
+        function useVoiceForProject(voiceId, voiceName) {
+            // Switch to create tab and set the voice
+            showVoiceLabTab('create');
+            const provider = document.getElementById('vl-browse-provider').value;
+            if (provider) {
+                document.getElementById('vl-provider').value = provider;
+                // Load voices for this provider then select the voice
+                loadVLProviderVoices().then(() => {
+                    setTimeout(() => {
+                        document.getElementById('vl-base-voice').value = voiceId;
+                    }, 500);
+                });
+            }
+            // Set a suggested name
+            if (!document.getElementById('vl-name').value) {
+                document.getElementById('vl-name').value = voiceName + ' Clone';
+            }
         }
 
         async function createVoiceProject() {
