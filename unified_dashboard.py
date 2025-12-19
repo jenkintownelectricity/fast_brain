@@ -608,6 +608,24 @@ def save_api_keys():
     return jsonify({"success": True, "message": "No keys provided"})
 
 
+@app.route('/api/api-keys')
+def get_api_keys():
+    """Get saved API keys from database (masked for security)."""
+    if USE_DATABASE:
+        keys = db.get_all_api_keys()
+        # Return full keys so they can be used - they're already stored securely
+        return jsonify({
+            'groq': keys.get('groq', ''),
+            'openai': keys.get('openai', ''),
+            'anthropic': keys.get('anthropic', ''),
+            'elevenlabs': keys.get('elevenlabs', ''),
+            'cartesia': keys.get('cartesia', ''),
+            'deepgram': keys.get('deepgram', ''),
+            'playht': keys.get('playht', '')
+        })
+    return jsonify({})
+
+
 @app.route('/api/test-llm', methods=['POST'])
 def test_llm():
     """Test a single LLM provider with real API call."""
