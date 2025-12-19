@@ -2626,6 +2626,44 @@ def serve_voice_audio(filename):
     return jsonify({"error": "File not found or empty"}), 404
 
 
+@app.route('/api/voice-lab/debug-tts')
+def debug_tts():
+    """Debug endpoint to test TTS generation."""
+    import base64
+    import io
+
+    results = {
+        "gtts_available": False,
+        "gtts_error": None,
+        "audio_generated": False,
+        "audio_size": 0,
+        "audio_base64": None
+    }
+
+    try:
+        from gtts import gTTS
+        results["gtts_available"] = True
+
+        # Try to generate audio
+        tts = gTTS(text="Hello, this is a test.", lang='en')
+        audio_buffer = io.BytesIO()
+        tts.write_to_fp(audio_buffer)
+        audio_bytes = audio_buffer.getvalue()
+
+        results["audio_size"] = len(audio_bytes)
+        results["audio_generated"] = len(audio_bytes) > 100
+
+        if audio_bytes:
+            results["audio_base64"] = base64.b64encode(audio_bytes).decode('utf-8')
+
+    except Exception as e:
+        results["gtts_error"] = str(e)
+        import traceback
+        results["traceback"] = traceback.format_exc()
+
+    return jsonify(results)
+
+
 @app.route('/api/voice-lab/training-status')
 def get_voice_training_status():
     """Get status of all voice training jobs."""
