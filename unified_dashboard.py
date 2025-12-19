@@ -2287,7 +2287,8 @@ def train_voice_endpoint(project_id):
     if not project:
         return jsonify({"error": "Project not found"}), 404
 
-    samples = project.get('samples', [])
+    # Get samples separately from database
+    samples = db.get_voice_samples(project_id)
     if len(samples) < 1:
         return jsonify({
             "success": False,
