@@ -342,11 +342,13 @@ worker/
 ├── requirements.txt        # Worker dependencies
 └── test_fast_brain.py      # Test client
 
-docs/visuals/               # Visual HTML documentation
-├── index.html              # Documentation library index
-├── dashboard-improvement-plan.html
-├── 2024-12-18_fast-brain-hive215-architecture.html
-└── 2024-12-18_unified-dashboard-features.html
+docs/
+├── HIVE215_INTEGRATION_GUIDE.md  # Complete integration guide for voice agents
+└── visuals/                      # Visual HTML documentation
+    ├── index.html                # Documentation library index
+    ├── dashboard-improvement-plan.html
+    ├── 2024-12-18_fast-brain-hive215-architecture.html
+    └── 2024-12-18_unified-dashboard-features.html
 ```
 
 ---
