@@ -439,21 +439,76 @@ When interested, say: "That's great! The easiest next step is to book a free dem
 RUNTIME_SKILLS = {}
 
 
+def _load_database_skill(skill_id: str) -> Optional[dict]:
+    """Load a skill from the persistent database (if available)."""
+    try:
+        import sys
+        sys.path.insert(0, "/root")
+        os.environ.setdefault('HIVE215_DB_PATH', '/data/hive215.db')
+        import database as db
+        skill = db.get_skill(skill_id)
+        if skill:
+            # Convert to format expected by get_skill()
+            return {
+                "name": skill.get("name", skill_id),
+                "description": skill.get("description", ""),
+                "system_prompt": skill.get("system_prompt", ""),
+                "greeting": skill.get("greeting", "Hello!"),
+                "voice": skill.get("voice_config", {}).get("description", VOICE_CONTEXTS.get("default", "")),
+                "version": skill.get("version", "1.0"),
+                "knowledge": skill.get("knowledge", []),
+            }
+    except Exception:
+        pass
+    return None
+
+
+def _load_all_database_skill_ids() -> list[str]:
+    """Get all skill IDs from the persistent database."""
+    try:
+        import sys
+        sys.path.insert(0, "/root")
+        os.environ.setdefault('HIVE215_DB_PATH', '/data/hive215.db')
+        import database as db
+        skills = db.get_all_skills(include_inactive=False)
+        return [s.get('id') for s in skills if s.get('id')]
+    except Exception:
+        return []
+
+
 def get_skill(skill_id: str) -> dict:
-    """Get skill by ID with fallback to default."""
-    # Check runtime skills first (allows overriding built-in)
+    """Get skill by ID with fallback to default.
+
+    Priority order:
+    1. Runtime skills (API-created, temporary)
+    2. Database skills (dashboard-created, persistent)
+    3. Built-in skills (hardcoded)
+    4. Fallback to 'general' skill
+    """
+    # Check runtime skills first (allows overriding)
     if skill_id in RUNTIME_SKILLS:
         return RUNTIME_SKILLS[skill_id]
-    # Then check built-in skills
+
+    # Check database skills (persistent, from dashboard)
+    db_skill = _load_database_skill(skill_id)
+    if db_skill:
+        return db_skill
+
+    # Check built-in skills
     if skill_id in BUILT_IN_SKILLS:
         return BUILT_IN_SKILLS[skill_id]
+
     # Fallback to default
     return BUILT_IN_SKILLS.get("default", BUILT_IN_SKILLS["general"])
 
 
 def list_skills() -> list[str]:
-    """List all skill IDs (built-in + runtime)."""
-    return list(BUILT_IN_SKILLS.keys()) + list(RUNTIME_SKILLS.keys())
+    """List all skill IDs (database + built-in + runtime)."""
+    # Combine all sources, deduplicate
+    skill_ids = set(BUILT_IN_SKILLS.keys())
+    skill_ids.update(RUNTIME_SKILLS.keys())
+    skill_ids.update(_load_all_database_skill_ids())
+    return list(skill_ids)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -461,6 +516,10 @@ def list_skills() -> list[str]:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 app = modal.App("fast-brain-lpu")
+
+# Shared volume with unified dashboard for persistent skill storage
+# This allows skills created in the dashboard to appear in the API
+skills_volume = modal.Volume.from_name("hive215-data", create_if_missing=True)
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -470,6 +529,8 @@ image = (
         "fastapi>=0.109.0",
         "pydantic>=2.0.0",
     )
+    # Add database module for persistent skill storage
+    .add_local_file("database.py", "/root/database.py")
 )
 
 
@@ -827,7 +888,7 @@ IMPORTANT FOR VOICE:
             },
             "region": MODAL_REGION,
             "skills": list_skills(),
-            "skills_count": len(BUILT_IN_SKILLS),
+            "skills_count": len(list_skills()),  # Include database skills in count
             "timestamp": datetime.utcnow().isoformat(),
         }
 
@@ -952,10 +1013,11 @@ async def health():
     Returns:
         status: "healthy"
         backend: Model identifier
-        skills_available: List of skill IDs
+        skills_available: List of skill IDs (including database skills)
         version: API version
     """
-    all_skills = list(BUILT_IN_SKILLS.keys()) + list(RUNTIME_SKILLS.keys())
+    # Use list_skills() to include database, built-in, and runtime skills
+    all_skills = list_skills()
     return {
         "status": "healthy",
         "backend": f"groq-{FAST_MODEL}",
@@ -968,32 +1030,91 @@ async def health():
 # SKILLS ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _get_database_skills() -> list:
+    """
+    Get skills from the persistent SQLite database.
+
+    Returns empty list if database is not available.
+    """
+    try:
+        import sys
+        sys.path.insert(0, "/root")
+        os.environ.setdefault('HIVE215_DB_PATH', '/data/hive215.db')
+        import database as db
+        return db.get_all_skills(include_inactive=False)
+    except Exception as e:
+        print(f"Warning: Could not load database skills: {e}")
+        return []
+
+
+def _get_database_skill(skill_id: str) -> Optional[dict]:
+    """
+    Get a specific skill from the persistent SQLite database.
+
+    Returns None if database is not available or skill not found.
+    """
+    try:
+        import sys
+        sys.path.insert(0, "/root")
+        os.environ.setdefault('HIVE215_DB_PATH', '/data/hive215.db')
+        import database as db
+        return db.get_skill(skill_id)
+    except Exception as e:
+        print(f"Warning: Could not load skill from database: {e}")
+        return None
+
+
 @web_app.get("/v1/skills")
 async def get_all_skills():
     """
     List all available skills (HIVE215-compatible).
 
-    Returns skills with id, name, description, and version.
+    Returns skills from three sources (in priority order):
+    1. Persistent database (skills created in dashboard)
+    2. Built-in skills (hardcoded defaults)
+    3. Runtime skills (created via API, lost on restart)
     """
     skills = []
+    seen_ids = set()
 
-    # Add built-in skills
+    # 1. Add skills from persistent database first (highest priority)
+    # These are skills created in the unified dashboard
+    db_skills = _get_database_skills()
+    for skill in db_skills:
+        skill_id = skill.get('id')
+        if skill_id and skill_id not in seen_ids:
+            skills.append({
+                "id": skill_id,
+                "name": skill.get("name", skill_id),
+                "description": skill.get("description", ""),
+                "version": skill.get("version", "1.0"),
+                "source": "database",  # Indicates persistent storage
+            })
+            seen_ids.add(skill_id)
+
+    # 2. Add built-in skills (don't duplicate if already in database)
     for skill_id, skill in BUILT_IN_SKILLS.items():
-        skills.append({
-            "id": skill_id,
-            "name": skill.get("name", skill_id),
-            "description": skill.get("description", ""),
-            "version": skill.get("version", "1.0"),
-        })
+        if skill_id not in seen_ids:
+            skills.append({
+                "id": skill_id,
+                "name": skill.get("name", skill_id),
+                "description": skill.get("description", ""),
+                "version": skill.get("version", "1.0"),
+                "source": "builtin",
+            })
+            seen_ids.add(skill_id)
 
-    # Add runtime skills
+    # 3. Add runtime skills (temporary, created via API)
     for skill_id, skill in RUNTIME_SKILLS.items():
-        skills.append({
-            "id": skill_id,
-            "name": skill.get("name", skill_id),
-            "description": skill.get("description", ""),
-            "version": skill.get("version", "1.0"),
-        })
+        if skill_id not in seen_ids:
+            skills.append({
+                "id": skill_id,
+                "name": skill.get("name", skill_id),
+                "description": skill.get("description", ""),
+                "version": skill.get("version", "1.0"),
+                "source": "runtime",
+            })
+            seen_ids.add(skill_id)
 
     return {"skills": skills}
 
@@ -1034,7 +1155,26 @@ async def create_skill(request: SkillRequest):
 @web_app.get("/v1/skills/{skill_id}")
 async def get_skill_detail(skill_id: str):
     """Get details for a specific skill."""
-    # Check both built-in and runtime skills
+    # 1. Check database first (persistent skills from dashboard)
+    db_skill = _get_database_skill(skill_id)
+    if db_skill:
+        # Extract voice config from database skill
+        voice_config = db_skill.get("voice_config", {})
+        voice_description = voice_config.get("description", VOICE_CONTEXTS["default"])
+
+        return {
+            "id": skill_id,
+            "name": db_skill.get("name", skill_id),
+            "description": db_skill.get("description", ""),
+            "greeting": db_skill.get("greeting", "Hello!"),
+            "voice": voice_description,
+            "version": db_skill.get("version", "1.0"),
+            "system_prompt": db_skill.get("system_prompt", ""),
+            "knowledge": db_skill.get("knowledge", []),
+            "source": "database",
+        }
+
+    # 2. Check built-in and runtime skills
     skill = BUILT_IN_SKILLS.get(skill_id) or RUNTIME_SKILLS.get(skill_id)
 
     if not skill:
@@ -1047,6 +1187,7 @@ async def get_skill_detail(skill_id: str):
         "greeting": skill.get("greeting", "Hello!"),
         "voice": skill.get("voice", VOICE_CONTEXTS["default"]),
         "version": skill.get("version", "1.0"),
+        "source": "builtin" if skill_id in BUILT_IN_SKILLS else "runtime",
     }
 
 
@@ -1062,8 +1203,31 @@ async def get_greeting(skill_id: str):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def get_all_skills_dict() -> dict:
-    """Get combined built-in and runtime skills."""
+    """Get combined database, built-in, and runtime skills.
+
+    Priority order (later overrides earlier):
+    1. Built-in skills (base)
+    2. Database skills (persistent, from dashboard)
+    3. Runtime skills (temporary, from API)
+    """
     combined = dict(BUILT_IN_SKILLS)
+
+    # Add database skills (override built-in if same ID)
+    db_skills = _get_database_skills()
+    for skill in db_skills:
+        skill_id = skill.get('id')
+        if skill_id:
+            combined[skill_id] = {
+                "name": skill.get("name", skill_id),
+                "description": skill.get("description", ""),
+                "system_prompt": skill.get("system_prompt", ""),
+                "greeting": skill.get("greeting", "Hello!"),
+                "voice": skill.get("voice_config", {}).get("description", VOICE_CONTEXTS["default"]),
+                "version": skill.get("version", "1.0"),
+                "knowledge": skill.get("knowledge", []),
+            }
+
+    # Runtime skills have highest priority
     combined.update(RUNTIME_SKILLS)
     return combined
 
@@ -1197,10 +1361,28 @@ async def get_filler_phrases():
     }
 
 
-@app.function(image=image, region=MODAL_REGION)
+@app.function(
+    image=image,
+    region=MODAL_REGION,
+    volumes={"/data": skills_volume},  # Mount shared volume for database access
+)
 @modal.asgi_app()
 def fastapi_app():
-    """Mount FastAPI to Modal."""
+    """Mount FastAPI to Modal with persistent skill storage."""
+    import os
+    import sys
+
+    # Set up database access
+    sys.path.insert(0, "/root")
+    os.environ['HIVE215_DB_PATH'] = '/data/hive215.db'
+
+    # Initialize database module
+    try:
+        import database as db
+        db.init_db()  # Ensure tables exist
+    except Exception as e:
+        print(f"Database initialization warning: {e}")
+
     return web_app
 
 

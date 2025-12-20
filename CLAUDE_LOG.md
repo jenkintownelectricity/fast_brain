@@ -145,3 +145,102 @@ Endpoints:
 - [ ] Implement edge caching with Modal regions
 - [ ] Add voice A/B testing feature
 - [ ] Integrate Fish Speech V1.5 (open source leader)
+
+---
+
+## 2024-12-20: Fix Skills Not Appearing in HIVE215 UI
+
+### Session: `claude/qwen3-vllm-exploration-5LDqg`
+
+#### Problem
+Skills created in the Unified Dashboard (e.g., "The Molasses Alchemist") were not appearing in the HIVE215 UI dropdown, despite being visible in the Dashboard.
+
+#### Root Cause Analysis
+
+**Architecture Disconnect:**
+| Component | Database Access | Skills Source |
+|-----------|-----------------|---------------|
+| `deploy_dashboard.py` (Modal) | ✅ hive215-data volume at `/data` | SQLite database |
+| `deploy_groq.py` (Modal) | ❌ No volume mounted | BUILT_IN_SKILLS dict only |
+
+**Flow of the Bug:**
+```
+User creates skill in Dashboard
+    ↓
+unified_dashboard.py stores in SQLite (/data/hive215.db)
+    ↓
+Dashboard shows skill ✓
+    ↓
+HIVE215 calls Fast Brain /v1/skills API
+    ↓
+deploy_groq.py queries BUILT_IN_SKILLS only (ignores database)
+    ↓
+Skill NOT returned ✗
+    ↓
+HIVE215 dropdown missing the skill
+```
+
+#### Solution
+Modified `deploy_groq.py` to share the same SQLite database volume as the dashboard:
+
+1. **Added shared volume declaration:**
+   ```python
+   skills_volume = modal.Volume.from_name("hive215-data", create_if_missing=True)
+   ```
+
+2. **Added database.py to Modal image:**
+   ```python
+   .add_local_file("database.py", "/root/database.py")
+   ```
+
+3. **Mounted volume in fastapi_app:**
+   ```python
+   @app.function(
+       image=image,
+       region=MODAL_REGION,
+       volumes={"/data": skills_volume},
+   )
+   ```
+
+4. **Updated all skill-related functions to query database:**
+   - `get_all_skills()` - Now queries database first
+   - `get_skill_detail()` - Checks database before built-in
+   - `get_skill()` - Helper function now includes database
+   - `list_skills()` - Returns database + built-in + runtime skills
+   - `get_all_skills_dict()` - Combines all sources for chat
+   - `/health` endpoint - Shows all skills including database
+
+5. **Added helper functions:**
+   - `_get_database_skills()` - Query all skills from SQLite
+   - `_get_database_skill(skill_id)` - Query single skill
+   - `_load_database_skill()` - Load with format conversion
+   - `_load_all_database_skill_ids()` - Get all IDs
+
+#### Priority Order (skills lookup):
+1. **Runtime skills** - Created via API, temporary (highest priority)
+2. **Database skills** - Created in Dashboard, persistent
+3. **Built-in skills** - Hardcoded defaults (lowest priority)
+
+#### Files Modified:
+- `fast_brain/deploy_groq.py` - Added volume, database integration, updated all skill endpoints
+
+#### Verification Steps:
+After deploying, verify with:
+```bash
+# Check if molasses-master-expert appears
+curl https://jenkintownelectricity--fast-brain-lpu-fastapi-app.modal.run/v1/skills | jq '.skills[] | select(.id | contains("molasses"))'
+
+# Check individual skill
+curl https://jenkintownelectricity--fast-brain-lpu-fastapi-app.modal.run/v1/skills/molasses-master-expert
+
+# Check health endpoint shows all skills
+curl https://jenkintownelectricity--fast-brain-lpu-fastapi-app.modal.run/health | jq '.skills_available'
+```
+
+#### Deployment:
+```bash
+cd /path/to/fast_brain
+modal deploy fast_brain/deploy_groq.py
+```
+
+---
