@@ -1930,68 +1930,79 @@ def get_fast_brain_skills():
 @app.route('/api/fast-brain/skills', methods=['POST'])
 def create_fast_brain_skill():
     """Create a new custom skill with database persistence."""
-    data = request.json
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"})
 
-    skill_id = data.get('skill_id', '').lower().replace(' ', '_')
-    skill_id = re.sub(r'[^\w\-]', '_', skill_id)
+        skill_id = data.get('skill_id', '').lower().replace(' ', '_')
+        skill_id = re.sub(r'[^\w\-]', '_', skill_id)
 
-    if not skill_id:
-        return jsonify({"success": False, "error": "Skill ID is required"})
+        if not skill_id:
+            return jsonify({"success": False, "error": "Skill ID is required"})
 
-    # Check for builtin skill
-    if USE_DATABASE:
-        existing = db.get_skill(skill_id)
-        if existing and existing.get('is_builtin'):
-            return jsonify({"success": False, "error": "Cannot overwrite built-in skill"})
+        # Check for builtin skill
+        if USE_DATABASE:
+            existing = db.get_skill(skill_id)
+            if existing and existing.get('is_builtin'):
+                return jsonify({"success": False, "error": "Cannot overwrite built-in skill"})
 
-        # Create/update in database
-        skill = db.create_skill(
-            skill_id=skill_id,
-            name=data.get('name', skill_id.replace('_', ' ').title()),
-            description=data.get('description', ''),
-            skill_type=data.get('skill_type', 'custom'),
-            system_prompt=data.get('system_prompt', ''),
-            knowledge=data.get('knowledge', []),
-            is_builtin=False
-        )
-    else:
-        # Fallback to in-memory
-        if skill_id in FAST_BRAIN_SKILLS and FAST_BRAIN_SKILLS[skill_id].get('is_builtin'):
-            return jsonify({"success": False, "error": "Cannot overwrite built-in skill"})
+            # Create/update in database
+            skill = db.create_skill(
+                skill_id=skill_id,
+                name=data.get('name', skill_id.replace('_', ' ').title()),
+                description=data.get('description', ''),
+                skill_type=data.get('skill_type', 'custom'),
+                system_prompt=data.get('system_prompt', ''),
+                knowledge=data.get('knowledge', []),
+                is_builtin=False
+            )
+        else:
+            # Fallback to in-memory
+            if skill_id in FAST_BRAIN_SKILLS and FAST_BRAIN_SKILLS[skill_id].get('is_builtin'):
+                return jsonify({"success": False, "error": "Cannot overwrite built-in skill"})
 
-        skill = {
-            "id": skill_id,
-            "name": data.get('name', skill_id.title()),
-            "description": data.get('description', ''),
-            "system_prompt": data.get('system_prompt', ''),
-            "knowledge": data.get('knowledge', []),
-            "is_builtin": False,
-        }
-        FAST_BRAIN_SKILLS[skill_id] = skill
+            skill = {
+                "id": skill_id,
+                "name": data.get('name', skill_id.title()),
+                "description": data.get('description', ''),
+                "system_prompt": data.get('system_prompt', ''),
+                "knowledge": data.get('knowledge', []),
+                "is_builtin": False,
+            }
+            FAST_BRAIN_SKILLS[skill_id] = skill
 
-    # Try to sync to deployed LPU
-    url = FAST_BRAIN_CONFIG.get('url')
-    if url:
-        try:
-            import httpx
-            with httpx.Client(timeout=10.0) as client:
-                response = client.post(
-                    f"{url}/v1/skills",
-                    json={
-                        "skill_id": skill_id,
-                        "name": skill.get("name"),
-                        "description": skill.get("description"),
-                        "system_prompt": skill.get("system_prompt"),
-                        "knowledge": skill.get("knowledge", []),
-                    }
-                )
-                if response.status_code == 200:
-                    add_activity(f"Skill '{skill.get('name')}' synced to LPU", "🔄", "skills")
-        except Exception as e:
-            add_activity(f"Skill created (sync failed: {str(e)[:50]})", "⚠️", "skills")
+        # Try to sync to deployed LPU
+        url = FAST_BRAIN_CONFIG.get('url')
+        if url:
+            try:
+                import httpx
+                with httpx.Client(timeout=10.0) as client:
+                    response = client.post(
+                        f"{url}/v1/skills",
+                        json={
+                            "skill_id": skill_id,
+                            "name": skill.get("name"),
+                            "description": skill.get("description"),
+                            "system_prompt": skill.get("system_prompt"),
+                            "knowledge": skill.get("knowledge", []),
+                        }
+                    )
+                    if response.status_code == 200:
+                        add_activity(f"Skill '{skill.get('name')}' synced to LPU", "🔄", "skills")
+            except Exception as e:
+                add_activity(f"Skill created (sync failed: {str(e)[:50]})", "⚠️", "skills")
 
-    add_activity(f"Created skill: {skill.get('name')}", "✨", "skills")
-    return jsonify({"success": True, "skill": skill})
+        add_activity(f"Created skill: {skill.get('name')}", "✨", "skills")
+        return jsonify({"success": True, "skill": skill})
+
+    except Exception as e:
+        # Return JSON error instead of HTML error page
+        import traceback
+        error_msg = str(e)
+        print(f"Error creating skill: {error_msg}")
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": f"Server error: {error_msg}"}), 500
 
 
 @app.route('/api/fast-brain/skills/<skill_id>', methods=['PUT'])
