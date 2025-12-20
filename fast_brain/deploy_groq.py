@@ -84,7 +84,7 @@ FAST_MAX_TOKENS = 1024
 FAST_TEMPERATURE = 0.7
 
 # System 2: Deep Brain (Claude)
-DEEP_MODEL = "claude-3-5-sonnet-20241022"
+DEEP_MODEL = "claude-sonnet-4-20250514"
 DEEP_MAX_TOKENS = 2048
 DEEP_TEMPERATURE = 0.7
 
