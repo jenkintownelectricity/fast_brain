@@ -149,6 +149,37 @@ def init_db():
         ''')
 
         # =================================================================
+        # EXTRACTED DATA TABLE - Parsed document content
+        # =================================================================
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS extracted_data (
+                id TEXT PRIMARY KEY,
+                skill_id TEXT NOT NULL,
+                content_type TEXT DEFAULT 'qa_pair',
+                user_input TEXT NOT NULL,
+                assistant_response TEXT NOT NULL,
+                raw_content TEXT,
+                source_filename TEXT,
+                source_type TEXT,
+                category TEXT DEFAULT 'general',
+                tags TEXT,  -- JSON array
+                importance_score REAL DEFAULT 50,
+                confidence REAL DEFAULT 0.8,
+                tokens INTEGER DEFAULT 0,
+                is_approved INTEGER DEFAULT 0,
+                is_archived INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                metadata TEXT,  -- JSON for extra data
+                FOREIGN KEY (skill_id) REFERENCES skills(id)
+            )
+        ''')
+
+        # Create indexes for extracted_data
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_extracted_skill ON extracted_data(skill_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_extracted_approved ON extracted_data(is_approved)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_extracted_importance ON extracted_data(importance_score)')
+
+        # =================================================================
         # API KEYS TABLE - Encrypted storage
         # =================================================================
         cursor.execute('''

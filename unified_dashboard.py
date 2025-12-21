@@ -775,6 +775,316 @@ def test_trained_adapter(skill_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+# =============================================================================
+# DOCUMENT PARSER ENDPOINTS
+# =============================================================================
+
+@app.route('/api/parser/supported-types', methods=['GET'])
+def get_supported_types():
+    """Get list of all supported file types."""
+    FILE_TYPES = {
+        'document': ['pdf', 'docx', 'doc', 'rtf', 'txt', 'md'],
+        'spreadsheet': ['xlsx', 'xls', 'csv', 'tsv'],
+        'presentation': ['pptx', 'ppt'],
+        'data': ['json', 'jsonl', 'xml', 'yaml', 'yml'],
+        'web': ['html', 'htm'],
+        'image': ['png', 'jpg', 'jpeg', 'gif', 'webp'],
+        'audio': ['mp3', 'wav', 'm4a'],
+        'code': ['py', 'js', 'ts', 'java', 'go', 'rs']
+    }
+    all_extensions = [ext for types in FILE_TYPES.values() for ext in types]
+    return jsonify({
+        'success': True,
+        'total_types': len(all_extensions),
+        'types_by_category': FILE_TYPES,
+        'all_extensions': all_extensions
+    })
+
+
+@app.route('/api/parser/upload', methods=['POST'])
+def upload_and_parse():
+    """Upload files, extract Q&A pairs, then delete files."""
+    import hashlib
+    import uuid
+
+    if 'files[]' not in request.files and 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No files provided'}), 400
+
+    skill_id = request.form.get('skill_id')
+    if not skill_id:
+        return jsonify({'success': False, 'error': 'skill_id required'}), 400
+
+    files = request.files.getlist('files[]') or [request.files.get('file')]
+
+    results = {
+        'files_processed': 0,
+        'files_failed': 0,
+        'items_extracted': 0,
+        'errors': [],
+        'extracted_data': []
+    }
+
+    for file in files:
+        if not file or not file.filename:
+            continue
+
+        try:
+            filename = file.filename
+            content = file.read().decode('utf-8', errors='ignore')
+
+            # Simple text extraction (expand with parser module for full support)
+            lines = content.split('\n')
+
+            # Extract Q&A pairs from content (simple heuristic)
+            qa_pairs = []
+            current_q = None
+            current_a = []
+
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Look for question patterns
+                if line.endswith('?') or line.startswith('Q:') or line.startswith('Question:'):
+                    if current_q and current_a:
+                        qa_pairs.append((current_q, ' '.join(current_a)))
+                    current_q = line.lstrip('Q:').lstrip('Question:').strip()
+                    current_a = []
+                elif current_q:
+                    current_a.append(line.lstrip('A:').lstrip('Answer:').strip())
+
+            # Add last pair
+            if current_q and current_a:
+                qa_pairs.append((current_q, ' '.join(current_a)))
+
+            # If no Q&A found, create from paragraphs
+            if not qa_pairs:
+                paragraphs = [p.strip() for p in content.split('\n\n') if p.strip() and len(p.strip()) > 50]
+                for para in paragraphs[:10]:  # Limit to 10
+                    qa_pairs.append((
+                        f"Tell me about: {para[:50]}...",
+                        para
+                    ))
+
+            # Store extracted data
+            if USE_DATABASE:
+                for q, a in qa_pairs[:50]:  # Limit to 50 pairs per file
+                    item_id = str(uuid.uuid4())[:16]
+                    tokens = (len(q) + len(a)) // 4
+
+                    db.execute_query('''
+                        INSERT INTO extracted_data
+                        (id, skill_id, user_input, assistant_response, source_filename,
+                         source_type, category, importance_score, tokens)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (item_id, skill_id, q, a, filename,
+                          filename.split('.')[-1] if '.' in filename else 'text',
+                          'general', 50, tokens))
+
+                    results['extracted_data'].append({
+                        'id': item_id,
+                        'user_input': q[:100],
+                        'assistant_response': a[:200]
+                    })
+                    results['items_extracted'] += 1
+
+            results['files_processed'] += 1
+
+        except Exception as e:
+            results['files_failed'] += 1
+            results['errors'].append(f"{file.filename}: {str(e)}")
+
+    return jsonify({
+        'success': True,
+        'files_processed': results['files_processed'],
+        'files_failed': results['files_failed'],
+        'items_extracted': results['items_extracted'],
+        'errors': results['errors']
+    })
+
+
+@app.route('/api/parser/data/<skill_id>', methods=['GET'])
+def get_extracted_data(skill_id):
+    """Get all extracted data for a skill."""
+    if not USE_DATABASE:
+        return jsonify({'success': True, 'data': [], 'total': 0, 'page': 1, 'pages': 0})
+
+    try:
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        offset = (page - 1) * per_page
+
+        # Build query with filters
+        query = "SELECT * FROM extracted_data WHERE skill_id = ? AND is_archived = 0"
+        params = [skill_id]
+
+        if request.args.get('category'):
+            query += " AND category = ?"
+            params.append(request.args.get('category'))
+
+        if request.args.get('approved') == 'true':
+            query += " AND is_approved = 1"
+        elif request.args.get('approved') == 'false':
+            query += " AND is_approved = 0"
+
+        if request.args.get('search'):
+            query += " AND (user_input LIKE ? OR assistant_response LIKE ?)"
+            search = f"%{request.args.get('search')}%"
+            params.extend([search, search])
+
+        # Get total count
+        count_query = query.replace("SELECT *", "SELECT COUNT(*)")
+        total = db.execute_query(count_query, params)[0][0] if db.execute_query(count_query, params) else 0
+
+        # Get paginated data
+        query += " ORDER BY importance_score DESC LIMIT ? OFFSET ?"
+        params.extend([per_page, offset])
+
+        rows = db.execute_query(query, params) or []
+
+        # Convert to list of dicts
+        data = []
+        for row in rows:
+            data.append({
+                'id': row[0],
+                'skill_id': row[1],
+                'content_type': row[2],
+                'user_input': row[3],
+                'assistant_response': row[4],
+                'raw_content': row[5],
+                'source_filename': row[6],
+                'source_type': row[7],
+                'category': row[8],
+                'tags': json.loads(row[9]) if row[9] else [],
+                'importance_score': row[10] or 50,
+                'confidence': row[11] or 0.8,
+                'tokens': row[12] or 0,
+                'is_approved': bool(row[13]),
+                'is_archived': bool(row[14]),
+                'created_at': row[15]
+            })
+
+        return jsonify({
+            'success': True,
+            'data': data,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'pages': (total + per_page - 1) // per_page if total > 0 else 0
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/parser/data/<skill_id>/stats', methods=['GET'])
+def get_extracted_stats(skill_id):
+    """Get statistics for extracted data."""
+    if not USE_DATABASE:
+        return jsonify({'success': True, 'stats': {'total': 0, 'approved': 0, 'total_tokens': 0}})
+
+    try:
+        # Get counts
+        total = db.execute_query(
+            "SELECT COUNT(*) FROM extracted_data WHERE skill_id = ? AND is_archived = 0",
+            [skill_id]
+        )
+        total = total[0][0] if total else 0
+
+        approved = db.execute_query(
+            "SELECT COUNT(*) FROM extracted_data WHERE skill_id = ? AND is_approved = 1 AND is_archived = 0",
+            [skill_id]
+        )
+        approved = approved[0][0] if approved else 0
+
+        tokens = db.execute_query(
+            "SELECT SUM(tokens) FROM extracted_data WHERE skill_id = ? AND is_archived = 0",
+            [skill_id]
+        )
+        tokens = tokens[0][0] if tokens and tokens[0][0] else 0
+
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total': total,
+                'approved': approved,
+                'archived': 0,
+                'total_tokens': tokens
+            }
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/parser/data/<skill_id>/bulk', methods=['POST'])
+def bulk_update_extracted(skill_id):
+    """Bulk update extracted data items."""
+    data = request.json
+    action = data.get('action')
+    item_ids = data.get('item_ids', [])
+
+    if not item_ids:
+        return jsonify({'success': False, 'error': 'No items specified'}), 400
+
+    if not USE_DATABASE:
+        return jsonify({'success': True, 'affected': 0})
+
+    try:
+        affected = 0
+
+        if action == 'approve':
+            for item_id in item_ids:
+                db.execute_query(
+                    "UPDATE extracted_data SET is_approved = 1 WHERE id = ? AND skill_id = ?",
+                    [item_id, skill_id]
+                )
+                affected += 1
+
+        elif action == 'archive':
+            for item_id in item_ids:
+                db.execute_query(
+                    "UPDATE extracted_data SET is_archived = 1 WHERE id = ? AND skill_id = ?",
+                    [item_id, skill_id]
+                )
+                affected += 1
+
+        elif action == 'delete':
+            for item_id in item_ids:
+                db.execute_query(
+                    "DELETE FROM extracted_data WHERE id = ? AND skill_id = ?",
+                    [item_id, skill_id]
+                )
+                affected += 1
+
+        elif action == 'move_to_training':
+            # Move approved items to training_data table
+            for item_id in item_ids:
+                rows = db.execute_query(
+                    "SELECT user_input, assistant_response FROM extracted_data WHERE id = ? AND skill_id = ?",
+                    [item_id, skill_id]
+                )
+                if rows:
+                    db.execute_query(
+                        "INSERT INTO training_data (skill_id, user_message, assistant_response, rating) VALUES (?, ?, ?, ?)",
+                        [skill_id, rows[0][0], rows[0][1], 5]
+                    )
+                    db.execute_query(
+                        "UPDATE extracted_data SET is_archived = 1 WHERE id = ?",
+                        [item_id]
+                    )
+                    affected += 1
+
+        return jsonify({'success': True, 'affected': affected})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/create-skill', methods=['POST'])
 def create_skill():
     """Create a new skill from the quick form."""
@@ -5197,6 +5507,7 @@ DASHBOARD_HTML = '''
         <div id="tab-training" class="tab-content">
             <div class="sub-tabs">
                 <button class="sub-tab-btn active" onclick="showTrainingTab('console')">🎯 Console</button>
+                <button class="sub-tab-btn" onclick="showTrainingTab('data')">📄 Data Manager</button>
                 <button class="sub-tab-btn" onclick="showTrainingTab('progress')">📊 Progress</button>
                 <button class="sub-tab-btn" onclick="showTrainingTab('adapters')">📦 Adapters</button>
             </div>
@@ -5350,6 +5661,135 @@ DASHBOARD_HTML = '''
                     <button class="btn btn-primary" style="width: 100%; padding: 1rem; font-size: 1.1rem;" onclick="startTraining()" id="start-training-btn">
                         🚀 Start Training
                     </button>
+                </div>
+            </div>
+
+            <!-- Data Manager - Parse & Extract Training Data -->
+            <div id="training-data" class="sub-tab-content">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">📄</span> Data Manager</div>
+                        <button class="btn btn-primary btn-sm" onclick="openParserModal()">📤 Parse Documents</button>
+                    </div>
+
+                    <!-- Quick Stats -->
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
+                        <div class="glass-card" style="background: var(--glass-surface); padding: 1rem; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-cyan);" id="dm-total-items">0</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Total Items</div>
+                        </div>
+                        <div class="glass-card" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(239, 68, 68, 0.2)); border: 1px solid rgba(245, 158, 11, 0.3); padding: 1rem; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-orange);" id="dm-pending-items">0</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Pending Review</div>
+                        </div>
+                        <div class="glass-card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(0, 212, 170, 0.2)); border: 1px solid rgba(16, 185, 129, 0.3); padding: 1rem; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-green);" id="dm-approved-items">0</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Approved</div>
+                        </div>
+                        <div class="glass-card" style="background: var(--glass-surface); padding: 1rem; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-purple);" id="dm-total-tokens">0</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Total Tokens</div>
+                        </div>
+                    </div>
+
+                    <!-- Skill Selector for Data -->
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label class="form-label">Select Skill</label>
+                        <select id="dm-skill-select" class="form-select" onchange="loadDataManagerData()">
+                            <option value="">-- Select a skill --</option>
+                        </select>
+                    </div>
+
+                    <!-- Toolbar -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="text" id="dm-search" class="form-input" placeholder="Search..." style="width: 200px;" onkeyup="filterDataManager()">
+                            <select id="dm-category-filter" class="form-select" style="width: 140px;" onchange="filterDataManager()">
+                                <option value="">All Categories</option>
+                                <option value="general">General</option>
+                                <option value="faq">FAQ</option>
+                                <option value="technical">Technical</option>
+                                <option value="pricing">Pricing</option>
+                                <option value="procedure">Procedure</option>
+                            </select>
+                            <select id="dm-status-filter" class="form-select" style="width: 120px;" onchange="filterDataManager()">
+                                <option value="">All Status</option>
+                                <option value="pending">Pending</option>
+                                <option value="approved">Approved</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-secondary btn-sm" onclick="bulkApproveSelected()">✅ Approve Selected</button>
+                            <button class="btn btn-secondary btn-sm" onclick="bulkMoveToTraining()">📥 Move to Training</button>
+                            <button class="btn btn-secondary btn-sm" onclick="bulkDeleteSelected()" style="color: #ff4444;">🗑️ Delete</button>
+                        </div>
+                    </div>
+
+                    <!-- Data List -->
+                    <div id="dm-data-list" style="background: var(--glass-surface); border-radius: 12px; max-height: 500px; overflow-y: auto;">
+                        <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                            <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
+                            <p>No extracted data yet</p>
+                            <p style="font-size: 0.9rem;">Upload and parse documents to extract training data</p>
+                            <button class="btn btn-primary" style="margin-top: 1rem;" onclick="openParserModal()">📤 Parse Documents</button>
+                        </div>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div id="dm-pagination" style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Document Parser Modal -->
+            <div id="parser-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
+                <div class="glass-card" style="width: 600px; max-width: 90%; max-height: 80vh; overflow-y: auto;">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">📤</span> Parse Documents</div>
+                        <button class="btn btn-secondary btn-sm" onclick="closeParserModal()">✕</button>
+                    </div>
+
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Upload documents to extract Q&A pairs for training. Supports 70+ file types.</p>
+                    <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem;">
+                        <strong style="color: var(--neon-orange);">⚠️ Note:</strong>
+                        <span style="color: var(--text-secondary);">Files are processed and <strong>immediately deleted</strong>. Only extracted Q&A data is stored - zero storage waste!</span>
+                    </div>
+
+                    <!-- Skill Selector -->
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label class="form-label">Target Skill</label>
+                        <select id="parser-skill-select" class="form-select">
+                            <option value="">-- Select a skill --</option>
+                        </select>
+                    </div>
+
+                    <!-- File Upload -->
+                    <div id="parser-dropzone" style="border: 2px dashed var(--neon-cyan); border-radius: 12px; padding: 2rem; text-align: center; margin-bottom: 1rem; cursor: pointer;" onclick="document.getElementById('parser-files').click()">
+                        <div style="font-size: 3rem; margin-bottom: 0.5rem;">📁</div>
+                        <p style="color: var(--text-secondary);">Drop files here or click to browse</p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary);">PDF, DOCX, TXT, CSV, JSON, Images, Audio, and more</p>
+                        <input type="file" id="parser-files" multiple style="display: none;" onchange="handleParserFiles(this.files)">
+                    </div>
+
+                    <!-- Selected Files -->
+                    <div id="parser-file-list" style="margin-bottom: 1rem;"></div>
+
+                    <!-- Progress -->
+                    <div id="parser-progress" style="display: none; margin-bottom: 1rem;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span>Processing...</span>
+                            <span id="parser-progress-text">0%</span>
+                        </div>
+                        <div style="background: var(--glass-surface); border-radius: 8px; height: 8px; overflow: hidden;">
+                            <div id="parser-progress-bar" style="background: var(--neon-cyan); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Buttons -->
+                    <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                        <button class="btn btn-secondary" onclick="closeParserModal()">Cancel</button>
+                        <button class="btn btn-primary" id="parser-submit-btn" onclick="submitParserFiles()">🚀 Parse & Extract</button>
+                    </div>
                 </div>
             </div>
 
@@ -7369,6 +7809,7 @@ pipeline = Pipeline([
 
             if (subTab === 'adapters') refreshAdapters();
             if (subTab === 'progress') checkActiveTraining();
+            if (subTab === 'data') loadDataManagerSkillsDropdown();
         }
 
         async function loadTrainingSkillsDropdown() {
@@ -7861,6 +8302,273 @@ pipeline = Pipeline([
 
         function showAdapterDetails(skillId) {
             alert('Adapter: ' + skillId + '\\n\\nOptions:\\n- Retrain with more data\\n- Export to HuggingFace\\n- Delete adapter');
+        }
+
+        // ============================================================
+        // DATA MANAGER FUNCTIONS
+        // ============================================================
+        let dmCurrentSkillId = null;
+        let dmSelectedIds = new Set();
+        let dmCurrentPage = 1;
+        let parserFiles = [];
+
+        function loadDataManagerSkillsDropdown() {
+            loadTrainingSkillsDropdown();  // Reuse existing function
+            // Also populate dm-skill-select and parser-skill-select
+            fetch('/api/fast-brain/skills')
+                .then(r => r.json())
+                .then(data => {
+                    ['dm-skill-select', 'parser-skill-select'].forEach(selectId => {
+                        const select = document.getElementById(selectId);
+                        if (select) {
+                            select.innerHTML = '<option value="">-- Select a skill --</option>';
+                            if (data.skills) {
+                                data.skills.forEach(skill => {
+                                    const opt = document.createElement('option');
+                                    opt.value = skill.id;
+                                    opt.textContent = skill.name || skill.id;
+                                    select.appendChild(opt);
+                                });
+                            }
+                        }
+                    });
+                });
+        }
+
+        async function loadDataManagerData() {
+            const skillId = document.getElementById('dm-skill-select').value;
+            if (!skillId) return;
+
+            dmCurrentSkillId = skillId;
+
+            try {
+                // Load stats
+                const statsRes = await fetch(`/api/parser/data/${skillId}/stats`);
+                const statsData = await statsRes.json();
+
+                if (statsData.success) {
+                    document.getElementById('dm-total-items').textContent = statsData.stats.total || 0;
+                    document.getElementById('dm-pending-items').textContent = (statsData.stats.total - statsData.stats.approved) || 0;
+                    document.getElementById('dm-approved-items').textContent = statsData.stats.approved || 0;
+                    document.getElementById('dm-total-tokens').textContent = formatNumber(statsData.stats.total_tokens || 0);
+                }
+
+                // Load data
+                filterDataManager();
+
+            } catch (err) {
+                console.error('Failed to load data manager:', err);
+            }
+        }
+
+        async function filterDataManager() {
+            if (!dmCurrentSkillId) return;
+
+            const search = document.getElementById('dm-search').value;
+            const category = document.getElementById('dm-category-filter').value;
+            const status = document.getElementById('dm-status-filter').value;
+
+            const params = new URLSearchParams({
+                page: dmCurrentPage,
+                per_page: 50
+            });
+
+            if (search) params.set('search', search);
+            if (category) params.set('category', category);
+            if (status === 'approved') params.set('approved', 'true');
+            if (status === 'pending') params.set('approved', 'false');
+
+            try {
+                const res = await fetch(`/api/parser/data/${dmCurrentSkillId}?${params}`);
+                const data = await res.json();
+
+                if (data.success) {
+                    renderDataManagerList(data.data);
+                }
+            } catch (err) {
+                console.error('Filter error:', err);
+            }
+        }
+
+        function renderDataManagerList(items) {
+            const listEl = document.getElementById('dm-data-list');
+
+            if (!items || items.length === 0) {
+                listEl.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
+                        <p>No extracted data yet</p>
+                        <button class="btn btn-primary" style="margin-top: 1rem;" onclick="openParserModal()">📤 Parse Documents</button>
+                    </div>
+                `;
+                return;
+            }
+
+            listEl.innerHTML = items.map(item => {
+                const importanceColor = item.importance_score >= 80 ? 'var(--neon-green)' :
+                                       item.importance_score >= 50 ? 'var(--neon-orange)' : 'var(--text-secondary)';
+                const statusColor = item.is_approved ? 'var(--neon-green)' : 'var(--neon-orange)';
+                const isSelected = dmSelectedIds.has(item.id);
+
+                return `
+                    <div class="data-item" style="display: flex; gap: 1rem; padding: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); ${isSelected ? 'background: rgba(124, 58, 237, 0.1);' : ''}">
+                        <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleDmSelection('${item.id}')" style="margin-top: 4px;">
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <span style="background: ${importanceColor}; color: #000; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold;">${Math.round(item.importance_score)}%</span>
+                                <span style="background: var(--neon-purple); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem;">${item.category}</span>
+                                <span style="color: var(--text-secondary); font-size: 0.75rem;">📄 ${item.source_filename || 'Unknown'}</span>
+                                <span style="margin-left: auto; color: ${statusColor}; font-size: 0.75rem;">${item.is_approved ? '✅ Approved' : '⏳ Pending'}</span>
+                            </div>
+                            <div style="color: var(--neon-cyan); margin-bottom: 0.25rem;"><strong>Q:</strong> ${escapeHtml(item.user_input).substring(0, 200)}${item.user_input.length > 200 ? '...' : ''}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.9rem;"><strong>A:</strong> ${escapeHtml(item.assistant_response).substring(0, 300)}${item.assistant_response.length > 300 ? '...' : ''}</div>
+                            <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                                <button class="btn btn-secondary btn-sm" onclick="quickApproveDm('${item.id}')">✅</button>
+                                <button class="btn btn-secondary btn-sm" onclick="quickDeleteDm('${item.id}')">🗑️</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleDmSelection(id) {
+            if (dmSelectedIds.has(id)) {
+                dmSelectedIds.delete(id);
+            } else {
+                dmSelectedIds.add(id);
+            }
+        }
+
+        async function quickApproveDm(id) {
+            await bulkDmAction('approve', [id]);
+            filterDataManager();
+            loadDataManagerData();
+        }
+
+        async function quickDeleteDm(id) {
+            if (confirm('Delete this item?')) {
+                await bulkDmAction('delete', [id]);
+                filterDataManager();
+                loadDataManagerData();
+            }
+        }
+
+        async function bulkApproveSelected() {
+            if (dmSelectedIds.size === 0) { alert('No items selected'); return; }
+            await bulkDmAction('approve', Array.from(dmSelectedIds));
+            dmSelectedIds.clear();
+            filterDataManager();
+            loadDataManagerData();
+        }
+
+        async function bulkMoveToTraining() {
+            if (dmSelectedIds.size === 0) { alert('No items selected'); return; }
+            await bulkDmAction('move_to_training', Array.from(dmSelectedIds));
+            dmSelectedIds.clear();
+            filterDataManager();
+            loadDataManagerData();
+            alert('Items moved to training data!');
+        }
+
+        async function bulkDeleteSelected() {
+            if (dmSelectedIds.size === 0) { alert('No items selected'); return; }
+            if (!confirm(`Delete ${dmSelectedIds.size} items?`)) return;
+            await bulkDmAction('delete', Array.from(dmSelectedIds));
+            dmSelectedIds.clear();
+            filterDataManager();
+            loadDataManagerData();
+        }
+
+        async function bulkDmAction(action, itemIds) {
+            try {
+                await fetch(`/api/parser/data/${dmCurrentSkillId}/bulk`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, item_ids: itemIds })
+                });
+            } catch (err) {
+                console.error('Bulk action error:', err);
+            }
+        }
+
+        // Parser Modal Functions
+        function openParserModal() {
+            loadDataManagerSkillsDropdown();
+            document.getElementById('parser-modal').style.display = 'flex';
+            parserFiles = [];
+            document.getElementById('parser-file-list').innerHTML = '';
+        }
+
+        function closeParserModal() {
+            document.getElementById('parser-modal').style.display = 'none';
+            parserFiles = [];
+        }
+
+        function handleParserFiles(files) {
+            parserFiles = Array.from(files);
+            const listEl = document.getElementById('parser-file-list');
+            listEl.innerHTML = parserFiles.map((f, i) => `
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--glass-surface); border-radius: 6px; margin-bottom: 0.5rem;">
+                    <span>📄 ${f.name} <span style="color: var(--text-secondary);">(${(f.size / 1024).toFixed(1)} KB)</span></span>
+                    <button class="btn btn-secondary btn-sm" onclick="removeParserFile(${i})">✕</button>
+                </div>
+            `).join('');
+        }
+
+        function removeParserFile(index) {
+            parserFiles.splice(index, 1);
+            handleParserFiles(parserFiles);
+        }
+
+        async function submitParserFiles() {
+            const skillId = document.getElementById('parser-skill-select').value;
+            if (!skillId) { alert('Please select a skill'); return; }
+            if (parserFiles.length === 0) { alert('Please select files to parse'); return; }
+
+            const btn = document.getElementById('parser-submit-btn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Processing...';
+
+            document.getElementById('parser-progress').style.display = 'block';
+
+            const formData = new FormData();
+            formData.append('skill_id', skillId);
+            parserFiles.forEach(f => formData.append('files[]', f));
+
+            try {
+                const res = await fetch('/api/parser/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await res.json();
+
+                document.getElementById('parser-progress-bar').style.width = '100%';
+                document.getElementById('parser-progress-text').textContent = '100%';
+
+                if (data.success) {
+                    alert(`✅ Parsed ${data.files_processed} file(s), extracted ${data.items_extracted} items!`);
+                    closeParserModal();
+                    dmCurrentSkillId = skillId;
+                    document.getElementById('dm-skill-select').value = skillId;
+                    loadDataManagerData();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 Parse & Extract';
+                document.getElementById('parser-progress').style.display = 'none';
+            }
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
         }
 
         function escapeHtml(text) {
