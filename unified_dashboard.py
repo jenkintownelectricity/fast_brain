@@ -2522,6 +2522,52 @@ def get_fast_brain_skills():
     })
 
 
+@app.route('/api/fast-brain/sync-skills', methods=['POST'])
+def sync_skills_from_lpu():
+    """Sync skills from the Fast Brain LPU API to local database."""
+    try:
+        import httpx
+        url = FAST_BRAIN_CONFIG.get('url', 'https://jenkintownelectricity--fast-brain-lpu-fastapi-app.modal.run')
+
+        synced = 0
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(f"{url}/v1/skills")
+            if response.status_code == 200:
+                remote_skills = response.json().get("skills", [])
+                for skill in remote_skills:
+                    skill_id = skill.get('id')
+                    if skill_id and USE_DATABASE:
+                        # Create or update skill in local database
+                        existing = db.get_skill(skill_id)
+                        if not existing:
+                            db.create_skill(
+                                skill_id=skill_id,
+                                name=skill.get('name', skill_id),
+                                description=skill.get('description', ''),
+                                system_prompt=skill.get('system_prompt', ''),
+                                skill_type=skill.get('skill_type', 'custom'),
+                                is_builtin=skill.get('is_builtin', False)
+                            )
+                            synced += 1
+
+        return jsonify({"success": True, "synced": synced, "message": f"Synced {synced} skills from LPU"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route('/api/fast-brain/seed-skills', methods=['POST'])
+def seed_default_skills():
+    """Seed default built-in skills to the database."""
+    try:
+        if USE_DATABASE:
+            db.seed_builtin_skills()
+            return jsonify({"success": True, "message": "Default skills seeded"})
+        else:
+            return jsonify({"success": False, "error": "Database not enabled"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
 @app.route('/api/fast-brain/skills', methods=['POST'])
 def create_fast_brain_skill():
     """Create a new custom skill with database persistence."""
@@ -6279,6 +6325,8 @@ DASHBOARD_HTML = '''
                     </div>
                     <div style="display: flex; gap: 0.5rem;">
                         <button class="btn btn-primary" onclick="showUnifiedCreateSkill()">+ Create Skill</button>
+                        <button class="btn btn-secondary" onclick="syncSkillsFromLPU()">🔄 Sync from LPU</button>
+                        <button class="btn btn-secondary" onclick="seedDefaultSkills()">📦 Seed Defaults</button>
                         <button class="btn btn-secondary" onclick="refreshUnifiedSkills()">Refresh</button>
                     </div>
                 </div>
@@ -8965,6 +9013,38 @@ pipeline = Pipeline([
             if (!skillId) { alert('Please select a skill first'); return; }
             // Redirect to existing golden prompt creation or open modal
             openManualEntryModal();
+        }
+
+        // Sync skills from LPU API
+        async function syncSkillsFromLPU() {
+            try {
+                const res = await fetch('/api/fast-brain/sync-skills', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.message || 'Skills synced successfully!');
+                    loadUnifiedSkills();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (err) {
+                alert('Failed to sync: ' + err.message);
+            }
+        }
+
+        // Seed default built-in skills
+        async function seedDefaultSkills() {
+            try {
+                const res = await fetch('/api/fast-brain/seed-skills', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.message || 'Default skills seeded!');
+                    loadUnifiedSkills();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (err) {
+                alert('Failed to seed: ' + err.message);
+            }
         }
 
         async function loadUnifiedSkills() {
