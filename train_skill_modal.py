@@ -148,8 +148,7 @@ class SkillTrainer:
             print(f"[TRAINER] GPU: {torch.cuda.get_device_name()}")
             print(f"[TRAINER] VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
 
-    @modal.method()
-    def get_training_data(self, skill_id: str) -> dict:
+    def _get_training_data(self, skill_id: str) -> dict:
         """
         Load training data for a skill from the database.
 
@@ -272,7 +271,7 @@ class SkillTrainer:
 
         # Step 1: Load training data
         print("[1/5] Loading training data...")
-        data_result = self.get_training_data(skill_id)
+        data_result = self._get_training_data(skill_id)
 
         if "error" in data_result:
             return {"success": False, "error": data_result["error"]}
