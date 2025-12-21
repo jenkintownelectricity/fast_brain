@@ -153,9 +153,23 @@ The dashboard is organized into 4 main sections for streamlined workflow:
 | Pillar | Contents |
 |--------|----------|
 | **Dashboard** | Overview, status cards, Getting Started onboarding |
-| **Skills** | Skills Manager, Golden Prompts, Train LoRA, Test Chat, Outgoing API |
-| **Voice** | Voice Projects, Create Voice, Training Queue, Skill Training |
+| **Skills & Training** | Unified skills management with 7 sub-tabs (see below) |
+| **Voice** | Voice Projects, Create Voice, Browse Voices, TTS Testing |
 | **Settings** | API Keys (7 providers), Platform Connections, Stats |
+
+### Unified Skills & Training Tab (New!)
+
+The Skills & Training section combines all skill management and training features into one unified interface with 7 sub-tabs:
+
+| Sub-Tab | Description |
+|---------|-------------|
+| **Skills Manager** | Create, edit, delete, and sync skills with the database |
+| **Golden Prompts** | View and edit voice-optimized system prompts |
+| **Train LoRA** | Configure and launch LoRA training jobs with Unsloth |
+| **Test Chat** | Test skills with real LLM inference (Groq/Claude) |
+| **Outgoing API** | Configure external API integrations with auth support |
+| **Training Status** | Monitor active training jobs, view logs, cancel runs |
+| **Data Parser** | Review and approve extracted training data samples |
 
 ### Dark/Light Mode
 
@@ -170,12 +184,15 @@ Toggle between Slack-inspired themes:
 - Getting Started onboarding for new users
 - Status cards for skills, voices, and API connections
 
-### Skills Tab
-- **Skills Manager**: Create, edit, and manage AI agent skills
+### Skills & Training Tab (Unified)
+All skill management and training features in one place:
+- **Skills Manager**: Create, edit, and manage AI agent skills with database sync
 - **Golden Prompts**: View/edit voice-optimized system prompts
-- **Train LoRA**: Generate training data for fine-tuning
-- **Test Chat**: Test skills with real LLM inference
+- **Train LoRA**: Configure LoRA training jobs with Unsloth (base model, epochs, LoRA rank)
+- **Test Chat**: Test skills with real LLM inference (Groq/Claude hybrid)
 - **Outgoing API**: Configure external API integrations
+- **Training Status**: Monitor active training jobs and view logs
+- **Data Parser**: Review and approve extracted training data samples
 
 ### Voice Tab (Voice Lab)
 
@@ -313,6 +330,8 @@ The dashboard uses SQLite for persistent storage on a Modal volume (`/data/hive2
 | `voice_samples` | Audio samples for voice training |
 | `api_connections` | Outgoing API integrations |
 | `training_data` | Collected examples for LoRA fine-tuning |
+| `trained_adapters` | LoRA adapter metadata (skill, epochs, loss, path) |
+| `extracted_data` | Parser-extracted training samples with approval status |
 | `configurations` | Key-value system settings |
 
 Data persists across Modal container restarts via the `hive215-data` volume.
@@ -493,6 +512,13 @@ model="claude-sonnet-4-5-20250929"
 ## Development
 
 ### Recent Updates (December 2024)
+
+**December 21, 2024 - Unified Skills & Training:**
+- **Unified Tab**: Combined separate Skills and Training tabs into single "Skills & Training" section
+- **7 Sub-Tabs**: Skills Manager, Golden Prompts, Train LoRA, Test Chat, Outgoing API, Training Status, Data Parser
+- **New API Endpoints**: Added 11 new endpoints for training and parser functionality
+- **Database Updates**: Added `trained_adapters` and `extracted_data` tables
+- **Bug Fixes**: Fixed "Failed to load skills" error caused by missing API endpoints
 
 **New Features:**
 - **Voice Lab**: Full voice cloning workflow with ElevenLabs, Cartesia, and free gTTS
