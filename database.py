@@ -180,6 +180,30 @@ def init_db():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_extracted_importance ON extracted_data(importance_score)')
 
         # =================================================================
+        # TRAINED ADAPTERS TABLE - LoRA adapters from training
+        # =================================================================
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS trained_adapters (
+                id TEXT PRIMARY KEY,
+                skill_id TEXT NOT NULL,
+                skill_name TEXT,
+                adapter_name TEXT,
+                base_model TEXT DEFAULT 'unsloth/Qwen2.5-1.5B-Instruct',
+                epochs INTEGER DEFAULT 10,
+                lora_r INTEGER DEFAULT 16,
+                final_loss REAL,
+                training_time_seconds INTEGER,
+                adapter_path TEXT,
+                status TEXT DEFAULT 'completed',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                metadata TEXT,  -- JSON for extra training config
+                FOREIGN KEY (skill_id) REFERENCES skills(id)
+            )
+        ''')
+
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_adapter_skill ON trained_adapters(skill_id)')
+
+        # =================================================================
         # API KEYS TABLE - Encrypted storage
         # =================================================================
         cursor.execute('''
@@ -1147,6 +1171,113 @@ def update_api_connection_status(connection_id: str, status: str, error: str = N
             WHERE id = ?
         ''', (status, datetime.now().isoformat(), error, datetime.now().isoformat(), connection_id))
         return cursor.rowcount > 0
+
+
+# =============================================================================
+# TRAINED ADAPTERS FUNCTIONS
+# =============================================================================
+
+def get_all_adapters() -> List[Dict]:
+    """Get all trained adapters."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM trained_adapters ORDER BY created_at DESC')
+        adapters = []
+        for row in cursor.fetchall():
+            adapters.append({
+                **dict(row),
+                'metadata': json.loads(row['metadata'] or '{}') if row['metadata'] else {}
+            })
+        return adapters
+
+
+def get_adapters_by_skill(skill_id: str) -> List[Dict]:
+    """Get adapters for a specific skill."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM trained_adapters WHERE skill_id = ? ORDER BY created_at DESC', (skill_id,))
+        adapters = []
+        for row in cursor.fetchall():
+            adapters.append({
+                **dict(row),
+                'metadata': json.loads(row['metadata'] or '{}') if row['metadata'] else {}
+            })
+        return adapters
+
+
+def create_adapter(adapter_id: str, skill_id: str, skill_name: str = None, **kwargs) -> Dict:
+    """Create a new trained adapter record."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO trained_adapters (id, skill_id, skill_name, adapter_name, base_model, epochs, lora_r, final_loss, training_time_seconds, adapter_path, status, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            adapter_id,
+            skill_id,
+            skill_name,
+            kwargs.get('adapter_name'),
+            kwargs.get('base_model', 'unsloth/Qwen2.5-1.5B-Instruct'),
+            kwargs.get('epochs', 10),
+            kwargs.get('lora_r', 16),
+            kwargs.get('final_loss'),
+            kwargs.get('training_time_seconds'),
+            kwargs.get('adapter_path'),
+            kwargs.get('status', 'completed'),
+            json.dumps(kwargs.get('metadata', {}))
+        ))
+        return {"id": adapter_id, "skill_id": skill_id}
+
+
+# =============================================================================
+# EXTRACTED DATA / PARSER STATS FUNCTIONS
+# =============================================================================
+
+def get_extracted_data_stats() -> Dict:
+    """Get overall stats for extracted training data."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Overall stats
+        cursor.execute('SELECT COUNT(*) as total, SUM(tokens) as total_tokens FROM extracted_data')
+        overall = dict(cursor.fetchone())
+
+        cursor.execute('SELECT COUNT(*) as approved FROM extracted_data WHERE is_approved = 1')
+        overall['approved'] = cursor.fetchone()['approved']
+
+        cursor.execute('SELECT COUNT(*) as pending FROM extracted_data WHERE is_approved = 0')
+        overall['pending'] = cursor.fetchone()['pending']
+
+        # By skill
+        cursor.execute('''
+            SELECT skill_id, COUNT(*) as total, SUM(tokens) as tokens
+            FROM extracted_data
+            GROUP BY skill_id
+        ''')
+        by_skill = [dict(row) for row in cursor.fetchall()]
+
+        return {
+            'total': overall.get('total', 0) or 0,
+            'total_tokens': overall.get('total_tokens', 0) or 0,
+            'approved': overall.get('approved', 0) or 0,
+            'pending': overall.get('pending', 0) or 0,
+            'by_skill': by_skill
+        }
+
+
+def get_extracted_data_by_skill(skill_id: str) -> List[Dict]:
+    """Get all extracted data for a skill."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM extracted_data WHERE skill_id = ? ORDER BY created_at DESC', (skill_id,))
+        items = []
+        for row in cursor.fetchall():
+            items.append({
+                **dict(row),
+                'tags': json.loads(row['tags'] or '[]') if row['tags'] else [],
+                'metadata': json.loads(row['metadata'] or '{}') if row['metadata'] else {}
+            })
+        return items
 
 
 # =============================================================================

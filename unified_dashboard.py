@@ -728,6 +728,144 @@ def list_trained_adapters():
         return jsonify({"error": str(e)}), 500
 
 
+# =============================================================================
+# TRAINING & PARSER API ENDPOINTS (Required by unified Skills & Training tab)
+# =============================================================================
+
+@app.route('/api/training/adapters')
+def get_training_adapters():
+    """
+    Get all trained adapters from the database.
+    This endpoint is called by the unified Skills & Training tab.
+    """
+    try:
+        if USE_DATABASE:
+            adapters = db.get_all_adapters()
+        else:
+            adapters = []
+        return jsonify({"adapters": adapters, "success": True})
+    except Exception as e:
+        print(f"Error loading adapters: {e}")
+        return jsonify({"adapters": [], "success": False, "error": str(e)})
+
+
+@app.route('/api/training/adapters/<skill_id>')
+def get_skill_adapters(skill_id):
+    """Get adapters for a specific skill."""
+    try:
+        if USE_DATABASE:
+            adapters = db.get_adapters_by_skill(skill_id)
+        else:
+            adapters = []
+        return jsonify({"adapters": adapters, "success": True})
+    except Exception as e:
+        return jsonify({"adapters": [], "success": False, "error": str(e)})
+
+
+@app.route('/api/parser/stats')
+def get_parser_stats():
+    """
+    Get overall statistics for parsed training data.
+    This endpoint is called by the unified Skills & Training tab.
+    """
+    try:
+        if USE_DATABASE:
+            stats = db.get_extracted_data_stats()
+        else:
+            stats = {'total': 0, 'total_tokens': 0, 'approved': 0, 'pending': 0, 'by_skill': []}
+        return jsonify(stats)
+    except Exception as e:
+        print(f"Error loading parser stats: {e}")
+        return jsonify({'total': 0, 'total_tokens': 0, 'approved': 0, 'pending': 0, 'by_skill': [], 'error': str(e)})
+
+
+@app.route('/api/parser/data')
+def get_parser_data():
+    """
+    Get parsed training data for a skill.
+    Query params: skill_id
+    """
+    try:
+        skill_id = request.args.get('skill_id')
+        if not skill_id:
+            return jsonify({"items": [], "error": "skill_id required"})
+
+        if USE_DATABASE:
+            items = db.get_extracted_data_by_skill(skill_id)
+        else:
+            items = []
+        return jsonify({"items": items, "success": True})
+    except Exception as e:
+        return jsonify({"items": [], "success": False, "error": str(e)})
+
+
+@app.route('/api/parser/data', methods=['POST'])
+def add_parser_data():
+    """Add a training data item manually."""
+    try:
+        import uuid
+        data = request.json or {}
+
+        if not data.get('skill_id') or not data.get('user_input') or not data.get('assistant_response'):
+            return jsonify({"success": False, "error": "skill_id, user_input, and assistant_response required"})
+
+        if USE_DATABASE:
+            with db.get_db() as conn:
+                cursor = conn.cursor()
+                item_id = str(uuid.uuid4())[:8]
+                tokens = len(data.get('user_input', '').split()) + len(data.get('assistant_response', '').split())
+
+                cursor.execute('''
+                    INSERT INTO extracted_data (id, skill_id, user_input, assistant_response, source_filename, category, tokens, is_approved)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    item_id,
+                    data['skill_id'],
+                    data['user_input'],
+                    data['assistant_response'],
+                    data.get('source_filename', 'manual_entry'),
+                    data.get('category', 'general'),
+                    tokens,
+                    1 if data.get('is_approved') else 0
+                ))
+
+            return jsonify({"success": True, "id": item_id})
+        else:
+            return jsonify({"success": False, "error": "Database not available"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route('/api/parser/data/<item_id>', methods=['DELETE'])
+def delete_parser_data(item_id):
+    """Delete a training data item."""
+    try:
+        if USE_DATABASE:
+            with db.get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM extracted_data WHERE id = ?', (item_id,))
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "Database not available"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route('/api/parser/data/<item_id>/approve', methods=['POST'])
+def approve_parser_data(item_id):
+    """Approve a training data item."""
+    try:
+        if USE_DATABASE:
+            with db.get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute('UPDATE extracted_data SET is_approved = 1 WHERE id = ?', (item_id,))
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "Database not available"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
 @app.route('/api/test-adapter/<skill_id>', methods=['POST'])
 def test_trained_adapter(skill_id):
     """
@@ -2495,31 +2633,59 @@ def fast_brain_benchmark():
 @app.route('/api/fast-brain/skills')
 def get_fast_brain_skills():
     """Get all available skills from unified database."""
-    if USE_DATABASE:
-        skills = db.get_all_skills()
-        selected = db.get_config('selected_skill', 'general')
-    else:
-        # Fallback to in-memory
-        url = FAST_BRAIN_CONFIG.get('url')
-        if url:
-            try:
-                import httpx
-                with httpx.Client(timeout=5.0) as client:
-                    response = client.get(f"{url}/v1/skills")
-                    if response.status_code == 200:
-                        remote_skills = response.json().get("skills", [])
-                        for skill in remote_skills:
-                            if skill["id"] not in FAST_BRAIN_SKILLS:
-                                FAST_BRAIN_SKILLS[skill["id"]] = {**skill, "is_builtin": False}
-            except:
-                pass
-        skills = list(FAST_BRAIN_SKILLS.values())
-        selected = FAST_BRAIN_CONFIG.get("selected_skill", "general")
+    try:
+        skills = []
+        selected = 'general'
 
-    return jsonify({
-        "skills": skills,
-        "selected": selected
-    })
+        if USE_DATABASE:
+            try:
+                skills = db.get_all_skills()
+                selected = db.get_config('selected_skill', 'general') or 'general'
+            except Exception as db_error:
+                print(f"Database error loading skills: {db_error}")
+                # Try to initialize database if tables don't exist
+                try:
+                    db.init_db()
+                    skills = db.get_all_skills()
+                except:
+                    pass
+
+        # If no skills in database, try fetching from LPU API
+        if not skills:
+            url = FAST_BRAIN_CONFIG.get('url', 'https://jenkintownelectricity--fast-brain-lpu-fastapi-app.modal.run')
+            if url:
+                try:
+                    import httpx
+                    with httpx.Client(timeout=5.0) as client:
+                        response = client.get(f"{url}/v1/skills")
+                        if response.status_code == 200:
+                            remote_skills = response.json().get("skills", [])
+                            for skill in remote_skills:
+                                if skill.get("id"):
+                                    skills.append(skill)
+                                    FAST_BRAIN_SKILLS[skill["id"]] = {**skill, "is_builtin": False}
+                except Exception as api_error:
+                    print(f"API error fetching skills from LPU: {api_error}")
+
+        # Fallback to in-memory skills if still empty
+        if not skills and FAST_BRAIN_SKILLS:
+            skills = list(FAST_BRAIN_SKILLS.values())
+            selected = FAST_BRAIN_CONFIG.get("selected_skill", "general")
+
+        return jsonify({
+            "skills": skills,
+            "selected": selected,
+            "success": True
+        })
+
+    except Exception as e:
+        print(f"Error in get_fast_brain_skills: {e}")
+        return jsonify({
+            "skills": [],
+            "selected": "general",
+            "success": False,
+            "error": str(e)
+        })
 
 
 @app.route('/api/fast-brain/sync-skills', methods=['POST'])
