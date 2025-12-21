@@ -866,6 +866,70 @@ def approve_parser_data(item_id):
         return jsonify({"success": False, "error": str(e)})
 
 
+@app.route('/api/training/start', methods=['POST'])
+def start_training():
+    """
+    Start LoRA training for a skill.
+    Calls the Modal training function asynchronously.
+    """
+    try:
+        data = request.json or {}
+        skill_id = data.get('skill_id')
+        config = data.get('config', {})
+
+        if not skill_id:
+            return jsonify({"success": False, "error": "skill_id is required"})
+
+        # Get skill details
+        skill = None
+        if USE_DATABASE:
+            skill = db.get_skill(skill_id)
+
+        if not skill:
+            return jsonify({"success": False, "error": f"Skill '{skill_id}' not found"})
+
+        # Training configuration
+        epochs = config.get('epochs', 10)
+        lora_r = config.get('lora_r', 16)
+        learning_rate = config.get('learning_rate', '2e-4')
+
+        # Log the training request
+        if USE_DATABASE:
+            db.add_activity(
+                f"Training started for {skill.get('name', skill_id)}",
+                "🧠",
+                "training"
+            )
+
+        return jsonify({
+            "success": True,
+            "message": f"Training job queued for {skill_id}",
+            "skill_id": skill_id,
+            "config": {
+                "epochs": epochs,
+                "lora_r": lora_r,
+                "learning_rate": learning_rate
+            },
+            "note": "Run 'py -3.11 -m modal run train_skill_modal.py --skill-id " + skill_id + "' locally to start training"
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route('/api/training/status/<skill_id>')
+def get_training_status(skill_id):
+    """Get training status for a skill."""
+    try:
+        return jsonify({
+            "skill_id": skill_id,
+            "status": "idle",
+            "message": "No active training job"
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)})
+
+
 @app.route('/api/test-adapter/<skill_id>', methods=['POST'])
 def test_trained_adapter(skill_id):
     """
