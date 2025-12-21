@@ -244,3 +244,199 @@ modal deploy fast_brain/deploy_groq.py
 ```
 
 ---
+
+## 2025-12-21: Unified Skills & Training Tab - Complete Overhaul
+
+### Session: `claude/unified-skills-training-5LDqg`
+
+#### Overview
+Combined the separate "Skills" and "Training" tabs into a single unified "🧠 Skills & Training" section with full feature integration, fixing multiple critical bugs along the way.
+
+#### Major Features Added
+
+1. **Unified Skills & Training Tab**
+   - Combined 2 separate tabs into 1 unified section
+   - 7 sub-tabs: Skills, Golden Prompts, Training, Data Manager, Test Chat, Adapters, API
+   - Skill cards with training status badges (untrained, has_data, trained)
+   - Click-to-manage skill detail modal
+
+2. **Skill Cards View**
+   - Visual grid of all skills with status indicators
+   - Search and filter (All, Untrained, Has Data, Trained)
+   - Sort by name/status
+   - Inline "Create Skill" form
+   - "Sync from LPU" and "Seed Defaults" buttons
+
+3. **Skill Detail Modal**
+   - 4-tab modal: Overview, Training Data, Train, Adapters
+   - Edit skill name, description, system prompt
+   - View/manage training examples
+   - Manual entry, bulk import, AI generate options
+   - Training configuration with intensity slider
+   - Adapter management
+
+4. **Training Data Management**
+   - Manual Q&A entry modal
+   - Bulk document import (70+ file types)
+   - AI-powered training data generation
+   - Approve/delete data items
+   - Token counting and stats
+
+#### Critical Bugs Fixed
+
+1. **Missing API Endpoints** (Root cause of "Failed to load skills")
+   ```
+   JavaScript was calling:
+   - /api/training/adapters    ❌ DID NOT EXIST
+   - /api/parser/stats         ❌ DID NOT EXIST
+   - /api/training/start       ❌ DID NOT EXIST
+   - /api/training/status      ❌ DID NOT EXIST
+
+   Promise.all() failed → showed "Failed to load skills"
+   ```
+
+2. **Duplicate Function Name**
+   - Two functions named `get_training_status()` caused Flask crash
+   - Renamed to `get_skill_training_status()`
+
+3. **Database Table Missing**
+   - Added `trained_adapters` table for tracking LoRA adapters
+   - Added `extracted_data` table functions for parser stats
+
+#### New API Endpoints Added
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/training/adapters` | GET | List all trained adapters |
+| `/api/training/adapters/<skill_id>` | GET | Get adapters for skill |
+| `/api/training/start` | POST | Start training job |
+| `/api/training/status/<skill_id>` | GET | Get training status |
+| `/api/parser/stats` | GET | Get training data statistics |
+| `/api/parser/data` | GET | Get training data by skill |
+| `/api/parser/data` | POST | Add manual training data |
+| `/api/parser/data/<id>` | DELETE | Delete training data |
+| `/api/parser/data/<id>/approve` | POST | Approve training data |
+| `/api/fast-brain/sync-skills` | POST | Sync skills from LPU API |
+| `/api/fast-brain/seed-skills` | POST | Seed default skills |
+
+#### Database Schema Changes
+
+```sql
+-- New table for tracking trained adapters
+CREATE TABLE trained_adapters (
+    id TEXT PRIMARY KEY,
+    skill_id TEXT NOT NULL,
+    skill_name TEXT,
+    adapter_name TEXT,
+    base_model TEXT DEFAULT 'unsloth/Qwen2.5-1.5B-Instruct',
+    epochs INTEGER DEFAULT 10,
+    lora_r INTEGER DEFAULT 16,
+    final_loss REAL,
+    training_time_seconds INTEGER,
+    adapter_path TEXT,
+    status TEXT DEFAULT 'completed',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    metadata TEXT
+);
+```
+
+#### New Database Functions
+
+```python
+# Adapters
+db.get_all_adapters()
+db.get_adapters_by_skill(skill_id)
+db.create_adapter(adapter_id, skill_id, **kwargs)
+
+# Parser Stats
+db.get_extracted_data_stats()
+db.get_extracted_data_by_skill(skill_id)
+```
+
+#### Files Modified
+
+| File | Changes |
+|------|---------|
+| `unified_dashboard.py` | +800 lines: Unified tab, modals, 11 new endpoints, JS functions |
+| `database.py` | +150 lines: trained_adapters table, adapter/parser functions |
+| `deploy_dashboard.py` | Updated Modal deployment |
+
+#### Commits Made
+
+1. `feat: Unify Skills & Training into single tab with skill cards`
+2. `feat: Add complete sub-tabs to unified Skills & Training section`
+3. `feat: Add skill sync and seed functions`
+4. `fix: Add missing API endpoints and proper error handling`
+5. `fix: Add /api/training/start and /api/training/status endpoints`
+6. `fix: Rename duplicate get_training_status function`
+
+#### Modal Deployments
+
+```powershell
+# All 4 services deployed successfully
+py -3.11 -m modal deploy deploy_dashboard.py       # hive215-dashboard
+py -3.11 -m modal deploy fast_brain/deploy_groq.py # fast-brain-lpu
+py -3.11 -m modal deploy train_skill_modal.py      # hive215-skill-trainer
+py -3.11 -m modal deploy parler_integration.py     # hive215-parler-tts
+```
+
+#### Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    🧠 Skills & Training Tab                  │
+├─────────────────────────────────────────────────────────────┤
+│  Sub-tabs:                                                   │
+│  ┌────────┬─────────┬──────────┬──────┬──────┬────────┬───┐ │
+│  │ Skills │ Golden  │ Training │ Data │ Chat │Adapters│API│ │
+│  │        │ Prompts │          │ Mgr  │      │        │   │ │
+│  └────────┴─────────┴──────────┴──────┴──────┴────────┴───┘ │
+├─────────────────────────────────────────────────────────────┤
+│  Skills Tab:                                                 │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐            │
+│  │ 🎯 Skill A  │ │ 🎯 Skill B  │ │ 🎯 Skill C  │            │
+│  │ ● Trained   │ │ ◐ Has Data  │ │ ○ Untrained │            │
+│  │ 50 examples │ │ 20 examples │ │ 0 examples  │            │
+│  │ 2 adapters  │ │ 0 adapters  │ │ 0 adapters  │            │
+│  └─────────────┘ └─────────────┘ └─────────────┘            │
+│                                                              │
+│  [+ Create Skill] [🔄 Sync from LPU] [📦 Seed Defaults]     │
+└─────────────────────────────────────────────────────────────┘
+
+Click Skill Card → Opens Detail Modal:
+┌─────────────────────────────────────────────────────────────┐
+│  🎯 Skill Name                           [● Trained] [✕]   │
+├─────────────────────────────────────────────────────────────┤
+│  [Overview] [Training Data] [Train] [Adapters]              │
+├─────────────────────────────────────────────────────────────┤
+│  Overview Tab:                                               │
+│  ├── Skill ID, Name, Description                            │
+│  ├── System Prompt editor                                   │
+│  └── Stats: Examples, Tokens, Adapters, Quality             │
+│                                                              │
+│  Training Data Tab:                                          │
+│  ├── [✏️ Manual] [📤 Bulk Import] [🤖 AI Generate]         │
+│  ├── Stats: Total | Pending | Approved | Tokens             │
+│  └── Data table with approve/delete actions                 │
+│                                                              │
+│  Train Tab:                                                  │
+│  ├── Readiness checks (examples, system prompt)             │
+│  ├── Intensity slider (Quick/Standard/Deep)                 │
+│  ├── Cost/time estimates                                    │
+│  └── [🚀 Start Training] button                             │
+│                                                              │
+│  Adapters Tab:                                               │
+│  └── List of trained adapters with Test/Deploy buttons      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Testing Notes
+
+After deployment, click "🔄 Sync from LPU" to import existing skills from the Fast Brain LPU API into the dashboard's local database.
+
+Training is currently a "queue" action - actual GPU training runs with:
+```powershell
+py -3.11 -m modal run train_skill_modal.py --skill-id <skill_id>
+```
+
+---
