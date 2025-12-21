@@ -918,8 +918,8 @@ def start_training():
 
 
 @app.route('/api/training/status/<skill_id>')
-def get_training_status(skill_id):
-    """Get training status for a skill."""
+def get_skill_training_status(skill_id):
+    """Get training status for a specific skill."""
     try:
         return jsonify({
             "skill_id": skill_id,
