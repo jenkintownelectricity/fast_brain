@@ -47,11 +47,18 @@ data_volume = modal.Volume.from_name("hive215-data", create_if_missing=True)
 # Training image with Unsloth + dependencies
 training_image = (
     modal.Image.debian_slim(python_version="3.11")
+    .apt_install("git")  # Required for unsloth installation
     .pip_install(
-        # Unsloth for fast training
-        "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git",
-        # Core dependencies
+        # Core PyTorch first
         "torch>=2.1.0",
+        "triton",
+    )
+    .pip_install(
+        # Unsloth for fast training (install after torch)
+        "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git",
+    )
+    .pip_install(
+        # Training dependencies
         "transformers>=4.36.0",
         "datasets>=2.14.0",
         "accelerate>=0.25.0",
@@ -62,6 +69,7 @@ training_image = (
         "huggingface_hub",
         "safetensors",
         "sentencepiece",
+        "xformers",
     )
     .add_local_file("database.py", "/root/database.py")
 )
