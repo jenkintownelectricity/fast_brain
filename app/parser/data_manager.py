@@ -1,5 +1,6 @@
 """
-Data Extraction Manager - LLM-powered extraction and storage
+Data Extraction Manager - Updated to use YOUR Modal endpoints
+Uses premier-whisper-stt instead of OpenAI Whisper (95% cheaper!)
 """
 
 import os
@@ -18,12 +19,22 @@ from werkzeug.utils import secure_filename
 from .universal_parser import UniversalParser, ALLOWED_EXTENSIONS
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CONFIGURATION
+# CONFIGURATION - YOUR MODAL ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# Your Modal endpoints (update these with your actual URLs)
+MODAL_WHISPER_URL = os.environ.get('MODAL_WHISPER_URL', 'https://jenkintownelectricity25--premier-whisper-stt-transcribe-web.modal.run')
+MODAL_KOKORO_URL = os.environ.get('MODAL_KOKORO_URL', 'https://jenkintownelectricity25--hive215-kokoro-tts-synthesize-web.modal.run')
+MODAL_COQUI_URL = os.environ.get('MODAL_COQUI_URL', 'https://jenkintownelectricity25--premier-coqui-tts-synthesize-web.modal.run')
+
+# Groq for LLM extraction (still needed)
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+# Fallback to OpenAI if Modal fails (optional)
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
+USE_OPENAI_FALLBACK = os.environ.get('USE_OPENAI_FALLBACK', 'false').lower() == 'true'
+
 TEMP_DIR = tempfile.gettempdir()
 
 
@@ -62,11 +73,10 @@ class ExtractedData:
 
 class DataExtractionManager:
     """
-    Manages the full pipeline:
-    1. Parse files
-    2. Extract training data with LLM
-    3. Store in database
-    4. DELETE original files
+    Manages the full pipeline using YOUR Modal endpoints:
+    - premier-whisper-stt for audio transcription
+    - Groq Llama for vision OCR
+    - Groq Llama for Q&A extraction
     """
     
     def __init__(self):
@@ -89,28 +99,21 @@ class DataExtractionManager:
         skill_context: Dict,
         auto_delete: bool = True
     ) -> Dict:
-        """
-        Process uploaded files:
-        1. Save temporarily
-        2. Parse each file
-        3. Extract training data
-        4. Store in database
-        5. Delete temp files
-        """
+        """Process uploaded files with YOUR Modal endpoints."""
         results = {
             'files_processed': 0,
             'files_failed': 0,
             'items_extracted': 0,
             'items_stored': 0,
             'errors': [],
-            'extracted_data': []
+            'extracted_data': [],
+            'transcription_source': None  # Track which service was used
         }
         
         for filename, content_type, data in files:
             temp_path = None
             
             try:
-                # Save to temp file
                 safe_name = secure_filename(filename)
                 temp_path = os.path.join(TEMP_DIR, f"{hashlib.md5(f'{filename}{datetime.now()}'.encode()).hexdigest()[:12]}_{safe_name}")
                 
@@ -123,17 +126,14 @@ class DataExtractionManager:
                 if parse_result['errors']:
                     results['errors'].extend([f"{filename}: {e}" for e in parse_result['errors']])
                 
-                if not parse_result['text'] and not parse_result.get('metadata', {}).get('needs_ocr') and not parse_result.get('metadata', {}).get('needs_transcription'):
-                    results['files_failed'] += 1
-                    continue
-                
-                # Handle OCR for images
+                # Handle OCR for images (Groq Vision)
                 if parse_result.get('metadata', {}).get('needs_ocr'):
                     parse_result = await self._ocr_image(temp_path, filename)
                 
-                # Handle transcription for audio/video
+                # Handle transcription for audio/video (YOUR MODAL WHISPER!)
                 if parse_result.get('metadata', {}).get('needs_transcription'):
-                    parse_result = await self._transcribe_audio(temp_path, filename)
+                    parse_result = await self._transcribe_with_modal(temp_path, filename)
+                    results['transcription_source'] = parse_result.get('metadata', {}).get('transcription_source', 'unknown')
                 
                 if not parse_result['text']:
                     results['files_failed'] += 1
@@ -174,21 +174,114 @@ class DataExtractionManager:
                 results['files_failed'] += 1
             
             finally:
-                # DELETE temp file immediately
                 if auto_delete and temp_path and os.path.exists(temp_path):
                     try:
                         os.remove(temp_path)
                     except:
                         pass
         
-        # Score importance of all items
+        # Score importance
         if results['extracted_data']:
             results['extracted_data'] = await self._score_importance(results['extracted_data'], skill_context)
         
         return results
     
+    # ─────────────────────────────────────────────────────────────────────────
+    # YOUR MODAL WHISPER STT (95% cheaper than OpenAI!)
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    async def _transcribe_with_modal(self, file_path: str, filename: str) -> Dict:
+        """
+        Transcribe audio using YOUR premier-whisper-stt Modal endpoint.
+        Falls back to OpenAI Whisper if Modal fails (optional).
+        """
+        try:
+            with open(file_path, 'rb') as f:
+                audio_data = f.read()
+            
+            client = await self._get_client()
+            
+            # Try YOUR Modal Whisper first
+            try:
+                print(f"🎤 Transcribing {filename} with Modal Whisper...")
+                
+                # Prepare multipart form data for Modal endpoint
+                files = {"file": (filename, audio_data)}
+                
+                response = await client.post(
+                    MODAL_WHISPER_URL,
+                    files=files,
+                    timeout=300.0  # 5 min timeout for long audio
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    
+                    # Handle different response formats
+                    if isinstance(result, dict):
+                        text = result.get('text', result.get('transcription', ''))
+                    else:
+                        text = str(result)
+                    
+                    if text:
+                        print(f"✅ Modal Whisper transcribed {len(text)} chars")
+                        return {
+                            'text': text, 
+                            'pages': 1, 
+                            'errors': [], 
+                            'metadata': {'transcribed': True, 'transcription_source': 'modal-whisper'},
+                            'source_type': 'audio'
+                        }
+                    
+            except Exception as modal_error:
+                print(f"⚠️ Modal Whisper failed: {modal_error}")
+                
+                # Fallback to OpenAI if enabled
+                if USE_OPENAI_FALLBACK and OPENAI_API_KEY:
+                    print("🔄 Falling back to OpenAI Whisper...")
+                    return await self._transcribe_with_openai(file_path, filename, audio_data)
+            
+            return {'text': '', 'pages': 0, 'errors': ['Transcription failed'], 'metadata': {}}
+                
+        except Exception as e:
+            return {'text': '', 'pages': 0, 'errors': [str(e)], 'metadata': {}}
+    
+    async def _transcribe_with_openai(self, file_path: str, filename: str, audio_data: bytes) -> Dict:
+        """Fallback to OpenAI Whisper API."""
+        try:
+            client = await self._get_client()
+            
+            files = {"file": (filename, audio_data)}
+            data = {"model": "whisper-1", "response_format": "text"}
+            
+            response = await client.post(
+                "https://api.openai.com/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+                files=files,
+                data=data
+            )
+            
+            if response.status_code == 200:
+                text = response.text
+                return {
+                    'text': text, 
+                    'pages': 1, 
+                    'errors': [], 
+                    'metadata': {'transcribed': True, 'transcription_source': 'openai-whisper'},
+                    'source_type': 'audio'
+                }
+            else:
+                return {'text': '', 'pages': 0, 'errors': [f'OpenAI Whisper error: {response.status_code}'], 'metadata': {}}
+                
+        except Exception as e:
+            return {'text': '', 'pages': 0, 'errors': [str(e)], 'metadata': {}}
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # OCR (Groq Vision)
+    # ─────────────────────────────────────────────────────────────────────────
+    
     async def _ocr_image(self, file_path: str, filename: str) -> Dict:
-        """Extract text from images using vision model."""
+        """Extract text from images using Groq Vision."""
         try:
             with open(file_path, 'rb') as f:
                 image_data = base64.b64encode(f.read()).decode('utf-8')
@@ -224,33 +317,9 @@ class DataExtractionManager:
         except Exception as e:
             return {'text': '', 'pages': 0, 'errors': [str(e)], 'metadata': {}}
     
-    async def _transcribe_audio(self, file_path: str, filename: str) -> Dict:
-        """Transcribe audio using Whisper API."""
-        try:
-            with open(file_path, 'rb') as f:
-                audio_data = f.read()
-            
-            client = await self._get_client()
-            
-            # Use OpenAI Whisper API
-            files = {"file": (filename, audio_data)}
-            data = {"model": "whisper-1", "response_format": "text"}
-            
-            response = await client.post(
-                "https://api.openai.com/v1/audio/transcriptions",
-                headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
-                files=files,
-                data=data
-            )
-            
-            if response.status_code == 200:
-                text = response.text
-                return {'text': text, 'pages': 1, 'errors': [], 'metadata': {'transcribed': True}, 'source_type': 'audio'}
-            else:
-                return {'text': '', 'pages': 0, 'errors': [f'Whisper API error: {response.status_code}'], 'metadata': {}}
-                
-        except Exception as e:
-            return {'text': '', 'pages': 0, 'errors': [str(e)], 'metadata': {}}
+    # ─────────────────────────────────────────────────────────────────────────
+    # LLM EXTRACTION (Groq Llama)
+    # ─────────────────────────────────────────────────────────────────────────
     
     async def _extract_training_data(
         self,
@@ -412,3 +481,59 @@ Return JSON mapping ID to score: {{"id1": 85, "id2": 72}}"""
                 except:
                     pass
         return []
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BONUS: TTS TESTING UTILITIES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TTSTestUtility:
+    """
+    Use your Kokoro/Coqui TTS to test trained models.
+    Generate audio samples to verify voice quality.
+    """
+    
+    def __init__(self):
+        self.http_client = None
+    
+    async def _get_client(self):
+        if not self.http_client:
+            self.http_client = httpx.AsyncClient(timeout=60.0)
+        return self.http_client
+    
+    async def generate_test_audio(self, text: str, voice: str = "af_heart", provider: str = "kokoro") -> bytes:
+        """Generate audio using your Modal TTS endpoints."""
+        client = await self._get_client()
+        
+        if provider == "kokoro":
+            response = await client.post(
+                MODAL_KOKORO_URL,
+                json={"text": text, "voice": voice}
+            )
+        elif provider == "coqui":
+            response = await client.post(
+                MODAL_COQUI_URL,
+                json={"text": text}
+            )
+        else:
+            raise ValueError(f"Unknown provider: {provider}")
+        
+        if response.status_code == 200:
+            return response.content
+        else:
+            raise Exception(f"TTS error: {response.status_code}")
+    
+    async def list_kokoro_voices(self) -> List[Dict]:
+        """Get available Kokoro voices."""
+        client = await self._get_client()
+        
+        list_url = MODAL_KOKORO_URL.replace('synthesize-web', 'list-voices')
+        response = await client.get(list_url)
+        
+        if response.status_code == 200:
+            return response.json()
+        return []
+    
+    async def close(self):
+        if self.http_client:
+            await self.http_client.aclose()

@@ -804,9 +804,19 @@ def get_supported_types():
 
 @app.route('/api/parser/upload', methods=['POST'])
 def upload_and_parse():
-    """Upload files, extract Q&A pairs, then delete files."""
+    """Upload files, extract Q&A pairs, then delete files.
+    Uses YOUR Modal Whisper for audio transcription (95% cheaper than OpenAI!)
+    """
     import hashlib
     import uuid
+    import requests as sync_requests
+
+    # YOUR Modal endpoints (95% cheaper!)
+    MODAL_WHISPER_URL = os.environ.get('MODAL_WHISPER_URL', 'https://jenkintownelectricity--premier-whisper-stt-transcribe-web.modal.run')
+
+    # Audio extensions that need transcription
+    AUDIO_EXTENSIONS = {'mp3', 'wav', 'm4a', 'ogg', 'flac', 'aac', 'wma'}
+    VIDEO_EXTENSIONS = {'mp4', 'mkv', 'avi', 'mov', 'wmv', 'webm'}
 
     if 'files[]' not in request.files and 'file' not in request.files:
         return jsonify({'success': False, 'error': 'No files provided'}), 400
@@ -822,7 +832,8 @@ def upload_and_parse():
         'files_failed': 0,
         'items_extracted': 0,
         'errors': [],
-        'extracted_data': []
+        'extracted_data': [],
+        'transcription_source': None
     }
 
     for file in files:
@@ -831,7 +842,37 @@ def upload_and_parse():
 
         try:
             filename = file.filename
-            content = file.read().decode('utf-8', errors='ignore')
+            ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+
+            # Handle audio/video files with YOUR Modal Whisper (95% cheaper!)
+            if ext in AUDIO_EXTENSIONS or ext in VIDEO_EXTENSIONS:
+                try:
+                    print(f"🎤 Transcribing {filename} with YOUR Modal Whisper...")
+                    file_data = file.read()
+
+                    # Call YOUR Modal Whisper endpoint
+                    response = sync_requests.post(
+                        MODAL_WHISPER_URL,
+                        files={'file': (filename, file_data)},
+                        timeout=300
+                    )
+
+                    if response.status_code == 200:
+                        result = response.json()
+                        content = result.get('text', result.get('transcription', ''))
+                        results['transcription_source'] = 'modal-whisper'
+                        print(f"✅ Modal Whisper: {len(content)} chars transcribed")
+                    else:
+                        results['errors'].append(f"{filename}: Transcription failed ({response.status_code})")
+                        results['files_failed'] += 1
+                        continue
+                except Exception as e:
+                    results['errors'].append(f"{filename}: Transcription error - {str(e)}")
+                    results['files_failed'] += 1
+                    continue
+            else:
+                # Text-based files
+                content = file.read().decode('utf-8', errors='ignore')
 
             # Simple text extraction (expand with parser module for full support)
             lines = content.split('\n')
@@ -901,7 +942,8 @@ def upload_and_parse():
         'files_processed': results['files_processed'],
         'files_failed': results['files_failed'],
         'items_extracted': results['items_extracted'],
-        'errors': results['errors']
+        'errors': results['errors'],
+        'transcription_source': results.get('transcription_source')  # Shows 'modal-whisper' when YOUR endpoint was used!
     })
 
 
