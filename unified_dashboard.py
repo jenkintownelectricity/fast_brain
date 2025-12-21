@@ -532,6 +532,249 @@ def get_training_status():
     })
 
 
+# =============================================================================
+# MODAL TRAINING ENDPOINTS
+# =============================================================================
+
+# Track active training jobs
+TRAINING_JOBS = {}
+
+
+@app.route('/api/train-skill/<skill_id>', methods=['POST'])
+def start_skill_training(skill_id):
+    """
+    Start a Modal-based LoRA training job for a skill.
+
+    This triggers the train_skill_modal.py script on Modal's A10G GPU.
+
+    Request body (optional):
+    {
+        "epochs": 3,
+        "learning_rate": 0.0002,
+        "lora_r": 16
+    }
+    """
+    try:
+        import subprocess
+        import threading
+
+        data = request.json or {}
+
+        # Check if skill exists
+        if USE_DATABASE:
+            skill = db.get_skill(skill_id)
+            if not skill:
+                return jsonify({"success": False, "error": f"Skill '{skill_id}' not found"})
+
+        # Check if already training
+        if skill_id in TRAINING_JOBS and TRAINING_JOBS[skill_id].get('status') == 'running':
+            return jsonify({
+                "success": False,
+                "error": f"Training already in progress for '{skill_id}'"
+            })
+
+        # Build command
+        cmd = [
+            "modal", "run", "train_skill_modal.py",
+            "--skill-id", skill_id,
+        ]
+
+        if data.get('epochs'):
+            cmd.extend(["--epochs", str(data['epochs'])])
+        if data.get('learning_rate'):
+            cmd.extend(["--lr", str(data['learning_rate'])])
+        if data.get('lora_r'):
+            cmd.extend(["--lora-r", str(data['lora_r'])])
+
+        # Track job
+        job_id = f"{skill_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        TRAINING_JOBS[skill_id] = {
+            "job_id": job_id,
+            "skill_id": skill_id,
+            "status": "starting",
+            "started_at": datetime.now().isoformat(),
+            "config": data,
+            "logs": [],
+        }
+
+        def run_training():
+            """Run training in background thread."""
+            try:
+                TRAINING_JOBS[skill_id]['status'] = 'running'
+                add_activity(f"Started training: {skill_id}", "🚀", "training")
+
+                # Run Modal command
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    cwd=str(Path(__file__).parent),
+                )
+
+                # Stream output
+                for line in process.stdout:
+                    TRAINING_JOBS[skill_id]['logs'].append(line.strip())
+                    # Keep last 100 lines
+                    if len(TRAINING_JOBS[skill_id]['logs']) > 100:
+                        TRAINING_JOBS[skill_id]['logs'] = TRAINING_JOBS[skill_id]['logs'][-100:]
+
+                process.wait()
+
+                if process.returncode == 0:
+                    TRAINING_JOBS[skill_id]['status'] = 'completed'
+                    TRAINING_JOBS[skill_id]['completed_at'] = datetime.now().isoformat()
+                    add_activity(f"Training complete: {skill_id}", "✅", "training")
+                else:
+                    TRAINING_JOBS[skill_id]['status'] = 'failed'
+                    TRAINING_JOBS[skill_id]['error'] = f"Process exited with code {process.returncode}"
+                    add_activity(f"Training failed: {skill_id}", "❌", "training")
+
+            except Exception as e:
+                TRAINING_JOBS[skill_id]['status'] = 'failed'
+                TRAINING_JOBS[skill_id]['error'] = str(e)
+                add_activity(f"Training error: {skill_id} - {str(e)[:50]}", "❌", "training")
+
+        # Start background thread
+        thread = threading.Thread(target=run_training, daemon=True)
+        thread.start()
+
+        return jsonify({
+            "success": True,
+            "job_id": job_id,
+            "message": f"Training started for skill '{skill_id}'",
+            "status_url": f"/api/training-job/{skill_id}"
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/training-job/<skill_id>')
+def get_training_job(skill_id):
+    """Get status of a training job."""
+    if skill_id not in TRAINING_JOBS:
+        return jsonify({"error": "No training job found for this skill"}), 404
+
+    job = TRAINING_JOBS[skill_id]
+    return jsonify({
+        "job_id": job.get('job_id'),
+        "skill_id": skill_id,
+        "status": job.get('status'),
+        "started_at": job.get('started_at'),
+        "completed_at": job.get('completed_at'),
+        "error": job.get('error'),
+        "logs": job.get('logs', [])[-20:],  # Last 20 lines
+    })
+
+
+@app.route('/api/training-jobs')
+def list_training_jobs():
+    """List all training jobs."""
+    jobs = []
+    for skill_id, job in TRAINING_JOBS.items():
+        jobs.append({
+            "job_id": job.get('job_id'),
+            "skill_id": skill_id,
+            "status": job.get('status'),
+            "started_at": job.get('started_at'),
+            "completed_at": job.get('completed_at'),
+        })
+    return jsonify({"jobs": jobs})
+
+
+@app.route('/api/trained-adapters')
+def list_trained_adapters():
+    """
+    List all trained LoRA adapters from Modal volume.
+
+    This calls the Modal function to list adapters.
+    """
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            ["modal", "run", "train_skill_modal.py", "--list-adapters"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=str(Path(__file__).parent),
+        )
+
+        # Parse output (simple text parsing)
+        adapters = []
+        lines = result.stdout.split('\n')
+        current_adapter = None
+
+        for line in lines:
+            if line.strip().startswith('•'):
+                if current_adapter:
+                    adapters.append(current_adapter)
+                current_adapter = {"skill_id": line.strip()[2:].strip()}
+            elif current_adapter and ':' in line:
+                key, value = line.split(':', 1)
+                current_adapter[key.strip().lower()] = value.strip()
+
+        if current_adapter:
+            adapters.append(current_adapter)
+
+        return jsonify({"adapters": adapters})
+
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Request timed out"}), 504
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/test-adapter/<skill_id>', methods=['POST'])
+def test_trained_adapter(skill_id):
+    """
+    Test a trained adapter with a prompt.
+
+    Request body:
+    {
+        "prompt": "Hello, how are you?"
+    }
+    """
+    try:
+        import subprocess
+
+        data = request.json or {}
+        prompt = data.get('prompt', 'Hello')
+
+        result = subprocess.run(
+            [
+                "modal", "run", "train_skill_modal.py",
+                "--skill-id", skill_id,
+                "--test-prompt", prompt
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=str(Path(__file__).parent),
+        )
+
+        # Parse response from output
+        output = result.stdout
+        if "Response:" in output:
+            response = output.split("Response:")[-1].strip()
+        else:
+            response = output
+
+        return jsonify({
+            "success": True,
+            "skill_id": skill_id,
+            "prompt": prompt,
+            "response": response,
+        })
+
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Request timed out"}), 504
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/create-skill', methods=['POST'])
 def create_skill():
     """Create a new skill from the quick form."""
