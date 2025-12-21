@@ -5099,6 +5099,273 @@ DASHBOARD_HTML = '''
         .file-upload input { display: none; }
         .file-upload-icon { font-size: 2rem; margin-bottom: 0.5rem; }
         .file-upload-text { color: var(--text-secondary); font-size: 0.9rem; }
+
+        /* ============================================
+           UNIFIED SKILLS & TRAINING STYLES
+           ============================================ */
+
+        /* Skill Cards */
+        .skill-card {
+            background: var(--glass-surface);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .skill-card:hover {
+            border-color: var(--neon-cyan);
+            transform: translateY(-4px);
+            box-shadow: 0 10px 30px rgba(0, 255, 242, 0.15);
+        }
+
+        .skill-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+        }
+
+        .skill-card-icon {
+            font-size: 2rem;
+            line-height: 1;
+        }
+
+        .skill-card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0.5rem 0 0.25rem 0;
+        }
+
+        .skill-card-description {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .skill-card-stats {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--glass-border);
+            padding-top: 0.75rem;
+            margin-top: auto;
+        }
+
+        .skill-card-stat {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .skill-card-stat .value {
+            font-weight: 600;
+            color: var(--neon-cyan);
+        }
+
+        /* Skill Status Badges */
+        .skill-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.25rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .skill-status-badge.untrained {
+            background: rgba(107, 114, 128, 0.2);
+            color: #9ca3af;
+            border: 1px solid rgba(107, 114, 128, 0.3);
+        }
+
+        .skill-status-badge.has_data {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .skill-status-badge.training {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            animation: pulse 1.5s infinite;
+        }
+
+        .skill-status-badge.trained {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .skill-status-badge.failed {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* Filter Buttons */
+        .skill-filter-btn {
+            background: transparent;
+            border: 1px solid var(--glass-border);
+            color: var(--text-secondary);
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .skill-filter-btn:hover {
+            border-color: var(--neon-cyan);
+            color: var(--neon-cyan);
+        }
+
+        .skill-filter-btn.active {
+            background: var(--neon-cyan);
+            border-color: var(--neon-cyan);
+            color: #000;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 2rem;
+        }
+
+        .modal-content {
+            background: var(--bg-primary);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            width: 100%;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, rgba(0, 255, 242, 0.1), rgba(180, 0, 255, 0.05));
+        }
+
+        /* Modal Tab Buttons */
+        .modal-tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .modal-tab-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .modal-tab-btn.active {
+            color: var(--neon-cyan);
+            border-bottom-color: var(--neon-cyan);
+        }
+
+        .modal-tab-content {
+            display: none;
+        }
+
+        .modal-tab-content.active {
+            display: block;
+        }
+
+        /* Progress Bar */
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--glass-surface);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-green));
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        /* Readiness Check Items */
+        .readiness-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 0;
+        }
+
+        .readiness-icon {
+            font-size: 1.25rem;
+        }
+
+        .readiness-icon.pass { color: var(--neon-green); }
+        .readiness-icon.fail { color: var(--neon-orange); }
+        .readiness-icon.warn { color: #fbbf24; }
+
+        /* Light Theme Overrides */
+        [data-theme="light"] .skill-card {
+            background: #ffffff;
+            border-color: #e5e7eb;
+        }
+
+        [data-theme="light"] .skill-card:hover {
+            border-color: #4a154b;
+            box-shadow: 0 10px 30px rgba(74, 21, 75, 0.1);
+        }
+
+        [data-theme="light"] .modal-overlay {
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        [data-theme="light"] .modal-content {
+            background: #ffffff;
+            border-color: #e5e7eb;
+        }
+
+        [data-theme="light"] .modal-tab-btn.active {
+            color: #4a154b;
+            border-bottom-color: #4a154b;
+        }
+
+        [data-theme="light"] .skill-filter-btn.active {
+            background: #4a154b;
+            border-color: #4a154b;
+            color: #ffffff;
+        }
     </style>
 </head>
 <body>
@@ -5123,11 +5390,10 @@ DASHBOARD_HTML = '''
             </div>
         </header>
 
-        <!-- Main Tabs - Simplified to 5 core sections -->
+        <!-- Main Tabs - Simplified to 4 core sections -->
         <div class="main-tabs">
             <button class="main-tab-btn active" onclick="showMainTab('dashboard')" title="Overview, status, and quick actions">Dashboard</button>
-            <button class="main-tab-btn" onclick="showMainTab('skills')" title="Create, manage, and test all your AI skills">Skills</button>
-            <button class="main-tab-btn" onclick="showMainTab('training')" title="Train skills with LoRA fine-tuning on Modal GPU">🧠 Training</button>
+            <button class="main-tab-btn" onclick="showMainTab('skills-training')" title="Create, manage, train, and test all your AI skills">🧠 Skills & Training</button>
             <button class="main-tab-btn" onclick="showMainTab('voice')" title="Voice projects, TTS settings, and platform connections">Voice</button>
             <button class="main-tab-btn" onclick="showMainTab('settings')" title="API keys, integrations, and advanced configuration">Settings</button>
         </div>
@@ -5983,6 +6249,416 @@ DASHBOARD_HTML = '''
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================================================================ -->
+        <!-- UNIFIED SKILLS & TRAINING TAB -->
+        <!-- ================================================================ -->
+        <div id="tab-skills-training" class="tab-content">
+            <!-- Header with Actions -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <h2 style="margin: 0; color: var(--text-primary); font-size: 1.5rem;">🧠 Skills & Training</h2>
+                    <p style="margin: 0.25rem 0 0 0; color: var(--text-secondary); font-size: 0.9rem;">Create, train, and deploy AI skills with custom personalities</p>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-primary" onclick="showCreateSkillModalUnified()">+ Create Skill</button>
+                    <button class="btn btn-secondary" onclick="refreshUnifiedSkills()">Refresh</button>
+                </div>
+            </div>
+
+            <!-- Filter/Search Bar -->
+            <div class="glass-card" style="padding: 1rem; margin-bottom: 1.5rem;">
+                <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 200px;">
+                        <input type="text" id="skill-search-input" class="form-input" placeholder="Search skills..." onkeyup="filterSkillCards()">
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-sm skill-filter-btn active" data-filter="all" onclick="setSkillFilter('all')">All</button>
+                        <button class="btn btn-sm skill-filter-btn" data-filter="untrained" onclick="setSkillFilter('untrained')">Untrained</button>
+                        <button class="btn btn-sm skill-filter-btn" data-filter="has_data" onclick="setSkillFilter('has_data')">Has Data</button>
+                        <button class="btn btn-sm skill-filter-btn" data-filter="trained" onclick="setSkillFilter('trained')">Trained</button>
+                    </div>
+                    <select id="skill-sort-select" class="form-select" style="width: auto;" onchange="sortSkillCards()">
+                        <option value="name">Sort: Name</option>
+                        <option value="status">Sort: Status</option>
+                        <option value="recent">Sort: Recent</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Skills Grid with Cards -->
+            <div id="unified-skills-grid" class="skills-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;">
+                <!-- Skills will be loaded here dynamically -->
+                <div class="loading-skills" style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);">
+                    <div style="font-size: 2rem; margin-bottom: 1rem;">🔄</div>
+                    Loading skills...
+                </div>
+            </div>
+        </div>
+
+        <!-- ================================================================ -->
+        <!-- SKILL DETAIL MODAL -->
+        <!-- ================================================================ -->
+        <div id="skill-detail-modal" class="modal-overlay" style="display: none;">
+            <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;">
+                <!-- Modal Header -->
+                <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; border-bottom: 1px solid var(--glass-border); flex-shrink: 0;">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <div id="skill-modal-icon" style="font-size: 2rem;">🎯</div>
+                        <div>
+                            <h2 id="skill-modal-title" style="margin: 0; font-size: 1.4rem;">Skill Name</h2>
+                            <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                                <span id="skill-modal-status-badge" class="skill-status-badge untrained">Untrained</span>
+                                <span id="skill-modal-examples-count" style="color: var(--text-secondary); font-size: 0.85rem;">0 examples</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary" onclick="closeSkillDetailModal()" style="padding: 0.5rem 1rem;">✕</button>
+                </div>
+
+                <!-- Modal Tabs -->
+                <div class="modal-tabs" style="display: flex; gap: 0; border-bottom: 1px solid var(--glass-border); padding: 0 1.5rem; flex-shrink: 0;">
+                    <button class="modal-tab-btn active" onclick="showSkillModalTab('overview')" data-tab="overview">Overview</button>
+                    <button class="modal-tab-btn" onclick="showSkillModalTab('training-data')" data-tab="training-data">Training Data</button>
+                    <button class="modal-tab-btn" onclick="showSkillModalTab('train')" data-tab="train">Train</button>
+                    <button class="modal-tab-btn" onclick="showSkillModalTab('adapters')" data-tab="adapters">Adapters</button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 1.5rem;">
+
+                    <!-- Overview Tab -->
+                    <div id="skill-modal-overview" class="modal-tab-content active">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                            <!-- Skill Info -->
+                            <div class="glass-card" style="padding: 1.25rem;">
+                                <h4 style="margin: 0 0 1rem 0; color: var(--neon-cyan);">📋 Skill Details</h4>
+                                <div class="form-group">
+                                    <label class="form-label">Skill ID</label>
+                                    <input type="text" id="skill-modal-id" class="form-input" readonly>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Display Name</label>
+                                    <input type="text" id="skill-modal-name" class="form-input">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Description</label>
+                                    <textarea id="skill-modal-description" class="form-textarea" rows="2"></textarea>
+                                </div>
+                            </div>
+
+                            <!-- Stats -->
+                            <div class="glass-card" style="padding: 1.25rem;">
+                                <h4 style="margin: 0 0 1rem 0; color: var(--neon-cyan);">📊 Statistics</h4>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                    <div style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; text-align: center;">
+                                        <div style="font-size: 1.75rem; font-weight: bold; color: var(--neon-green);" id="skill-modal-stat-examples">0</div>
+                                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Training Examples</div>
+                                    </div>
+                                    <div style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; text-align: center;">
+                                        <div style="font-size: 1.75rem; font-weight: bold; color: var(--neon-blue);" id="skill-modal-stat-tokens">0</div>
+                                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Total Tokens</div>
+                                    </div>
+                                    <div style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; text-align: center;">
+                                        <div style="font-size: 1.75rem; font-weight: bold; color: var(--neon-purple);" id="skill-modal-stat-adapters">0</div>
+                                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Adapters</div>
+                                    </div>
+                                    <div style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; text-align: center;">
+                                        <div style="font-size: 1.75rem; font-weight: bold; color: var(--neon-orange);" id="skill-modal-stat-quality">--</div>
+                                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Data Quality</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- System Prompt -->
+                            <div class="glass-card" style="grid-column: 1 / -1; padding: 1.25rem;">
+                                <h4 style="margin: 0 0 1rem 0; color: var(--neon-cyan);">💬 System Prompt</h4>
+                                <textarea id="skill-modal-system-prompt" class="form-textarea" rows="6" placeholder="Define the personality and behavior of this skill..."></textarea>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
+                            <button class="btn btn-secondary" onclick="testSkillChat()">🔬 Test Chat</button>
+                            <button class="btn btn-primary" onclick="saveSkillOverview()">💾 Save Changes</button>
+                        </div>
+                    </div>
+
+                    <!-- Training Data Tab -->
+                    <div id="skill-modal-training-data" class="modal-tab-content" style="display: none;">
+                        <!-- Data Actions -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-primary btn-sm" onclick="openManualEntryModal()">✏️ Manual Entry</button>
+                                <button class="btn btn-secondary btn-sm" onclick="openBulkImportModal()">📤 Bulk Import</button>
+                                <button class="btn btn-secondary btn-sm" onclick="openAiGenerateModal()">🤖 AI Generate</button>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span id="skill-data-selected-count" style="color: var(--text-secondary); font-size: 0.9rem;">0 selected</span>
+                                <button class="btn btn-secondary btn-sm" onclick="approveSelectedData()" id="approve-selected-btn" disabled>✓ Approve</button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteSelectedData()" id="delete-selected-btn" disabled>🗑 Delete</button>
+                            </div>
+                        </div>
+
+                        <!-- Data Stats -->
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
+                            <div class="glass-card" style="padding: 0.75rem; text-align: center;">
+                                <div style="font-size: 1.25rem; font-weight: bold; color: var(--neon-cyan);" id="skill-data-total">0</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Total</div>
+                            </div>
+                            <div class="glass-card" style="padding: 0.75rem; text-align: center; background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(239, 68, 68, 0.1));">
+                                <div style="font-size: 1.25rem; font-weight: bold; color: var(--neon-orange);" id="skill-data-pending">0</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Pending</div>
+                            </div>
+                            <div class="glass-card" style="padding: 0.75rem; text-align: center; background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(0, 212, 170, 0.1));">
+                                <div style="font-size: 1.25rem; font-weight: bold; color: var(--neon-green);" id="skill-data-approved">0</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Approved</div>
+                            </div>
+                            <div class="glass-card" style="padding: 0.75rem; text-align: center;">
+                                <div style="font-size: 1.25rem; font-weight: bold; color: var(--neon-purple);" id="skill-data-tokens">0</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Tokens</div>
+                            </div>
+                        </div>
+
+                        <!-- Data Table -->
+                        <div class="glass-card" style="padding: 1rem; max-height: 400px; overflow-y: auto;">
+                            <table class="skills-table" style="width: 100%;">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 30px;"><input type="checkbox" id="select-all-data" onchange="toggleSelectAllData()"></th>
+                                        <th>User Input</th>
+                                        <th>Response (Preview)</th>
+                                        <th style="width: 80px;">Tokens</th>
+                                        <th style="width: 80px;">Status</th>
+                                        <th style="width: 80px;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="skill-data-tbody">
+                                    <tr>
+                                        <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No training data yet. Add some!</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Train Tab -->
+                    <div id="skill-modal-train" class="modal-tab-content" style="display: none;">
+                        <!-- Training Readiness Check -->
+                        <div id="training-readiness" class="glass-card" style="padding: 1.25rem; margin-bottom: 1.5rem;">
+                            <h4 style="margin: 0 0 1rem 0; color: var(--neon-cyan);">🔍 Training Readiness</h4>
+                            <div id="readiness-checks" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Training Configuration -->
+                        <div class="glass-card" style="padding: 1.25rem; margin-bottom: 1.5rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h4 style="margin: 0; color: var(--neon-cyan);">⚙️ Training Configuration</h4>
+                                <div>
+                                    <button class="btn btn-secondary btn-sm" onclick="setModalTrainingPreset('simple')" id="modal-preset-simple" style="opacity: 1;">Simple</button>
+                                    <button class="btn btn-secondary btn-sm" onclick="setModalTrainingPreset('advanced')" id="modal-preset-advanced" style="opacity: 0.5;">Advanced</button>
+                                </div>
+                            </div>
+
+                            <!-- Simple Mode -->
+                            <div id="modal-training-simple">
+                                <div class="form-group">
+                                    <label class="form-label">Training Intensity</label>
+                                    <div style="display: flex; align-items: center; gap: 1rem;">
+                                        <input type="range" id="modal-training-intensity" min="1" max="3" value="2" style="flex: 1;" onchange="updateModalIntensityLabel()">
+                                        <span id="modal-intensity-label" style="color: var(--neon-green); font-weight: 600; min-width: 100px;">Standard</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Advanced Mode -->
+                            <div id="modal-training-advanced" style="display: none;">
+                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                                    <div class="form-group">
+                                        <label class="form-label">Epochs</label>
+                                        <select id="modal-training-epochs" class="form-select">
+                                            <option value="3">3 (Quick)</option>
+                                            <option value="5">5</option>
+                                            <option value="10" selected>10 (Standard)</option>
+                                            <option value="20">20 (Deep)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">LoRA Rank</label>
+                                        <select id="modal-training-lora-r" class="form-select">
+                                            <option value="8">8</option>
+                                            <option value="16" selected>16</option>
+                                            <option value="32">32</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Learning Rate</label>
+                                        <select id="modal-training-lr" class="form-select">
+                                            <option value="1e-4">1e-4</option>
+                                            <option value="2e-4" selected>2e-4</option>
+                                            <option value="5e-4">5e-4</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Cost Estimate -->
+                            <div style="background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.3); border-radius: 8px; padding: 0.75rem 1rem; margin-top: 1rem; display: flex; justify-content: space-between;">
+                                <span>Est. Time: <strong id="modal-time-estimate">~10 min</strong></span>
+                                <span>Est. Cost: <strong id="modal-cost-estimate">~$0.65</strong></span>
+                            </div>
+                        </div>
+
+                        <!-- Start Training Button -->
+                        <button class="btn btn-primary" style="width: 100%; padding: 1rem; font-size: 1.1rem;" onclick="startModalTraining()" id="modal-start-training-btn">
+                            🚀 Start Training
+                        </button>
+
+                        <!-- Training Progress (shown when training) -->
+                        <div id="modal-training-progress" style="display: none; margin-top: 1.5rem;">
+                            <div class="glass-card" style="padding: 1.25rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                    <h4 style="margin: 0; color: var(--neon-cyan);">📊 Training Progress</h4>
+                                    <span id="modal-training-status" class="badge" style="background: var(--neon-orange); color: #000;">Running</span>
+                                </div>
+                                <div class="progress-bar" style="margin-bottom: 1rem;">
+                                    <div class="progress-fill" id="modal-progress-fill" style="width: 0%;"></div>
+                                </div>
+                                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; text-align: center;">
+                                    <div>
+                                        <div style="font-size: 1.25rem; font-weight: bold;" id="modal-progress-epoch">0/10</div>
+                                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Epoch</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 1.25rem; font-weight: bold; color: var(--neon-green);" id="modal-progress-loss">--</div>
+                                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Loss</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 1.25rem; font-weight: bold;" id="modal-progress-time">0:00</div>
+                                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Elapsed</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 1.25rem; font-weight: bold;" id="modal-progress-eta">--</div>
+                                        <div style="font-size: 0.8rem; color: var(--text-secondary);">ETA</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Adapters Tab -->
+                    <div id="skill-modal-adapters" class="modal-tab-content" style="display: none;">
+                        <div id="skill-adapters-list" style="display: flex; flex-direction: column; gap: 1rem;">
+                            <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                                No adapters for this skill yet. Train to create one!
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================================================================ -->
+        <!-- MANUAL ENTRY MODAL -->
+        <!-- ================================================================ -->
+        <div id="manual-entry-modal" class="modal-overlay" style="display: none;">
+            <div class="modal-content" style="max-width: 700px;">
+                <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; border-bottom: 1px solid var(--glass-border);">
+                    <h3 style="margin: 0;">✏️ Add Training Example</h3>
+                    <button class="btn btn-secondary" onclick="closeManualEntryModal()" style="padding: 0.5rem 1rem;">✕</button>
+                </div>
+                <div style="padding: 1.5rem;">
+                    <div class="form-group">
+                        <label class="form-label">User Input / Question</label>
+                        <textarea id="manual-user-input" class="form-textarea" rows="3" placeholder="What would a user ask or say?"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Assistant Response</label>
+                        <textarea id="manual-assistant-response" class="form-textarea" rows="6" placeholder="How should the skill respond?"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Category (optional)</label>
+                        <input type="text" id="manual-category" class="form-input" placeholder="e.g., pricing, hours, products">
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
+                        <button class="btn btn-secondary" onclick="closeManualEntryModal()">Cancel</button>
+                        <button class="btn btn-secondary" onclick="saveAndAddAnother()">Save & Add Another</button>
+                        <button class="btn btn-primary" onclick="saveManualEntry()">Save & Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================================================================ -->
+        <!-- BULK IMPORT MODAL (Parser) -->
+        <!-- ================================================================ -->
+        <div id="bulk-import-modal" class="modal-overlay" style="display: none;">
+            <div class="modal-content" style="max-width: 800px;">
+                <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; border-bottom: 1px solid var(--glass-border);">
+                    <h3 style="margin: 0;">📤 Bulk Import Documents</h3>
+                    <button class="btn btn-secondary" onclick="closeBulkImportModal()" style="padding: 0.5rem 1rem;">✕</button>
+                </div>
+                <div style="padding: 1.5rem;">
+                    <div class="glass-card" style="padding: 2rem; text-align: center; border: 2px dashed var(--glass-border); margin-bottom: 1.5rem;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📁</div>
+                        <p style="margin: 0 0 1rem 0; color: var(--text-secondary);">Drag & drop files here or click to browse</p>
+                        <input type="file" id="bulk-import-files" multiple style="display: none;" onchange="handleBulkImportFiles(event)">
+                        <button class="btn btn-primary" onclick="document.getElementById('bulk-import-files').click()">Choose Files</button>
+                        <p style="margin: 1rem 0 0 0; font-size: 0.8rem; color: var(--text-secondary);">
+                            Supports: PDF, Word, Excel, Text, Audio (MP3, WAV), Video, and 70+ more formats
+                        </p>
+                    </div>
+                    <div id="bulk-import-queue" style="display: none;">
+                        <h4 style="margin: 0 0 1rem 0;">Files to Process:</h4>
+                        <div id="bulk-import-file-list" style="max-height: 200px; overflow-y: auto;"></div>
+                        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem;">
+                            <button class="btn btn-secondary" onclick="clearBulkImportQueue()">Clear</button>
+                            <button class="btn btn-primary" onclick="processBulkImport()">🚀 Process All</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================================================================ -->
+        <!-- AI GENERATE MODAL -->
+        <!-- ================================================================ -->
+        <div id="ai-generate-modal" class="modal-overlay" style="display: none;">
+            <div class="modal-content" style="max-width: 700px;">
+                <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; border-bottom: 1px solid var(--glass-border);">
+                    <h3 style="margin: 0;">🤖 AI Generate Training Data</h3>
+                    <button class="btn btn-secondary" onclick="closeAiGenerateModal()" style="padding: 0.5rem 1rem;">✕</button>
+                </div>
+                <div style="padding: 1.5rem;">
+                    <div class="form-group">
+                        <label class="form-label">Topic / Context</label>
+                        <textarea id="ai-generate-topic" class="form-textarea" rows="3" placeholder="Describe what topics the AI should generate Q&A pairs about..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Number of Examples</label>
+                        <select id="ai-generate-count" class="form-select">
+                            <option value="5">5 examples</option>
+                            <option value="10" selected>10 examples</option>
+                            <option value="20">20 examples</option>
+                            <option value="50">50 examples</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Style</label>
+                        <select id="ai-generate-style" class="form-select">
+                            <option value="conversational">Conversational</option>
+                            <option value="formal">Formal/Professional</option>
+                            <option value="friendly">Friendly/Casual</option>
+                            <option value="technical">Technical</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
+                        <button class="btn btn-secondary" onclick="closeAiGenerateModal()">Cancel</button>
+                        <button class="btn btn-primary" onclick="generateAiTrainingData()">🤖 Generate</button>
                     </div>
                 </div>
             </div>
@@ -7802,6 +8478,7 @@ pipeline = Pipeline([
             // Load appropriate data for each tab
             if (tabId === 'dashboard') { loadSkills(); loadMetrics(); }
             if (tabId === 'skills' || tabId === 'fastbrain') { loadFastBrainConfig(); loadFastBrainSkills(); refreshSystemStatus(); loadApiConnections(); }
+            if (tabId === 'skills-training') { loadUnifiedSkills(); }  // New unified Skills & Training tab
             if (tabId === 'training') { loadTrainingSkillsDropdown(); refreshAdapters(); loadTrainingJobs(); }
             if (tabId === 'voice' || tabId === 'voicelab') { loadVoiceProjects(); loadSkillsForDropdowns(); }
             if (tabId === 'settings' || tabId === 'command') { refreshStats(); loadApiKeys(); }
@@ -7831,6 +8508,646 @@ pipeline = Pipeline([
                 if (subTab === 'keys') showCommandTab('keys');
             }, 100);
         }
+
+        // ============================================================
+        // UNIFIED SKILLS & TRAINING FUNCTIONS
+        // ============================================================
+        let currentSkillFilter = 'all';
+        let currentModalSkillId = null;
+        let unifiedSkillsData = [];
+        let modalTrainingPollInterval = null;
+
+        async function loadUnifiedSkills() {
+            const grid = document.getElementById('unified-skills-grid');
+            grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);"><div style="font-size: 2rem; margin-bottom: 1rem;">🔄</div>Loading skills...</div>';
+
+            try {
+                // Fetch skills and their training status
+                const [skillsRes, adaptersRes, dataRes] = await Promise.all([
+                    fetch('/api/fast-brain/skills'),
+                    fetch('/api/training/adapters'),
+                    fetch('/api/parser/stats')
+                ]);
+
+                const skillsData = await skillsRes.json();
+                const adaptersData = await adaptersRes.json();
+                const dataStats = await dataRes.json();
+
+                if (!skillsData.skills || skillsData.skills.length === 0) {
+                    grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);"><div style="font-size: 3rem; margin-bottom: 1rem;">🎯</div><p>No skills yet. Create your first skill!</p><button class="btn btn-primary" onclick="showCreateSkillModalUnified()">+ Create Skill</button></div>';
+                    return;
+                }
+
+                // Build adapter lookup
+                const adaptersBySkill = {};
+                if (adaptersData.adapters) {
+                    adaptersData.adapters.forEach(adapter => {
+                        const skillId = adapter.skill_id;
+                        if (!adaptersBySkill[skillId]) adaptersBySkill[skillId] = [];
+                        adaptersBySkill[skillId].push(adapter);
+                    });
+                }
+
+                // Build data lookup
+                const dataBySkill = {};
+                if (dataStats.by_skill) {
+                    dataStats.by_skill.forEach(stat => {
+                        dataBySkill[stat.skill_id] = stat;
+                    });
+                }
+
+                // Enrich skills with status
+                unifiedSkillsData = skillsData.skills.map(skill => {
+                    const adapters = adaptersBySkill[skill.id] || [];
+                    const data = dataBySkill[skill.id] || { total: 0, tokens: 0 };
+
+                    let status = 'untrained';
+                    if (adapters.length > 0) {
+                        status = 'trained';
+                    } else if (data.total > 0) {
+                        status = 'has_data';
+                    }
+
+                    return {
+                        ...skill,
+                        adapters,
+                        training_data: data,
+                        status
+                    };
+                });
+
+                renderSkillCards();
+            } catch (err) {
+                console.error('Failed to load unified skills:', err);
+                grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--neon-orange);"><div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div><p>Failed to load skills. Please try again.</p><button class="btn btn-secondary" onclick="loadUnifiedSkills()">Retry</button></div>';
+            }
+        }
+
+        function renderSkillCards() {
+            const grid = document.getElementById('unified-skills-grid');
+            const searchTerm = (document.getElementById('skill-search-input')?.value || '').toLowerCase();
+
+            let filtered = unifiedSkillsData.filter(skill => {
+                // Apply filter
+                if (currentSkillFilter !== 'all' && skill.status !== currentSkillFilter) return false;
+                // Apply search
+                if (searchTerm && !skill.name.toLowerCase().includes(searchTerm) && !skill.id.toLowerCase().includes(searchTerm)) return false;
+                return true;
+            });
+
+            // Sort
+            const sortBy = document.getElementById('skill-sort-select')?.value || 'name';
+            if (sortBy === 'name') {
+                filtered.sort((a, b) => a.name.localeCompare(b.name));
+            } else if (sortBy === 'status') {
+                const order = { trained: 0, has_data: 1, untrained: 2 };
+                filtered.sort((a, b) => order[a.status] - order[b.status]);
+            }
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);">No skills match your filter.</div>';
+                return;
+            }
+
+            grid.innerHTML = filtered.map(skill => {
+                const statusLabels = {
+                    untrained: '○ Untrained',
+                    has_data: '◐ Has Data',
+                    training: '◉ Training',
+                    trained: '● Trained',
+                    failed: '✕ Failed'
+                };
+
+                const icon = skill.icon || getSkillIcon(skill.id);
+                const examples = skill.training_data?.total || 0;
+                const adapters = skill.adapters?.length || 0;
+
+                return `
+                    <div class="skill-card" onclick="openSkillDetailModal('${skill.id}')" data-skill-id="${skill.id}" data-status="${skill.status}">
+                        <div class="skill-card-header">
+                            <div class="skill-card-icon">${icon}</div>
+                            <span class="skill-status-badge ${skill.status}">${statusLabels[skill.status]}</span>
+                        </div>
+                        <div class="skill-card-title">${escapeHtml(skill.name)}</div>
+                        <div class="skill-card-description">${escapeHtml(skill.description || 'No description')}</div>
+                        <div class="skill-card-stats">
+                            <div class="skill-card-stat">📝 <span class="value">${examples}</span> examples</div>
+                            <div class="skill-card-stat">📦 <span class="value">${adapters}</span> adapters</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getSkillIcon(skillId) {
+            const icons = {
+                'molasses_alchemist': '🍯',
+                'customer_service': '💬',
+                'sales': '💼',
+                'technical_support': '🔧',
+                'booking': '📅',
+                'default': '🎯'
+            };
+            return icons[skillId] || icons['default'];
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function setSkillFilter(filter) {
+            currentSkillFilter = filter;
+            document.querySelectorAll('.skill-filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.filter === filter);
+            });
+            renderSkillCards();
+        }
+
+        function filterSkillCards() {
+            renderSkillCards();
+        }
+
+        function sortSkillCards() {
+            renderSkillCards();
+        }
+
+        function refreshUnifiedSkills() {
+            loadUnifiedSkills();
+        }
+
+        // Skill Detail Modal
+        async function openSkillDetailModal(skillId) {
+            currentModalSkillId = skillId;
+            const skill = unifiedSkillsData.find(s => s.id === skillId);
+            if (!skill) return;
+
+            // Populate header
+            document.getElementById('skill-modal-icon').textContent = skill.icon || getSkillIcon(skillId);
+            document.getElementById('skill-modal-title').textContent = skill.name;
+            document.getElementById('skill-modal-status-badge').className = 'skill-status-badge ' + skill.status;
+            document.getElementById('skill-modal-status-badge').textContent = skill.status.replace('_', ' ');
+            document.getElementById('skill-modal-examples-count').textContent = (skill.training_data?.total || 0) + ' examples';
+
+            // Populate overview
+            document.getElementById('skill-modal-id').value = skill.id;
+            document.getElementById('skill-modal-name').value = skill.name || '';
+            document.getElementById('skill-modal-description').value = skill.description || '';
+            document.getElementById('skill-modal-system-prompt').value = skill.system_prompt || '';
+
+            // Stats
+            document.getElementById('skill-modal-stat-examples').textContent = skill.training_data?.total || 0;
+            document.getElementById('skill-modal-stat-tokens').textContent = skill.training_data?.tokens || 0;
+            document.getElementById('skill-modal-stat-adapters').textContent = skill.adapters?.length || 0;
+
+            // Reset to overview tab
+            showSkillModalTab('overview');
+
+            // Show modal
+            document.getElementById('skill-detail-modal').style.display = 'flex';
+
+            // Load training data for this skill
+            loadSkillTrainingData(skillId);
+            loadSkillAdapters(skillId);
+            updateTrainingReadiness(skillId);
+        }
+
+        function closeSkillDetailModal() {
+            document.getElementById('skill-detail-modal').style.display = 'none';
+            currentModalSkillId = null;
+            if (modalTrainingPollInterval) {
+                clearInterval(modalTrainingPollInterval);
+                modalTrainingPollInterval = null;
+            }
+        }
+
+        function showSkillModalTab(tabName) {
+            document.querySelectorAll('#skill-detail-modal .modal-tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('#skill-detail-modal .modal-tab-btn').forEach(b => b.classList.remove('active'));
+
+            const tab = document.getElementById('skill-modal-' + tabName);
+            if (tab) tab.classList.add('active');
+
+            const btn = document.querySelector(`#skill-detail-modal .modal-tab-btn[data-tab="${tabName}"]`);
+            if (btn) btn.classList.add('active');
+
+            // Load tab-specific data
+            if (tabName === 'training-data') loadSkillTrainingData(currentModalSkillId);
+            if (tabName === 'train') updateTrainingReadiness(currentModalSkillId);
+            if (tabName === 'adapters') loadSkillAdapters(currentModalSkillId);
+        }
+
+        async function loadSkillTrainingData(skillId) {
+            try {
+                const response = await fetch(`/api/parser/data?skill_id=${skillId}`);
+                const data = await response.json();
+
+                const tbody = document.getElementById('skill-data-tbody');
+                const items = data.items || [];
+
+                // Update stats
+                const approved = items.filter(i => i.is_approved).length;
+                document.getElementById('skill-data-total').textContent = items.length;
+                document.getElementById('skill-data-pending').textContent = items.length - approved;
+                document.getElementById('skill-data-approved').textContent = approved;
+                document.getElementById('skill-data-tokens').textContent = items.reduce((sum, i) => sum + (i.tokens || 0), 0);
+
+                if (items.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No training data yet. Add some!</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = items.map(item => `
+                    <tr data-id="${item.id}">
+                        <td><input type="checkbox" class="data-checkbox" value="${item.id}" onchange="updateSelectedCount()"></td>
+                        <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(item.user_input)}">${escapeHtml(item.user_input)}</td>
+                        <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(item.assistant_response)}">${escapeHtml(item.assistant_response.substring(0, 100))}...</td>
+                        <td>${item.tokens || 0}</td>
+                        <td><span class="skill-status-badge ${item.is_approved ? 'trained' : 'has_data'}">${item.is_approved ? 'Approved' : 'Pending'}</span></td>
+                        <td>
+                            <button class="btn btn-secondary btn-sm" onclick="editDataItem('${item.id}')" title="Edit">✏️</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteDataItem('${item.id}')" title="Delete">🗑</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error('Failed to load training data:', err);
+            }
+        }
+
+        async function loadSkillAdapters(skillId) {
+            const container = document.getElementById('skill-adapters-list');
+            const skill = unifiedSkillsData.find(s => s.id === skillId);
+            const adapters = skill?.adapters || [];
+
+            if (adapters.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 2rem;">No adapters for this skill yet. Train to create one!</div>';
+                return;
+            }
+
+            container.innerHTML = adapters.map(adapter => `
+                <div class="glass-card" style="padding: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-weight: 600; color: var(--text-primary);">${adapter.adapter_name || adapter.id}</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                Base: ${adapter.base_model || 'Unknown'} |
+                                Loss: ${adapter.final_loss?.toFixed(3) || '--'} |
+                                Created: ${new Date(adapter.created_at).toLocaleDateString()}
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-secondary btn-sm" onclick="testAdapter('${adapter.id}')">🔬 Test</button>
+                            <button class="btn btn-primary btn-sm" onclick="deployAdapter('${adapter.id}')">🚀 Deploy</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateTrainingReadiness(skillId) {
+            const skill = unifiedSkillsData.find(s => s.id === skillId);
+            const container = document.getElementById('readiness-checks');
+            const examples = skill?.training_data?.total || 0;
+            const hasSystemPrompt = !!(skill?.system_prompt);
+
+            const checks = [
+                { pass: examples >= 10, text: `Training examples: ${examples} (need 10+)`, icon: examples >= 10 ? '✓' : '✗' },
+                { pass: hasSystemPrompt, text: hasSystemPrompt ? 'System prompt defined' : 'No system prompt (recommended)', icon: hasSystemPrompt ? '✓' : '⚠' },
+                { pass: true, text: 'Modal GPU available', icon: '✓' }
+            ];
+
+            container.innerHTML = checks.map(check => `
+                <div class="readiness-item">
+                    <span class="readiness-icon ${check.pass ? 'pass' : 'fail'}">${check.icon}</span>
+                    <span>${check.text}</span>
+                </div>
+            `).join('');
+
+            // Enable/disable training button
+            const btn = document.getElementById('modal-start-training-btn');
+            const canTrain = examples >= 5;
+            btn.disabled = !canTrain;
+            btn.style.opacity = canTrain ? 1 : 0.5;
+        }
+
+        // Manual Entry Modal
+        function openManualEntryModal() {
+            document.getElementById('manual-user-input').value = '';
+            document.getElementById('manual-assistant-response').value = '';
+            document.getElementById('manual-category').value = '';
+            document.getElementById('manual-entry-modal').style.display = 'flex';
+        }
+
+        function closeManualEntryModal() {
+            document.getElementById('manual-entry-modal').style.display = 'none';
+        }
+
+        async function saveManualEntry() {
+            await doSaveManualEntry();
+            closeManualEntryModal();
+            loadSkillTrainingData(currentModalSkillId);
+        }
+
+        async function saveAndAddAnother() {
+            await doSaveManualEntry();
+            document.getElementById('manual-user-input').value = '';
+            document.getElementById('manual-assistant-response').value = '';
+            loadSkillTrainingData(currentModalSkillId);
+        }
+
+        async function doSaveManualEntry() {
+            const userInput = document.getElementById('manual-user-input').value.trim();
+            const response = document.getElementById('manual-assistant-response').value.trim();
+            const category = document.getElementById('manual-category').value.trim();
+
+            if (!userInput || !response) {
+                alert('Please fill in both user input and response');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/parser/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        skill_id: currentModalSkillId,
+                        user_input: userInput,
+                        assistant_response: response,
+                        category: category || 'manual',
+                        source_filename: 'manual_entry'
+                    })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error);
+            } catch (err) {
+                alert('Failed to save: ' + err.message);
+            }
+        }
+
+        // Bulk Import Modal
+        function openBulkImportModal() {
+            document.getElementById('bulk-import-modal').style.display = 'flex';
+        }
+
+        function closeBulkImportModal() {
+            document.getElementById('bulk-import-modal').style.display = 'none';
+        }
+
+        let bulkImportFiles = [];
+
+        function handleBulkImportFiles(event) {
+            bulkImportFiles = Array.from(event.target.files);
+            if (bulkImportFiles.length > 0) {
+                document.getElementById('bulk-import-queue').style.display = 'block';
+                document.getElementById('bulk-import-file-list').innerHTML = bulkImportFiles.map((f, i) => `
+                    <div style="display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid var(--glass-border);">
+                        <span>${f.name}</span>
+                        <span style="color: var(--text-secondary);">${(f.size / 1024).toFixed(1)} KB</span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function clearBulkImportQueue() {
+            bulkImportFiles = [];
+            document.getElementById('bulk-import-queue').style.display = 'none';
+            document.getElementById('bulk-import-files').value = '';
+        }
+
+        async function processBulkImport() {
+            if (bulkImportFiles.length === 0) return;
+
+            for (const file of bulkImportFiles) {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('skill_id', currentModalSkillId);
+
+                try {
+                    await fetch('/api/parser/upload', { method: 'POST', body: formData });
+                } catch (err) {
+                    console.error('Failed to upload:', file.name, err);
+                }
+            }
+
+            clearBulkImportQueue();
+            closeBulkImportModal();
+            loadSkillTrainingData(currentModalSkillId);
+        }
+
+        // AI Generate Modal
+        function openAiGenerateModal() {
+            document.getElementById('ai-generate-modal').style.display = 'flex';
+        }
+
+        function closeAiGenerateModal() {
+            document.getElementById('ai-generate-modal').style.display = 'none';
+        }
+
+        async function generateAiTrainingData() {
+            const topic = document.getElementById('ai-generate-topic').value;
+            const count = document.getElementById('ai-generate-count').value;
+            const style = document.getElementById('ai-generate-style').value;
+
+            if (!topic) {
+                alert('Please enter a topic');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/parser/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        skill_id: currentModalSkillId,
+                        topic,
+                        count: parseInt(count),
+                        style
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    closeAiGenerateModal();
+                    loadSkillTrainingData(currentModalSkillId);
+                    alert(`Generated ${data.generated || count} examples!`);
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (err) {
+                alert('Failed to generate: ' + err.message);
+            }
+        }
+
+        // Data Management
+        function updateSelectedCount() {
+            const checked = document.querySelectorAll('#skill-data-tbody .data-checkbox:checked').length;
+            document.getElementById('skill-data-selected-count').textContent = checked + ' selected';
+            document.getElementById('approve-selected-btn').disabled = checked === 0;
+            document.getElementById('delete-selected-btn').disabled = checked === 0;
+        }
+
+        function toggleSelectAllData() {
+            const selectAll = document.getElementById('select-all-data').checked;
+            document.querySelectorAll('#skill-data-tbody .data-checkbox').forEach(cb => cb.checked = selectAll);
+            updateSelectedCount();
+        }
+
+        async function approveSelectedData() {
+            const ids = Array.from(document.querySelectorAll('#skill-data-tbody .data-checkbox:checked')).map(cb => cb.value);
+            for (const id of ids) {
+                await fetch(`/api/parser/data/${id}/approve`, { method: 'POST' });
+            }
+            loadSkillTrainingData(currentModalSkillId);
+        }
+
+        async function deleteSelectedData() {
+            if (!confirm('Delete selected items?')) return;
+            const ids = Array.from(document.querySelectorAll('#skill-data-tbody .data-checkbox:checked')).map(cb => cb.value);
+            for (const id of ids) {
+                await fetch(`/api/parser/data/${id}`, { method: 'DELETE' });
+            }
+            loadSkillTrainingData(currentModalSkillId);
+        }
+
+        async function deleteDataItem(id) {
+            if (!confirm('Delete this item?')) return;
+            await fetch(`/api/parser/data/${id}`, { method: 'DELETE' });
+            loadSkillTrainingData(currentModalSkillId);
+        }
+
+        // Modal Training Config
+        function setModalTrainingPreset(preset) {
+            document.getElementById('modal-preset-simple').style.opacity = preset === 'simple' ? 1 : 0.5;
+            document.getElementById('modal-preset-advanced').style.opacity = preset === 'advanced' ? 1 : 0.5;
+            document.getElementById('modal-training-simple').style.display = preset === 'simple' ? 'block' : 'none';
+            document.getElementById('modal-training-advanced').style.display = preset === 'advanced' ? 'block' : 'none';
+        }
+
+        function updateModalIntensityLabel() {
+            const val = document.getElementById('modal-training-intensity').value;
+            const labels = { 1: 'Quick', 2: 'Standard', 3: 'Deep' };
+            const times = { 1: '~5 min', 2: '~10 min', 3: '~20 min' };
+            const costs = { 1: '~$0.35', 2: '~$0.65', 3: '~$1.25' };
+            document.getElementById('modal-intensity-label').textContent = labels[val];
+            document.getElementById('modal-time-estimate').textContent = times[val];
+            document.getElementById('modal-cost-estimate').textContent = costs[val];
+        }
+
+        async function startModalTraining() {
+            const skill = unifiedSkillsData.find(s => s.id === currentModalSkillId);
+            if (!skill) return;
+
+            const intensity = document.getElementById('modal-training-intensity').value;
+            const epochs = { 1: 3, 2: 10, 3: 20 }[intensity];
+
+            // Show progress
+            document.getElementById('modal-start-training-btn').disabled = true;
+            document.getElementById('modal-training-progress').style.display = 'block';
+
+            try {
+                const res = await fetch('/api/training/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        skill_id: currentModalSkillId,
+                        config: {
+                            epochs,
+                            lora_r: parseInt(document.getElementById('modal-training-lora-r')?.value || 16),
+                            learning_rate: document.getElementById('modal-training-lr')?.value || '2e-4'
+                        }
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    startModalTrainingPolling();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (err) {
+                alert('Failed to start training: ' + err.message);
+                document.getElementById('modal-start-training-btn').disabled = false;
+                document.getElementById('modal-training-progress').style.display = 'none';
+            }
+        }
+
+        function startModalTrainingPolling() {
+            modalTrainingPollInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(`/api/training/status/${currentModalSkillId}`);
+                    const data = await res.json();
+
+                    if (data.status === 'running') {
+                        document.getElementById('modal-progress-epoch').textContent = `${data.current_epoch || 0}/${data.total_epochs || 10}`;
+                        document.getElementById('modal-progress-loss').textContent = data.loss?.toFixed(3) || '--';
+                        document.getElementById('modal-progress-fill').style.width = `${((data.current_epoch || 0) / (data.total_epochs || 10)) * 100}%`;
+                    } else if (data.status === 'completed') {
+                        clearInterval(modalTrainingPollInterval);
+                        document.getElementById('modal-training-status').textContent = 'Completed';
+                        document.getElementById('modal-training-status').style.background = 'var(--neon-green)';
+                        document.getElementById('modal-progress-fill').style.width = '100%';
+                        loadUnifiedSkills();
+                        loadSkillAdapters(currentModalSkillId);
+                    } else if (data.status === 'failed') {
+                        clearInterval(modalTrainingPollInterval);
+                        document.getElementById('modal-training-status').textContent = 'Failed';
+                        document.getElementById('modal-training-status').style.background = 'var(--neon-orange)';
+                    }
+                } catch (err) {
+                    console.error('Polling error:', err);
+                }
+            }, 3000);
+        }
+
+        // Save skill overview
+        async function saveSkillOverview() {
+            const id = document.getElementById('skill-modal-id').value;
+            const name = document.getElementById('skill-modal-name').value;
+            const description = document.getElementById('skill-modal-description').value;
+            const systemPrompt = document.getElementById('skill-modal-system-prompt').value;
+
+            try {
+                const res = await fetch(`/api/fast-brain/skills/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, description, system_prompt: systemPrompt })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Skill saved!');
+                    loadUnifiedSkills();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (err) {
+                alert('Failed to save: ' + err.message);
+            }
+        }
+
+        function testSkillChat() {
+            // Open test chat in a new window or redirect
+            closeSkillDetailModal();
+            showMainTab('skills');
+            setTimeout(() => {
+                showFastBrainTab('chat');
+                document.getElementById('fb-chat-skill-select').value = currentModalSkillId;
+            }, 100);
+        }
+
+        function showCreateSkillModalUnified() {
+            // Use existing create skill modal
+            showMainTab('skills');
+            setTimeout(() => {
+                showFastBrainTab('skills');
+                showCreateSkillModal();
+            }, 100);
+        }
+
+        // Close modals on backdrop click
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('modal-overlay')) {
+                e.target.style.display = 'none';
+            }
+        });
 
         // ============================================================
         // TRAINING TAB FUNCTIONS
