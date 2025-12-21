@@ -6258,44 +6258,239 @@ DASHBOARD_HTML = '''
         <!-- UNIFIED SKILLS & TRAINING TAB -->
         <!-- ================================================================ -->
         <div id="tab-skills-training" class="tab-content">
-            <!-- Header with Actions -->
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
-                <div>
-                    <h2 style="margin: 0; color: var(--text-primary); font-size: 1.5rem;">🧠 Skills & Training</h2>
-                    <p style="margin: 0.25rem 0 0 0; color: var(--text-secondary); font-size: 0.9rem;">Create, train, and deploy AI skills with custom personalities</p>
-                </div>
-                <div style="display: flex; gap: 0.5rem;">
-                    <button class="btn btn-primary" onclick="showCreateSkillModalUnified()">+ Create Skill</button>
-                    <button class="btn btn-secondary" onclick="refreshUnifiedSkills()">Refresh</button>
-                </div>
+            <!-- Sub-tabs for all Skills & Training features -->
+            <div class="sub-tabs">
+                <button class="sub-tab-btn active" onclick="showUnifiedSubTab('skills')">🎯 Skills</button>
+                <button class="sub-tab-btn" onclick="showUnifiedSubTab('golden')">✨ Golden Prompts</button>
+                <button class="sub-tab-btn" onclick="showUnifiedSubTab('training')">🧠 Training</button>
+                <button class="sub-tab-btn" onclick="showUnifiedSubTab('data')">📄 Data Manager</button>
+                <button class="sub-tab-btn" onclick="showUnifiedSubTab('chat')">💬 Test Chat</button>
+                <button class="sub-tab-btn" onclick="showUnifiedSubTab('adapters')">📦 Adapters</button>
+                <button class="sub-tab-btn" onclick="showUnifiedSubTab('api')">🔗 API</button>
             </div>
 
-            <!-- Filter/Search Bar -->
-            <div class="glass-card" style="padding: 1rem; margin-bottom: 1.5rem;">
-                <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                    <div style="flex: 1; min-width: 200px;">
-                        <input type="text" id="skill-search-input" class="form-input" placeholder="Search skills..." onkeyup="filterSkillCards()">
+            <!-- Skills Sub-tab (Card View) -->
+            <div id="unified-skills" class="sub-tab-content active">
+                <!-- Header with Actions -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h3 style="margin: 0; color: var(--text-primary);">All Skills</h3>
+                        <p style="margin: 0.25rem 0 0 0; color: var(--text-secondary); font-size: 0.9rem;">Click a skill card to manage training and configuration</p>
                     </div>
                     <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-sm skill-filter-btn active" data-filter="all" onclick="setSkillFilter('all')">All</button>
-                        <button class="btn btn-sm skill-filter-btn" data-filter="untrained" onclick="setSkillFilter('untrained')">Untrained</button>
-                        <button class="btn btn-sm skill-filter-btn" data-filter="has_data" onclick="setSkillFilter('has_data')">Has Data</button>
-                        <button class="btn btn-sm skill-filter-btn" data-filter="trained" onclick="setSkillFilter('trained')">Trained</button>
+                        <button class="btn btn-primary" onclick="showUnifiedCreateSkill()">+ Create Skill</button>
+                        <button class="btn btn-secondary" onclick="refreshUnifiedSkills()">Refresh</button>
                     </div>
-                    <select id="skill-sort-select" class="form-select" style="width: auto;" onchange="sortSkillCards()">
-                        <option value="name">Sort: Name</option>
-                        <option value="status">Sort: Status</option>
-                        <option value="recent">Sort: Recent</option>
-                    </select>
+                </div>
+
+                <!-- Filter/Search Bar -->
+                <div class="glass-card" style="padding: 1rem; margin-bottom: 1.5rem;">
+                    <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <input type="text" id="skill-search-input" class="form-input" placeholder="Search skills..." onkeyup="filterSkillCards()">
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-sm skill-filter-btn active" data-filter="all" onclick="setSkillFilter('all')">All</button>
+                            <button class="btn btn-sm skill-filter-btn" data-filter="untrained" onclick="setSkillFilter('untrained')">Untrained</button>
+                            <button class="btn btn-sm skill-filter-btn" data-filter="has_data" onclick="setSkillFilter('has_data')">Has Data</button>
+                            <button class="btn btn-sm skill-filter-btn" data-filter="trained" onclick="setSkillFilter('trained')">Trained</button>
+                        </div>
+                        <select id="skill-sort-select" class="form-select" style="width: auto;" onchange="sortSkillCards()">
+                            <option value="name">Sort: Name</option>
+                            <option value="status">Sort: Status</option>
+                            <option value="recent">Sort: Recent</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Skills Grid with Cards -->
+                <div id="unified-skills-grid" class="skills-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;">
+                    <div class="loading-skills" style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);">
+                        <div style="font-size: 2rem; margin-bottom: 1rem;">🔄</div>
+                        Loading skills...
+                    </div>
+                </div>
+
+                <!-- Create Skill Form (inline) -->
+                <div class="glass-card" id="unified-create-skill-form" style="display: none; margin-top: 1.5rem;">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">NEW</span> Create New Skill</div>
+                        <button class="btn btn-sm" onclick="hideUnifiedCreateSkill()" style="background: transparent; color: var(--text-secondary);">✕</button>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Skill ID (lowercase, no spaces)</label>
+                            <input type="text" class="form-input" id="unified-new-skill-id" placeholder="my_custom_skill">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Display Name</label>
+                            <input type="text" class="form-input" id="unified-new-skill-name" placeholder="My Custom Skill">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <input type="text" class="form-input" id="unified-new-skill-description" placeholder="Brief description of what this skill does">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">System Prompt</label>
+                        <textarea class="form-textarea" id="unified-new-skill-prompt" rows="6" placeholder="You are an AI assistant specialized in..."></textarea>
+                    </div>
+                    <div class="form-row">
+                        <button class="btn btn-primary" onclick="createUnifiedSkill()">Create Skill</button>
+                        <button class="btn btn-secondary" onclick="hideUnifiedCreateSkill()">Cancel</button>
+                    </div>
                 </div>
             </div>
 
-            <!-- Skills Grid with Cards -->
-            <div id="unified-skills-grid" class="skills-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;">
-                <!-- Skills will be loaded here dynamically -->
-                <div class="loading-skills" style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);">
-                    <div style="font-size: 2rem; margin-bottom: 1rem;">🔄</div>
-                    Loading skills...
+            <!-- Golden Prompts Sub-tab -->
+            <div id="unified-golden" class="sub-tab-content" style="display: none;">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">✨</span> Golden Prompts</div>
+                    </div>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Create and manage perfect example conversations for training.</p>
+                    <div class="form-group">
+                        <label class="form-label">Select Skill</label>
+                        <select id="unified-golden-skill" class="form-select" onchange="loadUnifiedGoldenPrompts()">
+                            <option value="">-- Select a skill --</option>
+                        </select>
+                    </div>
+                    <div id="unified-golden-list" style="margin-top: 1rem;">
+                        <p style="color: var(--text-secondary); text-align: center;">Select a skill to view golden prompts</p>
+                    </div>
+                    <div style="margin-top: 1rem;">
+                        <button class="btn btn-primary" onclick="addUnifiedGoldenPrompt()">+ Add Golden Prompt</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Training Sub-tab -->
+            <div id="unified-training" class="sub-tab-content" style="display: none;">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">🧠</span> Train Skill with LoRA</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Select Skill to Train</label>
+                        <select id="unified-training-skill" class="form-select" onchange="loadUnifiedTrainingStatus()">
+                            <option value="">-- Select a skill --</option>
+                        </select>
+                    </div>
+                    <div id="unified-training-status" style="display: none; margin: 1rem 0; padding: 1rem; background: var(--glass-surface); border-radius: 8px;">
+                        <!-- Training status will load here -->
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Training Intensity</label>
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <input type="range" id="unified-training-intensity" min="1" max="3" value="2" style="flex: 1;" onchange="updateUnifiedIntensity()">
+                            <span id="unified-intensity-label" style="color: var(--neon-green); font-weight: 600; min-width: 80px;">Standard</span>
+                        </div>
+                    </div>
+                    <div style="background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.3); border-radius: 8px; padding: 0.75rem 1rem; margin: 1rem 0; display: flex; justify-content: space-between;">
+                        <span>Est. Time: <strong id="unified-time-est">~10 min</strong></span>
+                        <span>Est. Cost: <strong id="unified-cost-est">~$0.65</strong></span>
+                    </div>
+                    <button class="btn btn-primary" style="width: 100%; padding: 1rem;" onclick="startUnifiedTraining()">🚀 Start Training</button>
+                </div>
+            </div>
+
+            <!-- Data Manager Sub-tab -->
+            <div id="unified-data" class="sub-tab-content" style="display: none;">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">📄</span> Training Data Manager</div>
+                        <button class="btn btn-primary btn-sm" onclick="openParserModal()">📤 Parse Documents</button>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Select Skill</label>
+                        <select id="unified-data-skill" class="form-select" onchange="loadUnifiedDataManager()">
+                            <option value="">-- Select a skill --</option>
+                        </select>
+                    </div>
+                    <div id="unified-data-stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin: 1rem 0;">
+                        <div style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-cyan);" id="unified-data-total">0</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Total</div>
+                        </div>
+                        <div style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-orange);" id="unified-data-pending">0</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Pending</div>
+                        </div>
+                        <div style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-green);" id="unified-data-approved">0</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Approved</div>
+                        </div>
+                        <div style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-purple);" id="unified-data-tokens">0</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Tokens</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                        <button class="btn btn-primary btn-sm" onclick="openManualEntryModal()">✏️ Manual Entry</button>
+                        <button class="btn btn-secondary btn-sm" onclick="openBulkImportModal()">📤 Bulk Import</button>
+                        <button class="btn btn-secondary btn-sm" onclick="openAiGenerateModal()">🤖 AI Generate</button>
+                    </div>
+                    <div id="unified-data-list" style="max-height: 400px; overflow-y: auto;">
+                        <p style="color: var(--text-secondary); text-align: center;">Select a skill to view training data</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Chat Sub-tab -->
+            <div id="unified-chat" class="sub-tab-content" style="display: none;">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">💬</span> Test Your Skill</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Select Skill</label>
+                        <select id="unified-chat-skill" class="form-select">
+                            <option value="">-- Select a skill --</option>
+                        </select>
+                    </div>
+                    <div id="unified-chat-messages" style="background: var(--glass-surface); border-radius: 8px; padding: 1rem; min-height: 300px; max-height: 400px; overflow-y: auto; margin: 1rem 0;">
+                        <p style="color: var(--text-secondary); text-align: center;">Select a skill and start chatting!</p>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="unified-chat-input" class="form-input" placeholder="Type your message..." style="flex: 1;" onkeypress="if(event.key==='Enter')sendUnifiedChat()">
+                        <button class="btn btn-primary" onclick="sendUnifiedChat()">Send</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Adapters Sub-tab -->
+            <div id="unified-adapters" class="sub-tab-content" style="display: none;">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">📦</span> Trained Adapters</div>
+                        <button class="btn btn-secondary btn-sm" onclick="refreshUnifiedAdapters()">Refresh</button>
+                    </div>
+                    <div id="unified-adapters-list">
+                        <p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Loading adapters...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- API Sub-tab -->
+            <div id="unified-api" class="sub-tab-content" style="display: none;">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">🔗</span> Outgoing API Integration</div>
+                    </div>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Use these endpoints to connect your skills to external platforms.</p>
+                    <div class="form-group">
+                        <label class="form-label">Fast Brain API URL</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" class="form-input" id="unified-api-url" value="https://jenkintownelectricity--fast-brain-lpu-fastapi-app.modal.run" readonly style="flex: 1; font-family: monospace;">
+                            <button class="btn btn-secondary" onclick="copyUnifiedApiUrl()">Copy</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Example cURL Request</label>
+                        <pre style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; overflow-x: auto; font-size: 0.85rem;">curl -X POST https://jenkintownelectricity--fast-brain-lpu-fastapi-app.modal.run/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"skill_id": "your_skill", "messages": [{"role": "user", "content": "Hello"}]}'</pre>
+                    </div>
                 </div>
             </div>
         </div>
@@ -8516,6 +8711,261 @@ pipeline = Pipeline([
         let currentModalSkillId = null;
         let unifiedSkillsData = [];
         let modalTrainingPollInterval = null;
+
+        // Sub-tab navigation for unified view
+        function showUnifiedSubTab(tabName) {
+            document.querySelectorAll('#tab-skills-training .sub-tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('#tab-skills-training .sub-tab-btn').forEach(b => b.classList.remove('active'));
+
+            const tab = document.getElementById('unified-' + tabName);
+            if (tab) {
+                tab.classList.add('active');
+                tab.style.display = 'block';
+            }
+            if (event && event.target) event.target.classList.add('active');
+
+            // Load data for specific tabs
+            if (tabName === 'skills') loadUnifiedSkills();
+            if (tabName === 'golden') loadUnifiedSkillsDropdown('unified-golden-skill');
+            if (tabName === 'training') loadUnifiedSkillsDropdown('unified-training-skill');
+            if (tabName === 'data') loadUnifiedSkillsDropdown('unified-data-skill');
+            if (tabName === 'chat') loadUnifiedSkillsDropdown('unified-chat-skill');
+            if (tabName === 'adapters') refreshUnifiedAdapters();
+        }
+
+        async function loadUnifiedSkillsDropdown(selectId) {
+            try {
+                const response = await fetch('/api/fast-brain/skills');
+                const data = await response.json();
+                const select = document.getElementById(selectId);
+                if (!select) return;
+
+                const currentValue = select.value;
+                select.innerHTML = '<option value="">-- Select a skill --</option>';
+
+                if (data.skills) {
+                    data.skills.forEach(skill => {
+                        const option = document.createElement('option');
+                        option.value = skill.id;
+                        option.textContent = skill.name || skill.id;
+                        select.appendChild(option);
+                    });
+                }
+                if (currentValue) select.value = currentValue;
+            } catch (err) {
+                console.error('Failed to load skills dropdown:', err);
+            }
+        }
+
+        // Create skill functions
+        function showUnifiedCreateSkill() {
+            document.getElementById('unified-create-skill-form').style.display = 'block';
+            document.getElementById('unified-new-skill-id').focus();
+        }
+
+        function hideUnifiedCreateSkill() {
+            document.getElementById('unified-create-skill-form').style.display = 'none';
+        }
+
+        async function createUnifiedSkill() {
+            const skillId = document.getElementById('unified-new-skill-id').value.trim().toLowerCase().replace(/\s+/g, '_');
+            const name = document.getElementById('unified-new-skill-name').value.trim();
+            const description = document.getElementById('unified-new-skill-description').value.trim();
+            const systemPrompt = document.getElementById('unified-new-skill-prompt').value.trim();
+
+            if (!skillId || !name) {
+                alert('Please fill in Skill ID and Name');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/fast-brain/skills', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: skillId, name, description, system_prompt: systemPrompt })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    hideUnifiedCreateSkill();
+                    loadUnifiedSkills();
+                    alert('Skill created successfully!');
+                } else {
+                    throw new Error(data.error || 'Failed to create skill');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        // Training functions
+        function updateUnifiedIntensity() {
+            const val = document.getElementById('unified-training-intensity').value;
+            const labels = { 1: 'Quick', 2: 'Standard', 3: 'Deep' };
+            const times = { 1: '~5 min', 2: '~10 min', 3: '~20 min' };
+            const costs = { 1: '~$0.35', 2: '~$0.65', 3: '~$1.25' };
+            document.getElementById('unified-intensity-label').textContent = labels[val];
+            document.getElementById('unified-time-est').textContent = times[val];
+            document.getElementById('unified-cost-est').textContent = costs[val];
+        }
+
+        async function startUnifiedTraining() {
+            const skillId = document.getElementById('unified-training-skill').value;
+            if (!skillId) { alert('Please select a skill'); return; }
+
+            const intensity = document.getElementById('unified-training-intensity').value;
+            const epochs = { 1: 3, 2: 10, 3: 20 }[intensity];
+
+            try {
+                const res = await fetch('/api/training/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ skill_id: skillId, config: { epochs } })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Training started! Check the Adapters tab for progress.');
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (err) {
+                alert('Failed to start training: ' + err.message);
+            }
+        }
+
+        // Adapters
+        async function refreshUnifiedAdapters() {
+            const container = document.getElementById('unified-adapters-list');
+            try {
+                const res = await fetch('/api/training/adapters');
+                const data = await res.json();
+
+                if (!data.adapters || data.adapters.length === 0) {
+                    container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No adapters yet. Train a skill to create one!</p>';
+                    return;
+                }
+
+                container.innerHTML = data.adapters.map(a => `
+                    <div class="glass-card" style="padding: 1rem; margin-bottom: 1rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>${a.skill_name || a.skill_id}</strong>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                    Loss: ${a.final_loss?.toFixed(3) || '--'} | Created: ${new Date(a.created_at).toLocaleDateString()}
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-secondary btn-sm" onclick="testAdapter('${a.id}')">Test</button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                container.innerHTML = '<p style="color: var(--neon-orange); text-align: center;">Failed to load adapters</p>';
+            }
+        }
+
+        // Chat
+        async function sendUnifiedChat() {
+            const skillId = document.getElementById('unified-chat-skill').value;
+            const input = document.getElementById('unified-chat-input');
+            const messages = document.getElementById('unified-chat-messages');
+            const text = input.value.trim();
+
+            if (!skillId) { alert('Please select a skill'); return; }
+            if (!text) return;
+
+            // Add user message
+            messages.innerHTML += `<div style="margin-bottom: 0.75rem; text-align: right;"><span style="background: var(--neon-cyan); color: #000; padding: 0.5rem 1rem; border-radius: 12px; display: inline-block;">${text}</span></div>`;
+            input.value = '';
+            messages.scrollTop = messages.scrollHeight;
+
+            try {
+                const res = await fetch('/api/fast-brain/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ skill_id: skillId, message: text })
+                });
+                const data = await res.json();
+                const reply = data.response || data.message || 'No response';
+                messages.innerHTML += `<div style="margin-bottom: 0.75rem;"><span style="background: var(--glass-surface); padding: 0.5rem 1rem; border-radius: 12px; display: inline-block;">${reply}</span></div>`;
+                messages.scrollTop = messages.scrollHeight;
+            } catch (err) {
+                messages.innerHTML += `<div style="margin-bottom: 0.75rem;"><span style="background: rgba(255,0,0,0.2); padding: 0.5rem 1rem; border-radius: 12px; display: inline-block;">Error: ${err.message}</span></div>`;
+            }
+        }
+
+        // API copy
+        function copyUnifiedApiUrl() {
+            const url = document.getElementById('unified-api-url').value;
+            navigator.clipboard.writeText(url);
+            alert('URL copied to clipboard!');
+        }
+
+        // Data manager
+        async function loadUnifiedDataManager() {
+            const skillId = document.getElementById('unified-data-skill').value;
+            if (!skillId) return;
+
+            try {
+                const res = await fetch(`/api/parser/data?skill_id=${skillId}`);
+                const data = await res.json();
+                const items = data.items || [];
+
+                const approved = items.filter(i => i.is_approved).length;
+                document.getElementById('unified-data-total').textContent = items.length;
+                document.getElementById('unified-data-pending').textContent = items.length - approved;
+                document.getElementById('unified-data-approved').textContent = approved;
+                document.getElementById('unified-data-tokens').textContent = items.reduce((s, i) => s + (i.tokens || 0), 0);
+
+                const list = document.getElementById('unified-data-list');
+                if (items.length === 0) {
+                    list.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">No training data for this skill.</p>';
+                } else {
+                    list.innerHTML = items.slice(0, 20).map(i => `
+                        <div style="padding: 0.75rem; border-bottom: 1px solid var(--glass-border);">
+                            <div style="font-weight: 500; margin-bottom: 0.25rem;">${escapeHtml(i.user_input.substring(0, 80))}...</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem;">${escapeHtml(i.assistant_response.substring(0, 100))}...</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                console.error('Failed to load data:', err);
+            }
+        }
+
+        // Golden prompts placeholder
+        async function loadUnifiedGoldenPrompts() {
+            const skillId = document.getElementById('unified-golden-skill').value;
+            const list = document.getElementById('unified-golden-list');
+            if (!skillId) {
+                list.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">Select a skill to view golden prompts</p>';
+                return;
+            }
+            // Load from existing golden prompts API
+            try {
+                const res = await fetch(`/api/golden-prompts?skill_id=${skillId}`);
+                const data = await res.json();
+                if (!data.prompts || data.prompts.length === 0) {
+                    list.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">No golden prompts for this skill.</p>';
+                } else {
+                    list.innerHTML = data.prompts.map(p => `
+                        <div class="glass-card" style="padding: 1rem; margin-bottom: 0.5rem;">
+                            <div><strong>User:</strong> ${escapeHtml(p.user_input)}</div>
+                            <div><strong>Assistant:</strong> ${escapeHtml(p.assistant_response)}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                list.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">No golden prompts for this skill.</p>';
+            }
+        }
+
+        function addUnifiedGoldenPrompt() {
+            const skillId = document.getElementById('unified-golden-skill').value;
+            if (!skillId) { alert('Please select a skill first'); return; }
+            // Redirect to existing golden prompt creation or open modal
+            openManualEntryModal();
+        }
 
         async function loadUnifiedSkills() {
             const grid = document.getElementById('unified-skills-grid');
