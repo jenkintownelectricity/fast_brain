@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HIVE215 Training System Design | December 2025</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a24;
+            --bg-elevated: #22222e;
+            --accent-primary: #00d4aa;
+            --accent-secondary: #7c3aed;
+            --accent-warning: #f59e0b;
+            --accent-error: #ef4444;
+            --accent-success: #10b981;
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border-color: #2d2d3a;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 60px 20px;
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        header h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 16px;
+        }
+        
+        header p {
+            color: var(--text-secondary);
+            font-size: 1.25rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .meta-info {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 24px;
+            flex-wrap: wrap;
+        }
+        
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        
+        .section {
+            padding: 60px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .section-title {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 32px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .section-title span {
+            font-size: 1.5rem;
+        }
+        
+        /* Competitor Analysis Cards */
+        .competitor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+        
+        .competitor-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .competitor-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 32px rgba(0, 212, 170, 0.1);
+        }
+        
+        .competitor-card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .competitor-card .rating {
+            font-size: 0.875rem;
+            color: var(--accent-warning);
+        }
+        
+        .competitor-card ul {
+            list-style: none;
+            margin-top: 12px;
+        }
+        
+        .competitor-card li {
+            padding: 6px 0;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        
+        .competitor-card li::before {
+            content: "→";
+            color: var(--accent-primary);
+        }
+        
+        /* Pain Points Section */
+        .pain-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 40px;
+        }
+        
+        @media (max-width: 768px) {
+            .pain-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .pain-column h3 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .pain-item {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 4px solid var(--accent-error);
+        }
+        
+        .pain-item.love {
+            border-left-color: var(--accent-success);
+        }
+        
+        .pain-item h4 {
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+        
+        .pain-item p {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        
+        .pain-item .solution {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid var(--border-color);
+            color: var(--accent-primary);
+            font-size: 0.875rem;
+        }
+        
+        /* UI Mockups */
+        .mockup-container {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            overflow: hidden;
+            margin: 24px 0;
+            border: 1px solid var(--border-color);
+        }
+        
+        .mockup-header {
+            background: var(--bg-elevated);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .mockup-dots {
+            display: flex;
+            gap: 6px;
+        }
+        
+        .mockup-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--border-color);
+        }
+        
+        .mockup-dot.red { background: #ef4444; }
+        .mockup-dot.yellow { background: #f59e0b; }
+        .mockup-dot.green { background: #10b981; }
+        
+        .mockup-title {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        
+        .mockup-content {
+            padding: 24px;
+        }
+        
+        /* Training Console UI */
+        .training-ui {
+            font-family: 'SF Mono', 'Monaco', monospace;
+        }
+        
+        .ui-section {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        
+        .ui-section-title {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .ui-select {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+        
+        .data-status {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-top: 16px;
+        }
+        
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+        
+        .stat-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--accent-primary);
+        }
+        
+        .stat-value.warning {
+            color: var(--accent-warning);
+        }
+        
+        .recommendation {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 16px;
+            font-size: 0.875rem;
+            color: var(--accent-warning);
+        }
+        
+        .slider-container {
+            margin: 16px 0;
+        }
+        
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+        
+        .slider {
+            width: 100%;
+            height: 8px;
+            background: var(--bg-elevated);
+            border-radius: 4px;
+            position: relative;
+        }
+        
+        .slider-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: 4px;
+            width: 33%;
+        }
+        
+        .slider-thumb {
+            width: 20px;
+            height: 20px;
+            background: var(--accent-primary);
+            border-radius: 50%;
+            position: absolute;
+            top: -6px;
+            left: calc(33% - 10px);
+            box-shadow: 0 2px 8px rgba(0, 212, 170, 0.4);
+        }
+        
+        .estimates {
+            display: flex;
+            gap: 24px;
+            margin-top: 16px;
+        }
+        
+        .estimate-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .estimate-icon {
+            font-size: 1.25rem;
+        }
+        
+        .estimate-value {
+            font-weight: 600;
+        }
+        
+        .train-button {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-size: 1.125rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .train-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 212, 170, 0.3);
+        }
+        
+        /* Progress UI */
+        .progress-bar-container {
+            background: var(--bg-elevated);
+            border-radius: 8px;
+            height: 24px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            width: 67%;
+            transition: width 0.3s;
+        }
+        
+        .progress-text {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        
+        .progress-meta {
+            display: flex;
+            gap: 24px;
+            margin-top: 12px;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-top: 20px;
+        }
+        
+        .chart-container {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 16px;
+        }
+        
+        .chart-title {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+        
+        .chart-svg {
+            width: 100%;
+            height: 120px;
+        }
+        
+        .log-container {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            font-family: 'SF Mono', monospace;
+            font-size: 0.8rem;
+            padding: 4px 0;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 12px;
+        }
+        
+        .log-time {
+            color: var(--text-muted);
+            min-width: 70px;
+        }
+        
+        .log-icon {
+            min-width: 16px;
+        }
+        
+        .log-icon.success { color: var(--accent-success); }
+        .log-icon.info { color: var(--accent-primary); }
+        .log-icon.current { color: var(--accent-warning); }
+        
+        /* Architecture Diagram */
+        .architecture-diagram {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 32px;
+            margin: 24px 0;
+        }
+        
+        .arch-layer {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        
+        .arch-layer-title {
+            font-size: 0.875rem;
+            color: var(--accent-primary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+        }
+        
+        .arch-components {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        
+        .arch-component {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 0.875rem;
+        }
+        
+        .arch-arrow {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            padding: 8px 0;
+        }
+        
+        /* Comparison Table */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 24px 0;
+        }
+        
+        .comparison-table th,
+        .comparison-table td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .comparison-table th {
+            background: var(--bg-card);
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        
+        .comparison-table tr:hover {
+            background: var(--bg-card);
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .badge.success {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-success);
+        }
+        
+        .badge.warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--accent-warning);
+        }
+        
+        .badge.info {
+            background: rgba(124, 58, 237, 0.2);
+            color: var(--accent-secondary);
+        }
+        
+        /* Implementation Timeline */
+        .timeline {
+            position: relative;
+            padding-left: 40px;
+        }
+        
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--border-color);
+        }
+        
+        .timeline-item {
+            position: relative;
+            padding-bottom: 32px;
+        }
+        
+        .timeline-dot {
+            position: absolute;
+            left: -33px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            border: 3px solid var(--bg-primary);
+        }
+        
+        .timeline-content {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 20px;
+        }
+        
+        .timeline-week {
+            font-size: 0.875rem;
+            color: var(--accent-primary);
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .timeline-title {
+            font-size: 1.125rem;
+            margin-bottom: 12px;
+        }
+        
+        .timeline-tasks {
+            list-style: none;
+        }
+        
+        .timeline-tasks li {
+            padding: 4px 0;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .timeline-tasks li::before {
+            content: "□";
+            color: var(--accent-primary);
+        }
+        
+        /* Best Practices Cards */
+        .practice-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .practice-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 24px;
+            border-left: 4px solid var(--accent-primary);
+        }
+        
+        .practice-card h4 {
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .practice-card code {
+            display: block;
+            background: var(--bg-elevated);
+            padding: 12px;
+            border-radius: 8px;
+            font-family: 'SF Mono', monospace;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            margin-top: 12px;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🧠 HIVE215 Training System</h1>
+        <p>One-Click AI Skill Training with Real-Time Progress, Smart Error Recovery, and Seamless Adapter Management</p>
+        <div class="meta-info">
+            <div class="meta-item">📅 December 21, 2025</div>
+            <div class="meta-item">📊 Version 1.0</div>
+            <div class="meta-item">✅ Research Complete</div>
+        </div>
+    </header>
+    
+    <div class="container">
+        <!-- Executive Summary -->
+        <section class="section">
+            <h2 class="section-title"><span>📋</span> Executive Summary</h2>
+            
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>Competitors</th>
+                        <th>HIVE215</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Training Time</td>
+                        <td>30-60 min</td>
+                        <td><span class="badge success">~10 min (2x faster)</span></td>
+                    </tr>
+                    <tr>
+                        <td>Cost per Train</td>
+                        <td>$2-10</td>
+                        <td><span class="badge success">~$0.50-2.00</span></td>
+                    </tr>
+                    <tr>
+                        <td>No-Code UI</td>
+                        <td>Some platforms</td>
+                        <td><span class="badge success">Full Support</span></td>
+                    </tr>
+                    <tr>
+                        <td>Real-time Progress</td>
+                        <td>Rare</td>
+                        <td><span class="badge success">Live Streaming</span></td>
+                    </tr>
+                    <tr>
+                        <td>Integrated Testing</td>
+                        <td>Manual</td>
+                        <td><span class="badge success">One-Click Chat Test</span></td>
+                    </tr>
+                    <tr>
+                        <td>Error Recovery</td>
+                        <td>Basic</td>
+                        <td><span class="badge success">Smart Auto-Recovery</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+        
+        <!-- Competitor Analysis -->
+        <section class="section">
+            <h2 class="section-title"><span>🔍</span> Competitor Analysis</h2>
+            
+            <div class="competitor-grid">
+                <div class="competitor-card">
+                    <h3>🌊 H2O LLM Studio <span class="rating">★★★★☆</span></h3>
+                    <ul>
+                        <li>No-code GUI for LLM fine-tuning</li>
+                        <li>Visual training charts & metrics</li>
+                        <li>Built-in chat testing</li>
+                        <li>One-click HuggingFace export</li>
+                        <li><strong>Weakness:</strong> Requires self-hosting</li>
+                    </ul>
+                </div>
+                
+                <div class="competitor-card">
+                    <h3>🦙 LLaMA Factory <span class="rating">★★★★☆</span></h3>
+                    <ul>
+                        <li>Web UI + CLI dual interface</li>
+                        <li>100+ model support</li>
+                        <li>Beginner-friendly design</li>
+                        <li>Zero-code workflows</li>
+                        <li><strong>Weakness:</strong> Custom dataset difficulty</li>
+                    </ul>
+                </div>
+                
+                <div class="competitor-card">
+                    <h3>🔥 Fireworks AI <span class="rating">★★★☆☆</span></h3>
+                    <ul>
+                        <li>Managed GPU infrastructure</li>
+                        <li>LoRA fine-tuning as service</li>
+                        <li>OpenAI-compatible APIs</li>
+                        <li>Multi-LoRA serving</li>
+                        <li><strong>Weakness:</strong> Higher cost, vendor lock-in</li>
+                    </ul>
+                </div>
+                
+                <div class="competitor-card">
+                    <h3>🦎 Axolotl <span class="rating">★★★★★</span></h3>
+                    <ul>
+                        <li>Most flexible/powerful</li>
+                        <li>Multi-GPU support (FSDP, DeepSpeed)</li>
+                        <li>Latest techniques (GaLore, Ring FA)</li>
+                        <li>YAML-based configs</li>
+                        <li><strong>Weakness:</strong> Steep learning curve, no GUI</li>
+                    </ul>
+                </div>
+                
+                <div class="competitor-card">
+                    <h3>🦥 Unsloth <span class="rating">★★★★★</span> (Our Choice)</h3>
+                    <ul>
+                        <li>2-5x faster training</li>
+                        <li>80% less VRAM usage</li>
+                        <li>Works on consumer GPUs</li>
+                        <li>Free and open-source</li>
+                        <li><strong>Why chosen:</strong> Perfect for Modal A10G</li>
+                    </ul>
+                </div>
+                
+                <div class="competitor-card">
+                    <h3>🤗 AutoTrain Advanced <span class="rating">★★★☆☆</span></h3>
+                    <ul>
+                        <li>HuggingFace integration</li>
+                        <li>Auto model upload</li>
+                        <li>Spaces deployment</li>
+                        <li>Simple web interface</li>
+                        <li><strong>Weakness:</strong> Complex JSON config</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Customer Pain Points -->
+        <section class="section">
+            <h2 class="section-title"><span>💡</span> Customer Insights</h2>
+            
+            <div class="pain-grid">
+                <div class="pain-column">
+                    <h3>😡 What Customers HATE</h3>
+                    
+                    <div class="pain-item">
+                        <h4>Silent Failures</h4>
+                        <p>Training crashes with cryptic error messages</p>
+                        <div class="solution">✓ Solution: Clear errors with suggested fixes</div>
+                    </div>
+                    
+                    <div class="pain-item">
+                        <h4>CUDA Out of Memory</h4>
+                        <p>"OOM" error with no guidance on what to do</p>
+                        <div class="solution">✓ Solution: Auto-reduce batch size & retry</div>
+                    </div>
+                    
+                    <div class="pain-item">
+                        <h4>No Progress Visibility</h4>
+                        <p>No idea if training is working or stuck</p>
+                        <div class="solution">✓ Solution: Real-time loss curves & ETA</div>
+                    </div>
+                    
+                    <div class="pain-item">
+                        <h4>Slow Iteration</h4>
+                        <p>Hours to test a single hyperparameter change</p>
+                        <div class="solution">✓ Solution: ~10 min training with Unsloth</div>
+                    </div>
+                    
+                    <div class="pain-item">
+                        <h4>Complex Setup</h4>
+                        <p>50 lines of config before first run</p>
+                        <div class="solution">✓ Solution: One-click with smart defaults</div>
+                    </div>
+                </div>
+                
+                <div class="pain-column">
+                    <h3>😍 What Customers LOVE</h3>
+                    
+                    <div class="pain-item love">
+                        <h4>One-Click Training</h4>
+                        <p>Upload data, click train, done</p>
+                    </div>
+                    
+                    <div class="pain-item love">
+                        <h4>Live Progress</h4>
+                        <p>See loss dropping in real-time</p>
+                    </div>
+                    
+                    <div class="pain-item love">
+                        <h4>Clear Errors</h4>
+                        <p>"Your data has 3 malformed rows" not stack traces</p>
+                    </div>
+                    
+                    <div class="pain-item love">
+                        <h4>Reasonable Defaults</h4>
+                        <p>Works well out of the box</p>
+                    </div>
+                    
+                    <div class="pain-item love">
+                        <h4>Chat Testing</h4>
+                        <p>Try the model immediately after training</p>
+                    </div>
+                    
+                    <div class="pain-item love">
+                        <h4>Cost Visibility</h4>
+                        <p>Know what training will cost before starting</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- UI Mockups -->
+        <section class="section">
+            <h2 class="section-title"><span>🎨</span> UI Design Mockups</h2>
+            
+            <h3 style="margin-bottom: 16px;">Training Console (Start View)</h3>
+            <div class="mockup-container">
+                <div class="mockup-header">
+                    <div class="mockup-dots">
+                        <div class="mockup-dot red"></div>
+                        <div class="mockup-dot yellow"></div>
+                        <div class="mockup-dot green"></div>
+                    </div>
+                    <div class="mockup-title">Fast Brain Dashboard — Skill Training</div>
+                </div>
+                <div class="mockup-content training-ui">
+                    <div class="ui-section">
+                        <div class="ui-section-title">🧠 Select Skill to Train</div>
+                        <select class="ui-select">
+                            <option>The Molasses Alchemist</option>
+                        </select>
+                    </div>
+                    
+                    <div class="ui-section">
+                        <div class="ui-section-title">📊 Training Data Status</div>
+                        <div class="data-status">
+                            <div class="stat-item">
+                                <span class="stat-label">Examples</span>
+                                <span class="stat-value">12 ✓</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Quality Score</span>
+                                <span class="stat-value warning">★★★☆☆ Good</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Avg Tokens</span>
+                                <span class="stat-value">245</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Topic Coverage</span>
+                                <span class="stat-value">7 topics</span>
+                            </div>
+                        </div>
+                        <div class="recommendation">
+                            ⚠️ Recommendation: Add 38 more examples for optimal results
+                        </div>
+                    </div>
+                    
+                    <div class="ui-section">
+                        <div class="ui-section-title">⚙️ Training Intensity</div>
+                        <div class="slider-container">
+                            <div class="slider">
+                                <div class="slider-fill"></div>
+                                <div class="slider-thumb"></div>
+                            </div>
+                            <div class="slider-labels">
+                                <span>Quick (3 epochs)</span>
+                                <span>Standard (5 epochs)</span>
+                                <span>Deep (10 epochs)</span>
+                            </div>
+                        </div>
+                        <div class="estimates">
+                            <div class="estimate-item">
+                                <span class="estimate-icon">⏱️</span>
+                                <span>Estimated Time:</span>
+                                <span class="estimate-value">~8 minutes</span>
+                            </div>
+                            <div class="estimate-item">
+                                <span class="estimate-icon">💰</span>
+                                <span>Estimated Cost:</span>
+                                <span class="estimate-value">~$0.65</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button class="train-button">
+                        🚀 Start Training
+                    </button>
+                </div>
+            </div>
+            
+            <h3 style="margin: 32px 0 16px;">Training Progress View</h3>
+            <div class="mockup-container">
+                <div class="mockup-header">
+                    <div class="mockup-dots">
+                        <div class="mockup-dot red"></div>
+                        <div class="mockup-dot yellow"></div>
+                        <div class="mockup-dot green"></div>
+                    </div>
+                    <div class="mockup-title">Fast Brain Dashboard — Training in Progress</div>
+                </div>
+                <div class="mockup-content training-ui">
+                    <div class="ui-section">
+                        <div class="ui-section-title">🏃 Training: The Molasses Alchemist</div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill"></div>
+                            <span class="progress-text">67%</span>
+                        </div>
+                        <div class="progress-meta">
+                            <span>Step 7/10</span>
+                            <span>•</span>
+                            <span>Epoch 3/5</span>
+                            <span>•</span>
+                            <span>ETA: 2 min 45 sec</span>
+                        </div>
+                    </div>
+                    
+                    <div class="charts-grid">
+                        <div class="chart-container">
+                            <div class="chart-title">📉 Training Loss</div>
+                            <svg class="chart-svg" viewBox="0 0 200 100">
+                                <polyline
+                                    fill="none"
+                                    stroke="#00d4aa"
+                                    stroke-width="2"
+                                    points="10,80 40,70 70,55 100,45 130,35 160,28 190,22"
+                                />
+                                <circle cx="190" cy="22" r="4" fill="#00d4aa"/>
+                            </svg>
+                        </div>
+                        <div class="chart-container">
+                            <div class="chart-title">📈 Learning Rate</div>
+                            <svg class="chart-svg" viewBox="0 0 200 100">
+                                <polyline
+                                    fill="none"
+                                    stroke="#7c3aed"
+                                    stroke-width="2"
+                                    points="10,80 40,40 70,30 100,30 130,30 160,40 190,60"
+                                />
+                                <circle cx="190" cy="60" r="4" fill="#7c3aed"/>
+                            </svg>
+                        </div>
+                    </div>
+                    
+                    <div class="log-container">
+                        <div class="ui-section-title">📋 Training Log</div>
+                        <div class="log-entry">
+                            <span class="log-time">12:34:15</span>
+                            <span class="log-icon success">✓</span>
+                            <span>Loaded 12 training examples</span>
+                        </div>
+                        <div class="log-entry">
+                            <span class="log-time">12:34:18</span>
+                            <span class="log-icon success">✓</span>
+                            <span>Model loaded: Llama-3.1-8B (4-bit)</span>
+                        </div>
+                        <div class="log-entry">
+                            <span class="log-time">12:34:22</span>
+                            <span class="log-icon success">✓</span>
+                            <span>LoRA configured (r=16, trainable: 41.9M params)</span>
+                        </div>
+                        <div class="log-entry">
+                            <span class="log-time">12:35:02</span>
+                            <span class="log-icon info">📊</span>
+                            <span>Step 1/10: loss=3.368</span>
+                        </div>
+                        <div class="log-entry">
+                            <span class="log-time">12:36:50</span>
+                            <span class="log-icon info">📊</span>
+                            <span>Step 6/10: loss=2.123</span>
+                        </div>
+                        <div class="log-entry">
+                            <span class="log-time">12:37:26</span>
+                            <span class="log-icon current">→</span>
+                            <span>Step 7/10: loss=1.987 ← Current</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Architecture -->
+        <section class="section">
+            <h2 class="section-title"><span>🏗️</span> System Architecture</h2>
+            
+            <div class="architecture-diagram">
+                <div class="arch-layer">
+                    <div class="arch-layer-title">Frontend — Unified Dashboard</div>
+                    <div class="arch-components">
+                        <div class="arch-component">🧠 Skills Manager</div>
+                        <div class="arch-component">🏋️ Train Console</div>
+                        <div class="arch-component">📦 Adapters Gallery</div>
+                        <div class="arch-component">💬 Test Chat</div>
+                    </div>
+                </div>
+                
+                <div class="arch-arrow">↓</div>
+                
+                <div class="arch-layer">
+                    <div class="arch-layer-title">API Layer — Flask Backend</div>
+                    <div class="arch-components">
+                        <div class="arch-component">POST /api/train-skill</div>
+                        <div class="arch-component">WS /api/training-stream</div>
+                        <div class="arch-component">GET /api/training-status</div>
+                        <div class="arch-component">POST /api/test-adapter</div>
+                        <div class="arch-component">GET /api/adapters</div>
+                    </div>
+                </div>
+                
+                <div class="arch-arrow">↓</div>
+                
+                <div class="arch-layer">
+                    <div class="arch-layer-title">Compute Layer — Modal GPU Cloud</div>
+                    <div class="arch-components">
+                        <div class="arch-component">🦥 Unsloth Trainer</div>
+                        <div class="arch-component">🎮 NVIDIA A10G (24GB)</div>
+                        <div class="arch-component">📁 hive215-adapters Volume</div>
+                    </div>
+                </div>
+                
+                <div class="arch-arrow">↓</div>
+                
+                <div class="arch-layer">
+                    <div class="arch-layer-title">Data Layer — Supabase</div>
+                    <div class="arch-components">
+                        <div class="arch-component">fb_skills</div>
+                        <div class="arch-component">fb_training_jobs</div>
+                        <div class="arch-component">fb_adapters</div>
+                        <div class="arch-component">fb_training_logs</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Best Practices -->
+        <section class="section">
+            <h2 class="section-title"><span>📚</span> Training Best Practices</h2>
+            
+            <div class="practice-cards">
+                <div class="practice-card">
+                    <h4>🎯 Optimal Hyperparameters</h4>
+                    <p>Unsloth-recommended defaults for QLoRA</p>
+                    <code>
+learning_rate: 2e-4
+lora_r: 16
+lora_alpha: 16
+batch_size: 2
+gradient_accumulation: 4
+epochs: 3-5
+                    </code>
+                </div>
+                
+                <div class="practice-card">
+                    <h4>📊 Data Quality Targets</h4>
+                    <p>Minimum requirements for good results</p>
+                    <code>
+Examples: 50-100 (minimum 10)
+Avg Tokens: 200-500
+Topic Coverage: 10+ topics
+Quality: Expert-level responses
+                    </code>
+                </div>
+                
+                <div class="practice-card">
+                    <h4>💾 Memory Optimization</h4>
+                    <p>When hitting CUDA OOM errors</p>
+                    <code>
+1. Reduce batch_size → 1
+2. Enable gradient_checkpointing
+3. Lower lora_r → 8
+4. Use 3B model instead of 8B
+                    </code>
+                </div>
+                
+                <div class="practice-card">
+                    <h4>📈 Loss Interpretation</h4>
+                    <p>What loss values mean</p>
+                    <code>
+> 3.0: Not learning (check data)
+2.0-3.0: Learning, needs more
+1.5-2.0: Good progress
+< 1.5: Excellent (watch overfit)
+                    </code>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Implementation Timeline -->
+        <section class="section">
+            <h2 class="section-title"><span>🗓️</span> Implementation Timeline</h2>
+            
+            <div class="timeline">
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-week">Week 1</div>
+                        <div class="timeline-title">Core Training Pipeline</div>
+                        <ul class="timeline-tasks">
+                            <li>Update Modal trainer with error handling</li>
+                            <li>Add training jobs DB table</li>
+                            <li>Create /api/train-skill endpoint</li>
+                            <li>Basic progress polling in UI</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-week">Week 2</div>
+                        <div class="timeline-title">Real-Time Progress</div>
+                        <ul class="timeline-tasks">
+                            <li>WebSocket server setup</li>
+                            <li>Training callback integration</li>
+                            <li>Live loss chart component</li>
+                            <li>Progress bar with ETA</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-week">Week 3</div>
+                        <div class="timeline-title">Error Handling & Recovery</div>
+                        <ul class="timeline-tasks">
+                            <li>Error classification system</li>
+                            <li>Auto-recovery logic (OOM, network)</li>
+                            <li>User-friendly error messages</li>
+                            <li>Retry UI with options</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-week">Week 4</div>
+                        <div class="timeline-title">Adapter Management</div>
+                        <ul class="timeline-tasks">
+                            <li>Adapters gallery UI</li>
+                            <li>Adapter versioning</li>
+                            <li>Activation/deactivation</li>
+                            <li>Export to HuggingFace</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-week">Week 5</div>
+                        <div class="timeline-title">Polish & Advanced Features</div>
+                        <ul class="timeline-tasks">
+                            <li>Training presets (Quick/Standard/Deep)</li>
+                            <li>Cost calculator</li>
+                            <li>Data quality validator</li>
+                            <li>Documentation & help tooltips</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Success Metrics -->
+        <section class="section">
+            <h2 class="section-title"><span>📈</span> Success Metrics</h2>
+            
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Target</th>
+                        <th>Measurement</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Training Success Rate</td>
+                        <td><span class="badge success">>95%</span></td>
+                        <td>Jobs completed / Jobs started</td>
+                    </tr>
+                    <tr>
+                        <td>Avg Training Time</td>
+                        <td><span class="badge success"><15 min</span></td>
+                        <td>For 50 examples</td>
+                    </tr>
+                    <tr>
+                        <td>Avg Cost per Train</td>
+                        <td><span class="badge success"><$1.50</span></td>
+                        <td>Modal GPU costs</td>
+                    </tr>
+                    <tr>
+                        <td>User Satisfaction</td>
+                        <td><span class="badge success">>4.5/5</span></td>
+                        <td>Post-training survey</td>
+                    </tr>
+                    <tr>
+                        <td>Error Recovery Rate</td>
+                        <td><span class="badge success">>80%</span></td>
+                        <td>Auto-recovered / Total errors</td>
+                    </tr>
+                    <tr>
+                        <td>Time to First Train</td>
+                        <td><span class="badge success"><5 min</span></td>
+                        <td>New user onboarding</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+    </div>
+    
+    <footer>
+        <p>HIVE215 Training System Design Document | Generated December 21, 2025</p>
+        <p>Research sources: H2O LLM Studio, LLaMA Factory, Axolotl, Unsloth, Together AI, Fireworks AI, W&B, MLflow</p>
+    </footer>
+</body>
+</html>
