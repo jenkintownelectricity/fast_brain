@@ -51,6 +51,7 @@ training_image = (
     .pip_install(
         # Core PyTorch first
         "torch>=2.1.0",
+        "torchvision",  # Required by unsloth
         "triton",
     )
     .pip_install(
