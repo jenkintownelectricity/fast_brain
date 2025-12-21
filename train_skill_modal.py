@@ -415,6 +415,7 @@ class SkillTrainer:
             training_meta = {
                 "skill_id": skill_id,
                 "skill_name": metadata['skill_name'],
+                "system_prompt": metadata.get('system_prompt', ''),
                 "base_model": config['base_model'],
                 "training_examples": len(training_data),
                 "final_loss": train_result.training_loss,
