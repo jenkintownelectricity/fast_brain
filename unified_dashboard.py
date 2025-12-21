@@ -4771,10 +4771,11 @@ DASHBOARD_HTML = '''
             </div>
         </header>
 
-        <!-- Main Tabs - Simplified to 4 core sections -->
+        <!-- Main Tabs - Simplified to 5 core sections -->
         <div class="main-tabs">
             <button class="main-tab-btn active" onclick="showMainTab('dashboard')" title="Overview, status, and quick actions">Dashboard</button>
             <button class="main-tab-btn" onclick="showMainTab('skills')" title="Create, manage, and test all your AI skills">Skills</button>
+            <button class="main-tab-btn" onclick="showMainTab('training')" title="Train skills with LoRA fine-tuning on Modal GPU">🧠 Training</button>
             <button class="main-tab-btn" onclick="showMainTab('voice')" title="Voice projects, TTS settings, and platform connections">Voice</button>
             <button class="main-tab-btn" onclick="showMainTab('settings')" title="API keys, integrations, and advanced configuration">Settings</button>
         </div>
@@ -5185,6 +5186,321 @@ DASHBOARD_HTML = '''
                             <strong>Deploy to Modal:</strong><br>
                             <code style="color: var(--neon-cyan);">modal volume put lpu-skills adapters/your_skill /root/skills/your_skill.lora</code>
                         </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================================================================ -->
+        <!-- TRAINING TAB - LoRA Fine-tuning Console -->
+        <!-- ================================================================ -->
+        <div id="tab-training" class="tab-content">
+            <div class="sub-tabs">
+                <button class="sub-tab-btn active" onclick="showTrainingTab('console')">🎯 Console</button>
+                <button class="sub-tab-btn" onclick="showTrainingTab('progress')">📊 Progress</button>
+                <button class="sub-tab-btn" onclick="showTrainingTab('adapters')">📦 Adapters</button>
+            </div>
+
+            <!-- Training Console -->
+            <div id="training-console" class="sub-tab-content active">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">🧠</span> Skill Training</div>
+                        <a href="#" onclick="showTrainingHelp(); return false;" style="color: var(--neon-cyan); font-size: 0.9rem;">? Help</a>
+                    </div>
+
+                    <!-- Skill Selector -->
+                    <div class="form-group" style="margin-bottom: 1.5rem;">
+                        <label class="form-label">Select Skill to Train</label>
+                        <select id="training-skill-select" class="form-select" onchange="loadTrainingDataStatus()">
+                            <option value="">-- Select a skill --</option>
+                        </select>
+                    </div>
+
+                    <!-- Training Data Status -->
+                    <div id="training-data-status" class="glass-card" style="background: var(--glass-surface); padding: 1rem; margin-bottom: 1.5rem; display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                            <span style="font-weight: 600; color: var(--neon-cyan);">📊 Training Data Status</span>
+                            <span id="training-quality-badge" class="badge" style="padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.8rem;">--</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1rem;">
+                            <div>
+                                <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-green);" id="training-examples-count">0</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Examples</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-blue);" id="training-avg-tokens">0</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Avg Tokens</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 1.5rem; font-weight: bold;" id="training-quality-score">--</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Quality</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-purple);" id="training-topics">0</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Topics</div>
+                            </div>
+                        </div>
+                        <div id="training-recommendation" style="background: rgba(255, 200, 0, 0.1); border-left: 3px solid var(--neon-orange); padding: 0.5rem 1rem; font-size: 0.85rem; color: var(--text-secondary); display: none;">
+                            <strong style="color: var(--neon-orange);">⚠️ Recommendation:</strong> <span id="training-recommendation-text"></span>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                            <button class="btn btn-secondary btn-sm" onclick="showMainTab('skills'); showSkillsTab('data');">+ Add Training Data</button>
+                            <button class="btn btn-secondary btn-sm" onclick="viewTrainingExamples()">📄 View Examples</button>
+                        </div>
+                    </div>
+
+                    <!-- Training Configuration -->
+                    <div class="glass-card" style="background: var(--glass-surface); padding: 1rem; margin-bottom: 1.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <span style="font-weight: 600; color: var(--neon-cyan);">⚙️ Training Configuration</span>
+                            <div>
+                                <button class="btn btn-secondary btn-sm" onclick="setTrainingPreset('simple')" id="preset-simple" style="opacity: 1;">Simple</button>
+                                <button class="btn btn-secondary btn-sm" onclick="setTrainingPreset('advanced')" id="preset-advanced" style="opacity: 0.5;">Advanced</button>
+                            </div>
+                        </div>
+
+                        <!-- Simple Mode -->
+                        <div id="training-config-simple">
+                            <div class="form-group">
+                                <label class="form-label">Training Intensity</label>
+                                <div style="display: flex; align-items: center; gap: 1rem;">
+                                    <input type="range" id="training-intensity" min="1" max="3" value="2" style="flex: 1;" onchange="updateIntensityLabel()">
+                                    <span id="training-intensity-label" style="color: var(--neon-green); font-weight: 600; min-width: 100px;">Standard</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                    <span>Quick (~5 min)</span>
+                                    <span>Standard (~10 min)</span>
+                                    <span>Deep (~20 min)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Advanced Mode (Hidden by default) -->
+                        <div id="training-config-advanced" style="display: none;">
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1rem;">
+                                <div class="form-group">
+                                    <label class="form-label">Base Model</label>
+                                    <select id="training-base-model" class="form-select">
+                                        <option value="unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit">Llama-3.1-8B (Recommended)</option>
+                                        <option value="unsloth/Llama-3.2-3B-Instruct-bnb-4bit">Llama-3.2-3B (Faster)</option>
+                                        <option value="unsloth/Mistral-7B-Instruct-v0.3-bnb-4bit">Mistral-7B</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Epochs</label>
+                                    <select id="training-epochs" class="form-select">
+                                        <option value="3">3 (Quick)</option>
+                                        <option value="5">5</option>
+                                        <option value="10" selected>10 (Standard)</option>
+                                        <option value="20">20 (Deep)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Learning Rate</label>
+                                    <select id="training-lr" class="form-select">
+                                        <option value="1e-4">1e-4 (Conservative)</option>
+                                        <option value="2e-4" selected>2e-4 (Recommended)</option>
+                                        <option value="5e-4">5e-4 (Aggressive)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                                <div class="form-group">
+                                    <label class="form-label">LoRA Rank (r)</label>
+                                    <select id="training-lora-r" class="form-select">
+                                        <option value="8">8 (Small)</option>
+                                        <option value="16" selected>16 (Standard)</option>
+                                        <option value="32">32 (Large)</option>
+                                        <option value="64">64 (Very Large)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">LoRA Alpha</label>
+                                    <select id="training-lora-alpha" class="form-select">
+                                        <option value="16" selected>16</option>
+                                        <option value="32">32</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Batch Size</label>
+                                    <select id="training-batch-size" class="form-select">
+                                        <option value="1">1</option>
+                                        <option value="2" selected>2</option>
+                                        <option value="4">4</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Cost Estimate -->
+                        <div style="background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.3); border-radius: 8px; padding: 0.75rem 1rem; margin-top: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <span style="color: var(--text-secondary);">Estimated Time:</span>
+                                <span style="color: var(--neon-green); font-weight: 600;" id="training-time-estimate">~10 minutes</span>
+                            </div>
+                            <div>
+                                <span style="color: var(--text-secondary);">Estimated Cost:</span>
+                                <span style="color: var(--neon-green); font-weight: 600;" id="training-cost-estimate">~$0.65</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Start Training Button -->
+                    <button class="btn btn-primary" style="width: 100%; padding: 1rem; font-size: 1.1rem;" onclick="startTraining()" id="start-training-btn">
+                        🚀 Start Training
+                    </button>
+                </div>
+            </div>
+
+            <!-- Training Progress -->
+            <div id="training-progress" class="sub-tab-content">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">📊</span> Training Progress</div>
+                        <button class="btn btn-secondary btn-sm" id="cancel-training-btn" onclick="cancelTraining()" style="display: none;">Cancel</button>
+                    </div>
+
+                    <!-- No Active Training -->
+                    <div id="no-training-message" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🧘</div>
+                        <p style="font-size: 1.1rem;">No training in progress</p>
+                        <p style="font-size: 0.9rem;">Select a skill and start training from the Console tab</p>
+                        <button class="btn btn-primary" style="margin-top: 1rem;" onclick="showTrainingTab('console')">Go to Console</button>
+                    </div>
+
+                    <!-- Active Training Display -->
+                    <div id="active-training-display" style="display: none;">
+                        <div style="margin-bottom: 1.5rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <span style="font-weight: 600;">Training: <span id="progress-skill-name" style="color: var(--neon-cyan);">--</span></span>
+                                <span id="progress-status" class="badge" style="background: var(--neon-green); color: #000;">Running</span>
+                            </div>
+
+                            <!-- Progress Bar -->
+                            <div style="background: var(--glass-surface); border-radius: 8px; height: 24px; overflow: hidden; margin-bottom: 0.5rem;">
+                                <div id="progress-bar" style="background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); height: 100%; width: 0%; transition: width 0.5s; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #000; font-size: 0.85rem;">
+                                    0%
+                                </div>
+                            </div>
+
+                            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-secondary);">
+                                <span>Step <span id="progress-step">0</span>/<span id="progress-total-steps">0</span></span>
+                                <span>Epoch <span id="progress-epoch">0</span>/<span id="progress-total-epochs">0</span></span>
+                                <span>ETA: <span id="progress-eta">--</span></span>
+                            </div>
+                        </div>
+
+                        <!-- Charts Row -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                            <div class="glass-card" style="background: var(--glass-surface); padding: 1rem;">
+                                <div style="font-weight: 600; margin-bottom: 0.5rem; color: var(--neon-cyan);">📉 Training Loss</div>
+                                <canvas id="loss-chart" height="150"></canvas>
+                            </div>
+                            <div class="glass-card" style="background: var(--glass-surface); padding: 1rem;">
+                                <div style="font-weight: 600; margin-bottom: 0.5rem; color: var(--neon-purple);">📈 Learning Rate</div>
+                                <canvas id="lr-chart" height="150"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Training Log -->
+                        <div class="glass-card" style="background: var(--glass-surface); padding: 1rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <span style="font-weight: 600; color: var(--neon-cyan);">📋 Training Log</span>
+                                <button class="btn btn-secondary btn-sm" onclick="clearTrainingLog()">Clear</button>
+                            </div>
+                            <div id="training-log" class="console" style="height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; padding: 0.5rem; background: #0a0a0f; border-radius: 4px;">
+                                <div style="color: var(--text-secondary);">Waiting for training to start...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Training Complete Display -->
+                    <div id="training-complete-display" style="display: none;">
+                        <div style="text-align: center; padding: 2rem;">
+                            <div style="font-size: 4rem; margin-bottom: 1rem;">🎉</div>
+                            <h2 style="color: var(--neon-green); margin-bottom: 0.5rem;">Training Complete!</h2>
+                            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Your skill adapter is ready to use</p>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
+                            <div class="glass-card" style="background: var(--glass-surface); padding: 1rem; text-align: center;">
+                                <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-green);" id="result-final-loss">--</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Final Loss</div>
+                            </div>
+                            <div class="glass-card" style="background: var(--glass-surface); padding: 1rem; text-align: center;">
+                                <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-cyan);" id="result-training-time">--</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Training Time</div>
+                            </div>
+                            <div class="glass-card" style="background: var(--glass-surface); padding: 1rem; text-align: center;">
+                                <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-purple);" id="result-examples">--</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Examples</div>
+                            </div>
+                            <div class="glass-card" style="background: var(--glass-surface); padding: 1rem; text-align: center;">
+                                <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-orange);" id="result-cost">--</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Cost</div>
+                            </div>
+                        </div>
+
+                        <!-- Test Chat -->
+                        <div class="glass-card" style="background: var(--glass-surface); padding: 1rem; margin-bottom: 1.5rem;">
+                            <div style="font-weight: 600; margin-bottom: 0.75rem; color: var(--neon-cyan);">💬 Test Your Trained Skill</div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="text" id="test-adapter-prompt" class="form-input" placeholder="Ask your trained skill something..." style="flex: 1;">
+                                <button class="btn btn-primary" onclick="testTrainedAdapter()">Send</button>
+                            </div>
+                            <div id="test-adapter-response" class="console" style="margin-top: 1rem; min-height: 60px; padding: 0.75rem; display: none;"></div>
+                        </div>
+
+                        <div style="display: flex; gap: 0.5rem; justify-content: center;">
+                            <button class="btn btn-secondary" onclick="showTrainingTab('console')">🔄 Train Again</button>
+                            <button class="btn btn-secondary" onclick="showTrainingTab('adapters')">📦 View Adapters</button>
+                            <button class="btn btn-primary" onclick="showMainTab('skills')">🏠 Back to Skills</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Adapters Gallery -->
+            <div id="training-adapters" class="sub-tab-content">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">📦</span> Trained Adapters</div>
+                        <button class="btn btn-secondary btn-sm" onclick="refreshAdapters()">↻ Refresh</button>
+                    </div>
+
+                    <div id="adapters-gallery" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                        <!-- Adapters will be loaded here -->
+                        <div id="no-adapters-message" style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);">
+                            <div style="font-size: 3rem; margin-bottom: 1rem;">📦</div>
+                            <p>No trained adapters yet</p>
+                            <p style="font-size: 0.9rem;">Train a skill to create your first adapter</p>
+                            <button class="btn btn-primary" style="margin-top: 1rem;" onclick="showTrainingTab('console')">Start Training</button>
+                        </div>
+                    </div>
+
+                    <!-- Training History Table -->
+                    <div class="section-header" style="margin-top: 2rem;">
+                        <div class="section-title"><span class="section-icon">📊</span> Training History</div>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table class="skills-table" style="width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Skill</th>
+                                    <th>Status</th>
+                                    <th>Loss</th>
+                                    <th>Time</th>
+                                    <th>Cost</th>
+                                </tr>
+                            </thead>
+                            <tbody id="training-history-table">
+                                <tr>
+                                    <td colspan="6" style="text-align: center; color: var(--text-secondary);">No training history</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -7004,6 +7320,7 @@ pipeline = Pipeline([
             // Load appropriate data for each tab
             if (tabId === 'dashboard') { loadSkills(); loadMetrics(); }
             if (tabId === 'skills' || tabId === 'fastbrain') { loadFastBrainConfig(); loadFastBrainSkills(); refreshSystemStatus(); loadApiConnections(); }
+            if (tabId === 'training') { loadTrainingSkillsDropdown(); refreshAdapters(); loadTrainingJobs(); }
             if (tabId === 'voice' || tabId === 'voicelab') { loadVoiceProjects(); loadSkillsForDropdowns(); }
             if (tabId === 'settings' || tabId === 'command') { refreshStats(); loadApiKeys(); }
             if (tabId === 'factory') { loadProfileDropdowns(); }
@@ -7031,6 +7348,529 @@ pipeline = Pipeline([
             setTimeout(() => {
                 if (subTab === 'keys') showCommandTab('keys');
             }, 100);
+        }
+
+        // ============================================================
+        // TRAINING TAB FUNCTIONS
+        // ============================================================
+        let currentTrainingSkillId = null;
+        let trainingPollInterval = null;
+        let lossChartData = [];
+        let lrChartData = [];
+
+        function showTrainingTab(subTab) {
+            document.querySelectorAll('#tab-training .sub-tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('#tab-training .sub-tab-btn').forEach(b => b.classList.remove('active'));
+
+            const tabContent = document.getElementById('training-' + subTab);
+            if (tabContent) tabContent.classList.add('active');
+
+            event.target.classList.add('active');
+
+            if (subTab === 'adapters') refreshAdapters();
+            if (subTab === 'progress') checkActiveTraining();
+        }
+
+        async function loadTrainingSkillsDropdown() {
+            try {
+                const response = await fetch('/api/fast-brain/skills');
+                const data = await response.json();
+                const select = document.getElementById('training-skill-select');
+
+                select.innerHTML = '<option value="">-- Select a skill --</option>';
+
+                if (data.skills && data.skills.length > 0) {
+                    data.skills.forEach(skill => {
+                        const option = document.createElement('option');
+                        option.value = skill.id;
+                        option.textContent = skill.name || skill.id;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to load skills:', err);
+            }
+        }
+
+        async function loadTrainingDataStatus() {
+            const skillId = document.getElementById('training-skill-select').value;
+            const statusDiv = document.getElementById('training-data-status');
+
+            if (!skillId) {
+                statusDiv.style.display = 'none';
+                return;
+            }
+
+            currentTrainingSkillId = skillId;
+            statusDiv.style.display = 'block';
+
+            try {
+                const response = await fetch(`/api/fast-brain/skills/${skillId}`);
+                const skill = await response.json();
+
+                // Calculate training data stats
+                const knowledge = skill.knowledge || [];
+                const trainingData = skill.training_data || [];
+                const examples = trainingData.length || knowledge.length || 0;
+
+                // Estimate tokens (rough approximation)
+                let totalTokens = 0;
+                if (trainingData.length > 0) {
+                    trainingData.forEach(d => {
+                        totalTokens += (d.user_input?.length || 0) / 4;
+                        totalTokens += (d.assistant_output?.length || 0) / 4;
+                    });
+                } else if (knowledge.length > 0) {
+                    knowledge.forEach(k => totalTokens += (k.length || 0) / 4);
+                }
+                const avgTokens = examples > 0 ? Math.round(totalTokens / examples) : 0;
+
+                // Calculate quality score
+                let qualityStars = '';
+                let qualityBadge = { text: 'Unknown', color: '#888' };
+                if (examples >= 50) {
+                    qualityStars = '★★★★★';
+                    qualityBadge = { text: 'Excellent', color: 'var(--neon-green)' };
+                } else if (examples >= 20) {
+                    qualityStars = '★★★★☆';
+                    qualityBadge = { text: 'Good', color: 'var(--neon-cyan)' };
+                } else if (examples >= 10) {
+                    qualityStars = '★★★☆☆';
+                    qualityBadge = { text: 'Fair', color: 'var(--neon-orange)' };
+                } else if (examples >= 5) {
+                    qualityStars = '★★☆☆☆';
+                    qualityBadge = { text: 'Minimal', color: 'var(--neon-pink)' };
+                } else {
+                    qualityStars = '★☆☆☆☆';
+                    qualityBadge = { text: 'Insufficient', color: '#ff4444' };
+                }
+
+                document.getElementById('training-examples-count').textContent = examples;
+                document.getElementById('training-avg-tokens').textContent = avgTokens;
+                document.getElementById('training-quality-score').textContent = qualityStars;
+                document.getElementById('training-topics').textContent = Math.min(examples, 10);
+
+                const badge = document.getElementById('training-quality-badge');
+                badge.textContent = qualityBadge.text;
+                badge.style.background = qualityBadge.color;
+                badge.style.color = qualityBadge.color === 'var(--neon-green)' || qualityBadge.color === 'var(--neon-cyan)' ? '#000' : '#fff';
+
+                // Recommendation
+                const recDiv = document.getElementById('training-recommendation');
+                const recText = document.getElementById('training-recommendation-text');
+                if (examples < 50) {
+                    recDiv.style.display = 'block';
+                    recText.textContent = `Add ${50 - examples} more examples for optimal results.`;
+                } else {
+                    recDiv.style.display = 'none';
+                }
+
+            } catch (err) {
+                console.error('Failed to load skill data:', err);
+            }
+        }
+
+        function setTrainingPreset(mode) {
+            document.getElementById('preset-simple').style.opacity = mode === 'simple' ? '1' : '0.5';
+            document.getElementById('preset-advanced').style.opacity = mode === 'advanced' ? '1' : '0.5';
+            document.getElementById('training-config-simple').style.display = mode === 'simple' ? 'block' : 'none';
+            document.getElementById('training-config-advanced').style.display = mode === 'advanced' ? 'block' : 'none';
+        }
+
+        function updateIntensityLabel() {
+            const intensity = document.getElementById('training-intensity').value;
+            const label = document.getElementById('training-intensity-label');
+            const timeEst = document.getElementById('training-time-estimate');
+            const costEst = document.getElementById('training-cost-estimate');
+
+            if (intensity == 1) {
+                label.textContent = 'Quick';
+                label.style.color = 'var(--neon-cyan)';
+                timeEst.textContent = '~5 minutes';
+                costEst.textContent = '~$0.35';
+            } else if (intensity == 2) {
+                label.textContent = 'Standard';
+                label.style.color = 'var(--neon-green)';
+                timeEst.textContent = '~10 minutes';
+                costEst.textContent = '~$0.65';
+            } else {
+                label.textContent = 'Deep';
+                label.style.color = 'var(--neon-purple)';
+                timeEst.textContent = '~20 minutes';
+                costEst.textContent = '~$1.30';
+            }
+        }
+
+        async function startTraining() {
+            const skillId = document.getElementById('training-skill-select').value;
+            if (!skillId) {
+                alert('Please select a skill to train');
+                return;
+            }
+
+            const btn = document.getElementById('start-training-btn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Starting...';
+
+            // Get configuration
+            let config = {};
+            const isAdvanced = document.getElementById('training-config-advanced').style.display !== 'none';
+
+            if (isAdvanced) {
+                config = {
+                    epochs: parseInt(document.getElementById('training-epochs').value),
+                    learning_rate: parseFloat(document.getElementById('training-lr').value),
+                    lora_r: parseInt(document.getElementById('training-lora-r').value)
+                };
+            } else {
+                const intensity = document.getElementById('training-intensity').value;
+                if (intensity == 1) {
+                    config = { epochs: 3 };
+                } else if (intensity == 2) {
+                    config = { epochs: 10 };
+                } else {
+                    config = { epochs: 20 };
+                }
+            }
+
+            try {
+                const response = await fetch(`/api/train-skill/${skillId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentTrainingSkillId = skillId;
+                    showTrainingTab('progress');
+                    document.querySelector('#tab-training .sub-tab-btn:nth-child(2)').click();
+                    startTrainingPolling(skillId);
+                } else {
+                    alert('Training failed: ' + (result.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Training error: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 Start Training';
+            }
+        }
+
+        function startTrainingPolling(skillId) {
+            // Show active training display
+            document.getElementById('no-training-message').style.display = 'none';
+            document.getElementById('active-training-display').style.display = 'block';
+            document.getElementById('training-complete-display').style.display = 'none';
+            document.getElementById('cancel-training-btn').style.display = 'block';
+            document.getElementById('progress-skill-name').textContent = skillId;
+
+            // Reset charts
+            lossChartData = [];
+            lrChartData = [];
+
+            // Start polling
+            if (trainingPollInterval) clearInterval(trainingPollInterval);
+            trainingPollInterval = setInterval(() => pollTrainingStatus(skillId), 2000);
+            pollTrainingStatus(skillId);
+        }
+
+        async function pollTrainingStatus(skillId) {
+            try {
+                const response = await fetch(`/api/training-job/${skillId}`);
+                const job = await response.json();
+
+                if (job.error) {
+                    console.log('Training job not found');
+                    return;
+                }
+
+                // Update status
+                const statusBadge = document.getElementById('progress-status');
+                if (job.status === 'running') {
+                    statusBadge.textContent = 'Running';
+                    statusBadge.style.background = 'var(--neon-green)';
+                } else if (job.status === 'completed') {
+                    statusBadge.textContent = 'Complete';
+                    statusBadge.style.background = 'var(--neon-cyan)';
+                    clearInterval(trainingPollInterval);
+                    showTrainingComplete(job);
+                } else if (job.status === 'failed') {
+                    statusBadge.textContent = 'Failed';
+                    statusBadge.style.background = '#ff4444';
+                    clearInterval(trainingPollInterval);
+                }
+
+                // Update logs
+                if (job.logs && job.logs.length > 0) {
+                    updateTrainingLog(job.logs);
+                    parseLogsForProgress(job.logs);
+                }
+
+            } catch (err) {
+                console.error('Failed to poll training status:', err);
+            }
+        }
+
+        function updateTrainingLog(logs) {
+            const logDiv = document.getElementById('training-log');
+            logDiv.innerHTML = logs.map(line => {
+                let color = 'var(--text-secondary)';
+                if (line.includes('✓') || line.includes('SUCCESS') || line.includes('complete')) color = 'var(--neon-green)';
+                if (line.includes('Error') || line.includes('Failed') || line.includes('✗')) color = '#ff4444';
+                if (line.includes('loss=') || line.includes('Loss:')) color = 'var(--neon-cyan)';
+                if (line.includes('%|')) color = 'var(--neon-purple)';
+                return `<div style="color: ${color}; margin-bottom: 2px;">${escapeHtml(line)}</div>`;
+            }).join('');
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function parseLogsForProgress(logs) {
+            // Parse progress from logs
+            for (const line of logs) {
+                // Parse step progress like "Step 4/10" or " 40%|████"
+                const stepMatch = line.match(/(\d+)\/(\d+)/);
+                if (stepMatch) {
+                    const current = parseInt(stepMatch[1]);
+                    const total = parseInt(stepMatch[2]);
+                    const percent = Math.round((current / total) * 100);
+
+                    document.getElementById('progress-step').textContent = current;
+                    document.getElementById('progress-total-steps').textContent = total;
+                    document.getElementById('progress-bar').style.width = percent + '%';
+                    document.getElementById('progress-bar').textContent = percent + '%';
+                }
+
+                // Parse loss values
+                const lossMatch = line.match(/loss[=:]\s*([\d.]+)/i);
+                if (lossMatch) {
+                    const loss = parseFloat(lossMatch[1]);
+                    if (!isNaN(loss) && loss < 10) {
+                        lossChartData.push(loss);
+                        updateLossChart();
+                    }
+                }
+
+                // Parse epoch
+                const epochMatch = line.match(/epoch[=:\s]*([\d.]+)/i);
+                if (epochMatch) {
+                    document.getElementById('progress-epoch').textContent = Math.floor(parseFloat(epochMatch[1]));
+                }
+            }
+        }
+
+        function updateLossChart() {
+            const canvas = document.getElementById('loss-chart');
+            const ctx = canvas.getContext('2d');
+            const data = lossChartData.slice(-20);  // Last 20 points
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (data.length < 2) return;
+
+            const maxLoss = Math.max(...data) * 1.1;
+            const minLoss = Math.min(...data) * 0.9;
+            const range = maxLoss - minLoss;
+
+            ctx.strokeStyle = '#00fff2';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            data.forEach((loss, i) => {
+                const x = (i / (data.length - 1)) * canvas.width;
+                const y = canvas.height - ((loss - minLoss) / range) * canvas.height;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+
+            ctx.stroke();
+        }
+
+        function showTrainingComplete(job) {
+            document.getElementById('active-training-display').style.display = 'none';
+            document.getElementById('training-complete-display').style.display = 'block';
+            document.getElementById('cancel-training-btn').style.display = 'none';
+
+            // Parse final stats from logs
+            const logs = job.logs || [];
+            let finalLoss = '--';
+            let trainingTime = '--';
+            let examples = '--';
+
+            for (const line of logs) {
+                if (line.includes('Final Loss:')) {
+                    const match = line.match(/Final Loss:\s*([\d.]+)/);
+                    if (match) finalLoss = parseFloat(match[1]).toFixed(4);
+                }
+                if (line.includes('Time:')) {
+                    const match = line.match(/Time:\s*([\d.]+)\s*min/);
+                    if (match) trainingTime = match[1] + ' min';
+                }
+                if (line.includes('Examples:')) {
+                    const match = line.match(/Examples:\s*(\d+)/);
+                    if (match) examples = match[1];
+                }
+            }
+
+            document.getElementById('result-final-loss').textContent = finalLoss;
+            document.getElementById('result-training-time').textContent = trainingTime;
+            document.getElementById('result-examples').textContent = examples;
+            document.getElementById('result-cost').textContent = '~$0.65';
+
+            refreshAdapters();
+        }
+
+        async function testTrainedAdapter() {
+            const prompt = document.getElementById('test-adapter-prompt').value;
+            if (!prompt || !currentTrainingSkillId) return;
+
+            const responseDiv = document.getElementById('test-adapter-response');
+            responseDiv.style.display = 'block';
+            responseDiv.innerHTML = '<span style="color: var(--text-secondary);">Testing adapter...</span>';
+
+            try {
+                const response = await fetch(`/api/test-adapter/${currentTrainingSkillId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt })
+                });
+
+                const result = await response.json();
+
+                if (result.response) {
+                    responseDiv.innerHTML = `<span style="color: var(--neon-cyan);">🧪 ${escapeHtml(result.response)}</span>`;
+                } else {
+                    responseDiv.innerHTML = `<span style="color: #ff4444;">Error: ${result.error || 'No response'}</span>`;
+                }
+            } catch (err) {
+                responseDiv.innerHTML = `<span style="color: #ff4444;">Error: ${err.message}</span>`;
+            }
+        }
+
+        function cancelTraining() {
+            if (confirm('Are you sure you want to cancel the training?')) {
+                clearInterval(trainingPollInterval);
+                document.getElementById('active-training-display').style.display = 'none';
+                document.getElementById('no-training-message').style.display = 'block';
+            }
+        }
+
+        function clearTrainingLog() {
+            document.getElementById('training-log').innerHTML = '<div style="color: var(--text-secondary);">Log cleared.</div>';
+        }
+
+        async function refreshAdapters() {
+            try {
+                const response = await fetch('/api/trained-adapters');
+                const data = await response.json();
+
+                const gallery = document.getElementById('adapters-gallery');
+                const noMsg = document.getElementById('no-adapters-message');
+
+                if (data.adapters && data.adapters.length > 0) {
+                    noMsg.style.display = 'none';
+                    gallery.innerHTML = data.adapters.map(adapter => `
+                        <div class="glass-card" style="background: var(--glass-surface); padding: 1rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                                <div>
+                                    <div style="font-weight: 600; color: var(--neon-cyan);">🧪 ${escapeHtml(adapter.skill_name || adapter.skill_id)}</div>
+                                    <div style="font-size: 0.8rem; color: var(--text-secondary);">${adapter.skill_id}</div>
+                                </div>
+                                <span class="badge" style="background: var(--neon-green); color: #000; padding: 0.2rem 0.5rem; font-size: 0.7rem;">Active</span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.85rem; margin-bottom: 0.75rem;">
+                                <div><span style="color: var(--text-secondary);">Loss:</span> ${adapter.final_loss?.toFixed(4) || '--'}</div>
+                                <div><span style="color: var(--text-secondary);">Examples:</span> ${adapter.training_examples || '--'}</div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-secondary btn-sm" onclick="testAdapterFromGallery('${adapter.skill_id}')">Test</button>
+                                <button class="btn btn-secondary btn-sm" onclick="showAdapterDetails('${adapter.skill_id}')">⋮</button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    noMsg.style.display = 'block';
+                    gallery.innerHTML = '';
+                    gallery.appendChild(noMsg);
+                }
+
+            } catch (err) {
+                console.error('Failed to load adapters:', err);
+            }
+        }
+
+        async function loadTrainingJobs() {
+            try {
+                const response = await fetch('/api/training-jobs');
+                const data = await response.json();
+
+                const table = document.getElementById('training-history-table');
+
+                if (data.jobs && data.jobs.length > 0) {
+                    table.innerHTML = data.jobs.map(job => {
+                        const date = job.started_at ? new Date(job.started_at).toLocaleString() : '--';
+                        const statusColor = job.status === 'completed' ? 'var(--neon-green)' : job.status === 'running' ? 'var(--neon-cyan)' : '#ff4444';
+                        return `
+                            <tr>
+                                <td>${date}</td>
+                                <td>${escapeHtml(job.skill_id)}</td>
+                                <td><span style="color: ${statusColor};">${job.status}</span></td>
+                                <td>--</td>
+                                <td>--</td>
+                                <td>--</td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+            } catch (err) {
+                console.error('Failed to load training jobs:', err);
+            }
+        }
+
+        function checkActiveTraining() {
+            // Check if there's an active training job
+            if (currentTrainingSkillId) {
+                pollTrainingStatus(currentTrainingSkillId);
+            }
+        }
+
+        function showTrainingHelp() {
+            alert('Training Help:\\n\\n1. Select a skill to train\\n2. Review the training data status\\n3. Choose training intensity (Quick/Standard/Deep)\\n4. Click Start Training\\n\\nTraining runs on Modal\\'s A10G GPU and typically takes 5-20 minutes.\\nCost: $0.35-$1.30 per training run.');
+        }
+
+        function viewTrainingExamples() {
+            if (currentTrainingSkillId) {
+                showMainTab('skills');
+            }
+        }
+
+        function testAdapterFromGallery(skillId) {
+            currentTrainingSkillId = skillId;
+            const prompt = window.prompt('Enter a test prompt:');
+            if (prompt) {
+                document.getElementById('test-adapter-prompt').value = prompt;
+                showTrainingTab('progress');
+                document.querySelector('#tab-training .sub-tab-btn:nth-child(2)').click();
+                document.getElementById('training-complete-display').style.display = 'block';
+                document.getElementById('no-training-message').style.display = 'none';
+                document.getElementById('active-training-display').style.display = 'none';
+                testTrainedAdapter();
+            }
+        }
+
+        function showAdapterDetails(skillId) {
+            alert('Adapter: ' + skillId + '\\n\\nOptions:\\n- Retrain with more data\\n- Export to HuggingFace\\n- Delete adapter');
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
 
         function hideGettingStarted() {
