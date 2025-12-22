@@ -1035,7 +1035,8 @@ def upload_and_parse():
         'items_extracted': 0,
         'errors': [],
         'extracted_data': [],
-        'transcription_source': None
+        'transcription_source': None,
+        'debug_sample_lines': []  # Debug: show sample lines from files
     }
 
     for file in files:
@@ -1280,6 +1281,7 @@ def upload_and_parse():
             qa_pairs = []
             current_q = None
             current_a = []
+            debug_lines = []  # Debug: track what we're seeing
 
             import re as regex
 
@@ -1287,6 +1289,10 @@ def upload_and_parse():
                 line = line.strip()
                 if not line:
                     continue
+
+                # Debug: log first 5 non-empty lines
+                if len(debug_lines) < 5:
+                    debug_lines.append(line[:100])
 
                 # Pattern 0: Arrow format - "question" -> answer OR question? -> answer
                 # Handles: "How do I do X?" -> Here's how to do X.
@@ -1367,6 +1373,9 @@ def upload_and_parse():
                     results['items_extracted'] += 1
 
             results['files_processed'] += 1
+            # Add debug info
+            if debug_lines:
+                results['debug_sample_lines'].extend(debug_lines[:3])
 
         except Exception as e:
             results['files_failed'] += 1
@@ -1378,7 +1387,8 @@ def upload_and_parse():
         'files_failed': results['files_failed'],
         'items_extracted': results['items_extracted'],
         'errors': results['errors'],
-        'transcription_source': results.get('transcription_source')  # Shows 'modal-whisper' when YOUR endpoint was used!
+        'transcription_source': results.get('transcription_source'),
+        'debug_sample_lines': results.get('debug_sample_lines', [])[:5]  # Show first 5 sample lines for debugging
     })
 
 
@@ -10443,9 +10453,14 @@ pipeline = Pipeline([
                     });
 
                     const data = await response.json();
+                    console.log('Upload response:', data);  // Debug
                     if (data.success) {
                         successCount++;
-                        totalExtracted += data.extracted || 0;
+                        totalExtracted += data.items_extracted || 0;
+                        // Show debug info if no items extracted
+                        if (data.items_extracted === 0 && data.debug_sample_lines?.length > 0) {
+                            console.log('Sample lines from file:', data.debug_sample_lines);
+                        }
                     }
                 } catch (err) {
                     console.error('Upload error:', err);
@@ -10453,13 +10468,17 @@ pipeline = Pipeline([
             }
 
             if (successCount > 0) {
-                statusDiv.innerHTML = `<span style="color: var(--neon-green);">✓ Uploaded ${successCount} file(s), extracted ${totalExtracted} Q&A pairs</span>`;
+                let msg = `✓ Uploaded ${successCount} file(s), extracted ${totalExtracted} Q&A pairs`;
+                if (totalExtracted === 0) {
+                    msg += ' (check browser console for debug info)';
+                }
+                statusDiv.innerHTML = `<span style="color: ${totalExtracted > 0 ? 'var(--neon-green)' : 'var(--neon-orange)'};">${msg}</span>`;
                 loadWorkflowTrainingData();
             } else {
                 statusDiv.innerHTML = `<span style="color: #ff6b6b;">✗ Upload failed</span>`;
             }
 
-            setTimeout(() => { statusDiv.innerHTML = ''; }, 5000);
+            setTimeout(() => { statusDiv.innerHTML = ''; }, 8000);
         }
 
         async function generateWorkflowAiData() {
