@@ -305,10 +305,12 @@ def create_skill(
     is_builtin: bool = False
 ) -> Dict:
     """Create a new skill."""
+    now = datetime.now().isoformat()
+    knowledge_list = knowledge or []
+    voice_config_dict = voice_config or {}
+
     with get_db() as conn:
         cursor = conn.cursor()
-        now = datetime.now().isoformat()
-
         cursor.execute('''
             INSERT OR REPLACE INTO skills
             (id, name, description, skill_type, system_prompt, knowledge, voice_config, is_builtin, created_at, updated_at)
@@ -319,14 +321,27 @@ def create_skill(
             description,
             skill_type,
             system_prompt,
-            json.dumps(knowledge or []),
-            json.dumps(voice_config or {}),
+            json.dumps(knowledge_list),
+            json.dumps(voice_config_dict),
             1 if is_builtin else 0,
             now,
             now
         ))
 
-        return get_skill(skill_id)
+    # Return the skill data (commit happened when with block exited)
+    return {
+        'id': skill_id,
+        'name': name,
+        'description': description,
+        'skill_type': skill_type,
+        'system_prompt': system_prompt,
+        'knowledge': knowledge_list,
+        'voice_config': voice_config_dict,
+        'is_builtin': is_builtin,
+        'is_active': True,
+        'created_at': now,
+        'updated_at': now
+    }
 
 
 def get_skill(skill_id: str) -> Optional[Dict]:
