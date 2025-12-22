@@ -27,14 +27,23 @@ volume = modal.Volume.from_name("hive215-data", create_if_missing=True)
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
+    .apt_install("tesseract-ocr", "tesseract-ocr-eng")  # OCR engine for images
     .pip_install(
+        # Core web framework
         "flask>=2.0.0",
         "flask-cors>=4.0.0",
-        "httpx>=0.25.0",  # For Fast Brain API calls
-        "requests>=2.31.0",  # HTTP requests
-        "gTTS>=2.3.0",  # Google TTS (HTTP-based, more reliable)
-        "PyPDF2>=3.0.0",  # PDF text extraction
-        "python-docx>=1.0.0",  # Word document parsing
+        "httpx>=0.25.0",
+        "requests>=2.31.0",
+        # Voice
+        "gTTS>=2.3.0",
+        # Document parsing (70+ file types support)
+        "PyPDF2>=3.0.0",  # PDF
+        "python-docx>=1.0.0",  # Word (.docx)
+        "openpyxl>=3.1.0",  # Excel (.xlsx)
+        "python-pptx>=0.6.0",  # PowerPoint (.pptx)
+        "beautifulsoup4>=4.12.0",  # HTML parsing
+        "Pillow>=10.0.0",  # Image handling
+        "pytesseract>=0.3.0",  # Image OCR
     )
     .add_local_file("unified_dashboard.py", "/root/unified_dashboard.py")
     .add_local_file("golden_prompts.py", "/root/golden_prompts.py")

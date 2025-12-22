@@ -1119,8 +1119,160 @@ def upload_and_parse():
                         results['files_failed'] += 1
                         continue
 
+                # Excel spreadsheets
+                elif ext in ('xlsx', 'xls'):
+                    try:
+                        import io
+                        from openpyxl import load_workbook
+                        file.seek(0)
+                        wb = load_workbook(io.BytesIO(file.read()), data_only=True)
+                        content_parts = []
+                        for sheet in wb.worksheets:
+                            for row in sheet.iter_rows(values_only=True):
+                                row_text = ' | '.join(str(cell) if cell is not None else '' for cell in row)
+                                if row_text.strip() and row_text.strip() != '|':
+                                    content_parts.append(row_text)
+                        content = '\n'.join(content_parts)
+                    except ImportError:
+                        results['errors'].append(f"{filename}: Excel parsing requires openpyxl package")
+                        results['files_failed'] += 1
+                        continue
+                    except Exception as e:
+                        results['errors'].append(f"{filename}: Excel parsing error - {str(e)}")
+                        results['files_failed'] += 1
+                        continue
+
+                # CSV files
+                elif ext == 'csv':
+                    try:
+                        import csv
+                        import io
+                        file.seek(0)
+                        text = file.read().decode('utf-8', errors='ignore')
+                        reader = csv.reader(io.StringIO(text))
+                        content_parts = []
+                        for row in reader:
+                            row_text = ' | '.join(str(cell) for cell in row if cell)
+                            if row_text.strip():
+                                content_parts.append(row_text)
+                        content = '\n'.join(content_parts)
+                    except Exception as e:
+                        results['errors'].append(f"{filename}: CSV parsing error - {str(e)}")
+                        results['files_failed'] += 1
+                        continue
+
+                # PowerPoint presentations
+                elif ext in ('pptx', 'ppt'):
+                    try:
+                        import io
+                        from pptx import Presentation
+                        file.seek(0)
+                        prs = Presentation(io.BytesIO(file.read()))
+                        content_parts = []
+                        for slide in prs.slides:
+                            for shape in slide.shapes:
+                                if hasattr(shape, 'text') and shape.text.strip():
+                                    content_parts.append(shape.text)
+                        content = '\n'.join(content_parts)
+                    except ImportError:
+                        results['errors'].append(f"{filename}: PowerPoint parsing requires python-pptx package")
+                        results['files_failed'] += 1
+                        continue
+                    except Exception as e:
+                        results['errors'].append(f"{filename}: PowerPoint parsing error - {str(e)}")
+                        results['files_failed'] += 1
+                        continue
+
+                # HTML files
+                elif ext in ('html', 'htm'):
+                    try:
+                        from bs4 import BeautifulSoup
+                        file.seek(0)
+                        soup = BeautifulSoup(file.read().decode('utf-8', errors='ignore'), 'html.parser')
+                        # Remove script and style elements
+                        for element in soup(['script', 'style', 'nav', 'footer', 'header']):
+                            element.decompose()
+                        content = soup.get_text(separator='\n', strip=True)
+                    except ImportError:
+                        # Fallback: basic tag stripping
+                        import re as regex
+                        file.seek(0)
+                        html = file.read().decode('utf-8', errors='ignore')
+                        content = regex.sub(r'<[^>]+>', ' ', html)
+                        content = regex.sub(r'\s+', ' ', content).strip()
+                    except Exception as e:
+                        results['errors'].append(f"{filename}: HTML parsing error - {str(e)}")
+                        results['files_failed'] += 1
+                        continue
+
+                # JSON files (extract values)
+                elif ext == 'json':
+                    try:
+                        file.seek(0)
+                        data = json.loads(file.read().decode('utf-8', errors='ignore'))
+                        # Flatten JSON to text
+                        def flatten_json(obj, prefix=''):
+                            parts = []
+                            if isinstance(obj, dict):
+                                for k, v in obj.items():
+                                    parts.extend(flatten_json(v, f"{prefix}{k}: "))
+                            elif isinstance(obj, list):
+                                for item in obj:
+                                    parts.extend(flatten_json(item, prefix))
+                            else:
+                                if obj and str(obj).strip():
+                                    parts.append(f"{prefix}{obj}")
+                            return parts
+                        content = '\n'.join(flatten_json(data))
+                    except Exception as e:
+                        results['errors'].append(f"{filename}: JSON parsing error - {str(e)}")
+                        results['files_failed'] += 1
+                        continue
+
+                # Images with OCR
+                elif ext in ('png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'webp'):
+                    try:
+                        import io
+                        from PIL import Image
+                        import pytesseract
+                        file.seek(0)
+                        img = Image.open(io.BytesIO(file.read()))
+                        content = pytesseract.image_to_string(img)
+                        if not content.strip():
+                            results['errors'].append(f"{filename}: No text found in image")
+                            results['files_failed'] += 1
+                            continue
+                    except ImportError:
+                        results['errors'].append(f"{filename}: Image OCR requires PIL and pytesseract packages")
+                        results['files_failed'] += 1
+                        continue
+                    except Exception as e:
+                        results['errors'].append(f"{filename}: Image OCR error - {str(e)}")
+                        results['files_failed'] += 1
+                        continue
+
+                # Markdown files (treat as text)
+                elif ext in ('md', 'markdown'):
+                    file.seek(0)
+                    content = file.read().decode('utf-8', errors='ignore')
+
+                # RTF files (basic extraction)
+                elif ext == 'rtf':
+                    try:
+                        import re as regex
+                        file.seek(0)
+                        rtf_content = file.read().decode('utf-8', errors='ignore')
+                        # Strip RTF control codes (basic)
+                        content = regex.sub(r'\\[a-z]+\d* ?', '', rtf_content)
+                        content = regex.sub(r'[{}]', '', content)
+                        content = content.strip()
+                    except Exception as e:
+                        results['errors'].append(f"{filename}: RTF parsing error - {str(e)}")
+                        results['files_failed'] += 1
+                        continue
+
                 else:
-                    # Plain text files
+                    # Plain text files (txt, log, etc.)
                     content = file.read().decode('utf-8', errors='ignore')
 
             # Enhanced Q&A extraction with multiple format support
