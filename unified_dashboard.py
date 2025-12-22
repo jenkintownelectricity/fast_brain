@@ -1671,7 +1671,7 @@ Generate exactly {count} examples. Return ONLY the JSON array."""
         if response.status_code != 200:
             return jsonify({
                 'success': False,
-                'error': f'AI API error: {response.status_code}'
+                'error': f'AI API error: {response.status_code} - {response.text[:500]}'
             }), 500
 
         result = response.json()
