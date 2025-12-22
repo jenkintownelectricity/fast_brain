@@ -10098,7 +10098,7 @@ pipeline = Pipeline([
 
             // Map new simplified tabs to existing content
             let actualTabId = tabId;
-            if (tabId === 'skills') actualTabId = 'fastbrain';  // Skills -> Fast Brain (has Skills Manager)
+            if (tabId === 'skills') actualTabId = 'skills-training';  // Skills -> New unified Skills & Training
             if (tabId === 'voice') actualTabId = 'voicelab';    // Voice -> Voice Lab
             if (tabId === 'settings') actualTabId = 'command';  // Settings -> Command Center (has API Keys)
 
@@ -10112,8 +10112,8 @@ pipeline = Pipeline([
 
             // Load appropriate data for each tab
             if (tabId === 'dashboard') { loadSkills(); loadMetrics(); }
-            if (tabId === 'skills' || tabId === 'fastbrain') { loadFastBrainConfig(); loadFastBrainSkills(); refreshSystemStatus(); loadApiConnections(); }
-            if (tabId === 'skills-training') { loadUnifiedSkills(); }  // New unified Skills & Training tab
+            if (tabId === 'skills' || tabId === 'skills-training') { loadUnifiedSkills(); }  // New unified Skills & Training tab
+            if (tabId === 'fastbrain') { loadFastBrainConfig(); loadFastBrainSkills(); refreshSystemStatus(); loadApiConnections(); }  // Legacy
             if (tabId === 'training') { loadTrainingSkillsDropdown(); refreshAdapters(); loadTrainingJobs(); }
             if (tabId === 'voice' || tabId === 'voicelab') { loadVoiceProjects(); loadSkillsForDropdowns(); }
             if (tabId === 'settings' || tabId === 'command') { refreshStats(); loadApiKeys(); }
@@ -10122,11 +10122,12 @@ pipeline = Pipeline([
 
         // New helper functions for consolidated navigation
         function showSkillsTab(subTab) {
-            showMainTab('skills');
+            showMainTab('skills-training');
             setTimeout(() => {
-                if (subTab === 'create') showFastBrainTab('skills');
-                if (subTab === 'test') showFastBrainTab('chat');
-                if (subTab === 'golden') showFactoryTab('golden');
+                // Map old sub-tab requests to new workflow steps
+                if (subTab === 'create') goToWorkflowStep(1);  // Create = Step 1 (select/create skill)
+                if (subTab === 'test') goToWorkflowStep(3);    // Test = Step 3 (test & train)
+                if (subTab === 'data') goToWorkflowStep(2);    // Data = Step 2 (add training data)
             }, 100);
         }
 
@@ -10344,7 +10345,7 @@ pipeline = Pipeline([
             }
 
             try {
-                const res = await fetch('/api/parser/save', {
+                const res = await fetch('/api/parser/data', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -10456,9 +10457,14 @@ pipeline = Pipeline([
                 return;
             }
 
-            const context = document.getElementById('wf-ai-context').value.trim();
+            const topic = document.getElementById('wf-ai-context').value.trim();
             const count = parseInt(document.getElementById('wf-ai-count').value);
             const statusDiv = document.getElementById('wf-ai-status');
+
+            if (!topic) {
+                showToast('Please enter a topic or context for AI to generate examples', 'warning');
+                return;
+            }
 
             statusDiv.innerHTML = `<span style="color: var(--neon-cyan);">✨ Generating ${count} training examples...</span>`;
 
@@ -10468,7 +10474,7 @@ pipeline = Pipeline([
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         skill_id: currentWorkflowSkill.id,
-                        context: context,
+                        topic: topic,
                         count: count
                     })
                 });
