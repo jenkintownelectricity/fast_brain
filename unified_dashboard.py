@@ -1037,7 +1037,8 @@ def chat_with_skill():
             return jsonify({'error': 'Groq API key not configured. Please add it in Settings.'}), 400
 
         # Call Groq API
-        response = httpx.post(
+        import requests
+        response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {groq_key}",
@@ -1052,7 +1053,7 @@ def chat_with_skill():
                 "temperature": 0.7,
                 "max_tokens": 1024
             },
-            timeout=30.0
+            timeout=30
         )
 
         if response.status_code != 200:
@@ -1070,7 +1071,7 @@ def chat_with_skill():
             'skill_name': skill_name
         })
 
-    except httpx.TimeoutException:
+    except requests.exceptions.Timeout:
         return jsonify({'error': 'Request timed out. Please try again.'}), 504
     except Exception as e:
         print(f"[CHAT] Error: {e}")
