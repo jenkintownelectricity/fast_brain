@@ -12384,6 +12384,11 @@ pipeline = Pipeline([
             }
         }
 
+        // Alias for testAdapter calls (adapter.id often equals skill_id)
+        function testAdapter(adapterId) {
+            testAdapterFromGallery(adapterId);
+        }
+
         function showAdapterDetails(skillId) {
             alert('Adapter: ' + skillId + '\\n\\nOptions:\\n- Retrain with more data\\n- Export to HuggingFace\\n- Delete adapter');
         }
