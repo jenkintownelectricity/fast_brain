@@ -33,6 +33,8 @@ image = (
         "httpx>=0.25.0",  # For Fast Brain API calls
         "requests>=2.31.0",  # HTTP requests
         "gTTS>=2.3.0",  # Google TTS (HTTP-based, more reliable)
+        "PyPDF2>=3.0.0",  # PDF text extraction
+        "python-docx>=1.0.0",  # Word document parsing
     )
     .add_local_file("unified_dashboard.py", "/root/unified_dashboard.py")
     .add_local_file("golden_prompts.py", "/root/golden_prompts.py")

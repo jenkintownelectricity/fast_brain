@@ -1073,13 +1073,58 @@ def upload_and_parse():
                     results['files_failed'] += 1
                     continue
             else:
-                # Text-based files
-                content = file.read().decode('utf-8', errors='ignore')
+                # Text-based files - handle different formats
+                ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
 
-            # Simple text extraction (expand with parser module for full support)
+                # PDF files need special handling
+                if ext == 'pdf':
+                    try:
+                        import io
+                        # Try PyPDF2 first
+                        try:
+                            from PyPDF2 import PdfReader
+                            file.seek(0)
+                            reader = PdfReader(io.BytesIO(file.read()))
+                            content = '\n'.join(page.extract_text() or '' for page in reader.pages)
+                        except ImportError:
+                            # Fallback: try pdfplumber
+                            try:
+                                import pdfplumber
+                                file.seek(0)
+                                with pdfplumber.open(io.BytesIO(file.read())) as pdf:
+                                    content = '\n'.join(page.extract_text() or '' for page in pdf.pages)
+                            except ImportError:
+                                results['errors'].append(f"{filename}: PDF parsing requires PyPDF2 or pdfplumber")
+                                results['files_failed'] += 1
+                                continue
+                    except Exception as e:
+                        results['errors'].append(f"{filename}: PDF parsing error - {str(e)}")
+                        results['files_failed'] += 1
+                        continue
+
+                # Word documents need special handling
+                elif ext in ('docx', 'doc'):
+                    try:
+                        import io
+                        from docx import Document
+                        file.seek(0)
+                        doc = Document(io.BytesIO(file.read()))
+                        content = '\n'.join(para.text for para in doc.paragraphs if para.text.strip())
+                    except ImportError:
+                        results['errors'].append(f"{filename}: Word parsing requires python-docx package")
+                        results['files_failed'] += 1
+                        continue
+                    except Exception as e:
+                        results['errors'].append(f"{filename}: Word parsing error - {str(e)}")
+                        results['files_failed'] += 1
+                        continue
+
+                else:
+                    # Plain text files
+                    content = file.read().decode('utf-8', errors='ignore')
+
+            # Enhanced Q&A extraction with multiple format support
             lines = content.split('\n')
-
-            # Extract Q&A pairs from content (simple heuristic)
             qa_pairs = []
             current_q = None
             current_a = []
@@ -1089,16 +1134,41 @@ def upload_and_parse():
                 if not line:
                     continue
 
-                # Look for question patterns
-                if line.endswith('?') or line.startswith('Q:') or line.startswith('Question:'):
+                # Pattern 1: Same-line format "Q: question? A: answer" or "1. Q: question? A: answer"
+                # Also handles numbered format like "1. Q: What is X? A: It is Y."
+                import re as regex
+                same_line_match = regex.search(r'Q:\s*(.+?\?)\s*A:\s*(.+)', line, regex.IGNORECASE)
+                if same_line_match:
+                    q = same_line_match.group(1).strip()
+                    a = same_line_match.group(2).strip()
+                    if q and a:
+                        qa_pairs.append((q, a))
+                    continue
+
+                # Pattern 2: Separate lines - Question line
+                if line.endswith('?') or line.lower().startswith('q:') or line.lower().startswith('question:'):
                     if current_q and current_a:
                         qa_pairs.append((current_q, ' '.join(current_a)))
-                    current_q = line.lstrip('Q:').lstrip('Question:').strip()
+                    # Clean up the question
+                    current_q = regex.sub(r'^[\d\.\)\-\s]*', '', line)  # Remove leading numbers
+                    current_q = regex.sub(r'^(q:|question:)\s*', '', current_q, flags=regex.IGNORECASE)
+                    current_q = current_q.strip()
                     current_a = []
-                elif current_q:
-                    current_a.append(line.lstrip('A:').lstrip('Answer:').strip())
 
-            # Add last pair
+                # Pattern 3: Answer line (starts with A: or follows a question)
+                elif line.lower().startswith('a:') or line.lower().startswith('answer:'):
+                    answer_text = regex.sub(r'^(a:|answer:)\s*', '', line, flags=regex.IGNORECASE)
+                    if current_q:
+                        current_a.append(answer_text.strip())
+                    else:
+                        # Standalone answer without question - skip
+                        pass
+
+                # Pattern 4: Continuation of previous answer
+                elif current_q and current_a:
+                    current_a.append(line)
+
+            # Add last pair if exists
             if current_q and current_a:
                 qa_pairs.append((current_q, ' '.join(current_a)))
 
