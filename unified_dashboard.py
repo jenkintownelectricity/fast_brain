@@ -6005,6 +6005,464 @@ DASHBOARD_HTML = '''
         .readiness-icon.fail { color: var(--neon-orange); }
         .readiness-icon.warn { color: #fbbf24; }
 
+        /* ========================================== */
+        /* SKILL WORKFLOW - 3 Step Design */
+        /* ========================================== */
+
+        .skill-workflow {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        /* Skill Context Bar - Always visible when skill selected */
+        .skill-context-bar {
+            display: none;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 1.5rem;
+            background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(139, 92, 246, 0.1));
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 12px;
+            margin-bottom: 1rem;
+        }
+
+        .skill-context-bar.visible {
+            display: flex;
+        }
+
+        .skill-context-icon {
+            font-size: 2rem;
+        }
+
+        .skill-context-info {
+            flex: 1;
+        }
+
+        .skill-context-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .skill-context-meta {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .skill-context-meta span {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .skill-context-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* Step Indicator */
+        .workflow-steps {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: var(--glass-surface);
+            border-radius: 12px;
+        }
+
+        .workflow-step {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .workflow-step:hover {
+            background: rgba(0, 255, 242, 0.1);
+        }
+
+        .workflow-step.active {
+            background: linear-gradient(135deg, rgba(0, 255, 242, 0.2), rgba(139, 92, 246, 0.1));
+        }
+
+        .workflow-step.completed .step-number {
+            background: var(--neon-green);
+            color: #000;
+        }
+
+        .workflow-step.active .step-number {
+            background: var(--neon-cyan);
+            color: #000;
+            box-shadow: 0 0 15px rgba(0, 255, 242, 0.5);
+        }
+
+        .workflow-step.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            background: var(--glass-border);
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .step-label {
+            font-weight: 500;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .workflow-step.active .step-label {
+            color: var(--text-primary);
+        }
+
+        .workflow-step.completed .step-label {
+            color: var(--neon-green);
+        }
+
+        .step-connector {
+            width: 40px;
+            height: 2px;
+            background: var(--glass-border);
+        }
+
+        .step-connector.completed {
+            background: var(--neon-green);
+        }
+
+        /* Workflow Content */
+        .workflow-content {
+            position: relative;
+        }
+
+        .workflow-panel {
+            display: none;
+        }
+
+        .workflow-panel.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Side-by-Side Layout for Step 2 */
+        .training-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 1024px) {
+            .training-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .training-panel {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .training-panel h4 {
+            margin: 0 0 1rem 0;
+            color: var(--neon-cyan);
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Data Entry Form */
+        .data-entry-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .data-entry-form .form-group {
+            margin-bottom: 0;
+        }
+
+        .data-entry-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        /* Training Data List Compact */
+        .training-data-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+        }
+
+        .training-data-item {
+            display: flex;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--glass-border);
+            gap: 0.75rem;
+            align-items: flex-start;
+            transition: background 0.2s ease;
+        }
+
+        .training-data-item:last-child {
+            border-bottom: none;
+        }
+
+        .training-data-item:hover {
+            background: rgba(0, 255, 242, 0.05);
+        }
+
+        .training-data-item .data-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .training-data-item .data-q {
+            font-weight: 500;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .training-data-item .data-a {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .training-data-item .data-actions {
+            display: flex;
+            gap: 0.25rem;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .training-data-item:hover .data-actions {
+            opacity: 1;
+        }
+
+        /* Upload Zone */
+        .upload-zone {
+            border: 2px dashed var(--glass-border);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--neon-cyan);
+            background: rgba(0, 255, 242, 0.05);
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--neon-green);
+            background: rgba(0, 255, 136, 0.1);
+        }
+
+        .upload-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Test & Train Layout */
+        .test-train-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 1024px) {
+            .test-train-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Chat Panel */
+        .chat-panel {
+            display: flex;
+            flex-direction: column;
+            height: 450px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            background: var(--glass-surface);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .chat-message {
+            padding: 0.75rem;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            max-width: 85%;
+        }
+
+        .chat-message.user {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(139, 92, 246, 0.1));
+            margin-left: auto;
+        }
+
+        .chat-message.assistant {
+            background: rgba(0, 255, 242, 0.1);
+        }
+
+        .chat-input-area {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* Train Panel */
+        .train-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .train-readiness {
+            padding: 1rem;
+            background: var(--glass-surface);
+            border-radius: 8px;
+        }
+
+        .readiness-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .readiness-row:last-child {
+            border-bottom: none;
+        }
+
+        .readiness-check {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+        }
+
+        .readiness-check.pass {
+            background: rgba(0, 255, 136, 0.2);
+            color: var(--neon-green);
+        }
+
+        .readiness-check.fail {
+            background: rgba(255, 100, 100, 0.2);
+            color: #ff6b6b;
+        }
+
+        .readiness-check.warn {
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+        }
+
+        .train-button-wrapper {
+            margin-top: auto;
+        }
+
+        .train-button-large {
+            width: 100%;
+            padding: 1.25rem;
+            font-size: 1.1rem;
+            background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan));
+            border: none;
+            border-radius: 12px;
+            color: #000;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .train-button-large:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 255, 136, 0.3);
+        }
+
+        .train-button-large:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: var(--glass-border);
+            color: var(--text-secondary);
+        }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .toast {
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            background: var(--card-bg);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            animation: slideIn 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            min-width: 300px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .toast.success { border-color: var(--neon-green); }
+        .toast.error { border-color: #ff6b6b; }
+        .toast.warning { border-color: #fbbf24; }
+        .toast.info { border-color: var(--neon-cyan); }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
         /* Light Theme Overrides */
         [data-theme="light"] .skill-card {
             background: #ffffff;
@@ -6927,19 +7385,322 @@ DASHBOARD_HTML = '''
         <!-- UNIFIED SKILLS & TRAINING TAB -->
         <!-- ================================================================ -->
         <div id="tab-skills-training" class="tab-content">
-            <!-- Sub-tabs for all Skills & Training features -->
-            <div class="sub-tabs">
-                <button class="sub-tab-btn active" onclick="showUnifiedSubTab('skills')">🎯 Skills</button>
-                <button class="sub-tab-btn" onclick="showUnifiedSubTab('golden')">✨ Golden Prompts</button>
-                <button class="sub-tab-btn" onclick="showUnifiedSubTab('training')">🧠 Training</button>
-                <button class="sub-tab-btn" onclick="showUnifiedSubTab('data')">📄 Data Manager</button>
-                <button class="sub-tab-btn" onclick="showUnifiedSubTab('chat')">💬 Test Chat</button>
-                <button class="sub-tab-btn" onclick="showUnifiedSubTab('adapters')">📦 Adapters</button>
-                <button class="sub-tab-btn" onclick="showUnifiedSubTab('api')">🔗 API</button>
+            <!-- Toast Container for Notifications -->
+            <div id="toast-container" class="toast-container"></div>
+
+            <!-- Skill Context Bar - Shows selected skill -->
+            <div id="skill-context-bar" class="skill-context-bar">
+                <div class="skill-context-icon" id="context-skill-icon">🎯</div>
+                <div class="skill-context-info">
+                    <h3 class="skill-context-name" id="context-skill-name">No Skill Selected</h3>
+                    <div class="skill-context-meta">
+                        <span id="context-skill-status">●  Untrained</span>
+                        <span id="context-skill-examples">📊 0 examples</span>
+                        <span id="context-skill-tokens">🔤 0 tokens</span>
+                    </div>
+                </div>
+                <div class="skill-context-actions">
+                    <button class="btn btn-secondary btn-sm" onclick="changeSelectedSkill()">Change Skill</button>
+                    <button class="btn btn-secondary btn-sm" onclick="editSkillDetails()">Edit Details</button>
+                </div>
             </div>
 
-            <!-- Skills Sub-tab (Card View) -->
-            <div id="unified-skills" class="sub-tab-content active">
+            <!-- Workflow Step Indicator -->
+            <div class="workflow-steps" id="workflow-steps">
+                <div class="workflow-step active" data-step="1" onclick="goToWorkflowStep(1)">
+                    <div class="step-number">1</div>
+                    <div class="step-label">Select Skill</div>
+                </div>
+                <div class="step-connector" id="connector-1-2"></div>
+                <div class="workflow-step disabled" data-step="2" onclick="goToWorkflowStep(2)">
+                    <div class="step-number">2</div>
+                    <div class="step-label">Add Training Data</div>
+                </div>
+                <div class="step-connector" id="connector-2-3"></div>
+                <div class="workflow-step disabled" data-step="3" onclick="goToWorkflowStep(3)">
+                    <div class="step-number">3</div>
+                    <div class="step-label">Test & Train</div>
+                </div>
+            </div>
+
+            <!-- Workflow Content Panels -->
+            <div class="workflow-content">
+
+                <!-- ============================================ -->
+                <!-- STEP 1: SELECT SKILL -->
+                <!-- ============================================ -->
+                <div id="workflow-step-1" class="workflow-panel active">
+                    <!-- Header with Actions -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <h3 style="margin: 0; color: var(--text-primary);">Step 1: Select a Skill</h3>
+                            <p style="margin: 0.25rem 0 0 0; color: var(--text-secondary); font-size: 0.9rem;">Choose an existing skill or create a new one to train</p>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-primary" onclick="showUnifiedCreateSkill()">+ Create New Skill</button>
+                            <button class="btn btn-secondary" onclick="refreshUnifiedSkills()">Refresh</button>
+                        </div>
+                    </div>
+
+                    <!-- Filter/Search Bar -->
+                    <div class="glass-card" style="padding: 1rem; margin-bottom: 1.5rem;">
+                        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 200px;">
+                                <input type="text" id="skill-search-input" class="form-input" placeholder="Search skills..." onkeyup="filterSkillCards()">
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-sm skill-filter-btn active" data-filter="all" onclick="setSkillFilter('all')">All</button>
+                                <button class="btn btn-sm skill-filter-btn" data-filter="untrained" onclick="setSkillFilter('untrained')">Untrained</button>
+                                <button class="btn btn-sm skill-filter-btn" data-filter="has_data" onclick="setSkillFilter('has_data')">Has Data</button>
+                                <button class="btn btn-sm skill-filter-btn" data-filter="trained" onclick="setSkillFilter('trained')">Trained</button>
+                            </div>
+                            <select id="skill-sort-select" class="form-select" style="width: auto;" onchange="sortSkillCards()">
+                                <option value="name">Sort: Name</option>
+                                <option value="status">Sort: Status</option>
+                                <option value="recent">Sort: Recent</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Skills Grid -->
+                    <div id="unified-skills-grid" class="skills-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;">
+                        <div class="loading-skills" style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);">
+                            <div style="font-size: 2rem; margin-bottom: 1rem;">🔄</div>
+                            Loading skills...
+                        </div>
+                    </div>
+
+                    <!-- Create Skill Form (inline) -->
+                    <div class="glass-card" id="unified-create-skill-form" style="display: none; margin-top: 1.5rem;">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">NEW</span> Create New Skill</div>
+                            <button class="btn btn-sm" onclick="hideUnifiedCreateSkill()" style="background: transparent; color: var(--text-secondary);">✕</button>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Skill ID (lowercase, no spaces)</label>
+                                <input type="text" class="form-input" id="unified-new-skill-id" placeholder="my_custom_skill">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Display Name</label>
+                                <input type="text" class="form-input" id="unified-new-skill-name" placeholder="My Custom Skill">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Description</label>
+                            <input type="text" class="form-input" id="unified-new-skill-description" placeholder="Brief description of what this skill does">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">System Prompt</label>
+                            <textarea class="form-textarea" id="unified-new-skill-prompt" rows="6" placeholder="You are an AI assistant specialized in..."></textarea>
+                        </div>
+                        <div class="form-row">
+                            <button class="btn btn-primary" onclick="createUnifiedSkill()">Create Skill</button>
+                            <button class="btn btn-secondary" onclick="hideUnifiedCreateSkill()">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================ -->
+                <!-- STEP 2: ADD TRAINING DATA (Side-by-Side) -->
+                <!-- ============================================ -->
+                <div id="workflow-step-2" class="workflow-panel">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <div>
+                            <h3 style="margin: 0; color: var(--text-primary);">Step 2: Add Training Data</h3>
+                            <p style="margin: 0.25rem 0 0 0; color: var(--text-secondary); font-size: 0.9rem;">Add examples to teach your skill how to respond</p>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <span id="step2-data-count" style="color: var(--neon-green); font-weight: 600;">0 examples</span>
+                            <button class="btn btn-primary" onclick="goToWorkflowStep(3)" id="step2-next-btn" disabled>Continue to Test & Train →</button>
+                        </div>
+                    </div>
+
+                    <!-- Data Stats Bar -->
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
+                        <div class="glass-card" style="padding: 0.75rem; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-cyan);" id="wf-data-total">0</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Total</div>
+                        </div>
+                        <div class="glass-card" style="padding: 0.75rem; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-orange);" id="wf-data-pending">0</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Pending</div>
+                        </div>
+                        <div class="glass-card" style="padding: 0.75rem; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-green);" id="wf-data-approved">0</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Approved</div>
+                        </div>
+                        <div class="glass-card" style="padding: 0.75rem; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-purple);" id="wf-data-tokens">0</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Tokens</div>
+                        </div>
+                    </div>
+
+                    <!-- Side-by-Side Layout -->
+                    <div class="training-layout">
+                        <!-- LEFT: Manual Entry -->
+                        <div class="glass-card training-panel">
+                            <h4>✏️ Manual Entry</h4>
+                            <div class="data-entry-form">
+                                <div class="form-group">
+                                    <label class="form-label">User Question / Input</label>
+                                    <textarea id="wf-user-input" class="form-textarea" rows="3" placeholder="What the user might ask..."></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Ideal Response</label>
+                                    <textarea id="wf-assistant-response" class="form-textarea" rows="4" placeholder="How the AI should respond..."></textarea>
+                                </div>
+                                <div class="data-entry-actions">
+                                    <button class="btn btn-primary" onclick="saveWorkflowEntry()">💾 Save Entry</button>
+                                    <button class="btn btn-secondary" onclick="saveAndAddAnotherWorkflow()">Save & Add Another</button>
+                                </div>
+                            </div>
+
+                            <!-- Recent Entries -->
+                            <div style="margin-top: 1.5rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <span style="font-size: 0.9rem; color: var(--text-secondary);">Recent Entries</span>
+                                    <button class="btn btn-sm btn-secondary" onclick="loadWorkflowTrainingData()">🔄</button>
+                                </div>
+                                <div id="wf-training-data-list" class="training-data-list">
+                                    <div style="padding: 1rem; text-align: center; color: var(--text-secondary);">No entries yet</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- RIGHT: Bulk Upload & AI Generate -->
+                        <div class="training-panel">
+                            <!-- File Upload -->
+                            <div class="glass-card" style="margin-bottom: 1rem;">
+                                <h4>📤 Bulk Upload</h4>
+                                <div class="upload-zone" id="wf-upload-zone" onclick="document.getElementById('wf-file-input').click()"
+                                     ondragover="event.preventDefault(); this.classList.add('dragover')"
+                                     ondragleave="this.classList.remove('dragover')"
+                                     ondrop="handleWorkflowDrop(event)">
+                                    <div class="upload-icon">📁</div>
+                                    <div style="color: var(--text-primary); font-weight: 500;">Drop files here or click to upload</div>
+                                    <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">
+                                        Supports: PDF, Word, Excel, CSV, TXT, JSON, and 60+ more formats
+                                    </div>
+                                    <input type="file" id="wf-file-input" style="display: none;" multiple accept="*/*" onchange="handleWorkflowUpload(this.files)">
+                                </div>
+                                <div id="wf-upload-status" style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);"></div>
+                            </div>
+
+                            <!-- AI Generate -->
+                            <div class="glass-card">
+                                <h4>🤖 AI Generate</h4>
+                                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+                                    Let AI generate training examples based on your skill's purpose
+                                </p>
+                                <div class="form-group">
+                                    <label class="form-label">Context / Topic (optional)</label>
+                                    <textarea id="wf-ai-context" class="form-textarea" rows="2" placeholder="E.g., Common questions about solar panel installation..."></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Number of Examples</label>
+                                    <select id="wf-ai-count" class="form-select">
+                                        <option value="5">5 examples</option>
+                                        <option value="10" selected>10 examples</option>
+                                        <option value="20">20 examples</option>
+                                        <option value="50">50 examples</option>
+                                    </select>
+                                </div>
+                                <button class="btn btn-primary" onclick="generateWorkflowAiData()" style="width: 100%;">
+                                    ✨ Generate Training Data
+                                </button>
+                                <div id="wf-ai-status" style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================ -->
+                <!-- STEP 3: TEST & TRAIN -->
+                <!-- ============================================ -->
+                <div id="workflow-step-3" class="workflow-panel">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <div>
+                            <h3 style="margin: 0; color: var(--text-primary);">Step 3: Test & Train</h3>
+                            <p style="margin: 0.25rem 0 0 0; color: var(--text-secondary); font-size: 0.9rem;">Test your skill's responses, then train when ready</p>
+                        </div>
+                        <button class="btn btn-secondary" onclick="goToWorkflowStep(2)">← Back to Training Data</button>
+                    </div>
+
+                    <!-- Test & Train Side-by-Side -->
+                    <div class="test-train-layout">
+                        <!-- LEFT: Test Chat -->
+                        <div class="glass-card">
+                            <h4 style="margin: 0 0 1rem 0; color: var(--neon-cyan);">💬 Test Your Skill</h4>
+                            <div class="chat-panel">
+                                <div id="wf-chat-messages" class="chat-messages">
+                                    <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                                        Send a message to test how your skill responds
+                                    </div>
+                                </div>
+                                <div class="chat-input-area">
+                                    <input type="text" id="wf-chat-input" class="form-input" placeholder="Type a test message..."
+                                           onkeypress="if(event.key==='Enter') sendWorkflowChat()">
+                                    <button class="btn btn-primary" onclick="sendWorkflowChat()">Send</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- RIGHT: Training Panel -->
+                        <div class="glass-card train-panel">
+                            <h4 style="margin: 0 0 1rem 0; color: var(--neon-cyan);">🚀 Train Your Skill</h4>
+
+                            <!-- Readiness Checks -->
+                            <div class="train-readiness">
+                                <div style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Training Readiness</div>
+                                <div id="wf-readiness-checks">
+                                    <div class="readiness-row">
+                                        <div class="readiness-check fail">✗</div>
+                                        <span>Loading...</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Training Config -->
+                            <div style="margin-top: 1rem;">
+                                <div class="form-group">
+                                    <label class="form-label">Training Intensity</label>
+                                    <div style="display: flex; align-items: center; gap: 1rem;">
+                                        <input type="range" id="wf-training-intensity" min="1" max="3" value="2" style="flex: 1;" onchange="updateWorkflowIntensityLabel()">
+                                        <span id="wf-intensity-label" style="color: var(--neon-green); font-weight: 600; min-width: 80px;">Standard</span>
+                                    </div>
+                                </div>
+                                <div style="background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.3); border-radius: 8px; padding: 0.75rem 1rem; display: flex; justify-content: space-between;">
+                                    <span>Est. Time: <strong id="wf-time-est">~10 min</strong></span>
+                                    <span>Est. Cost: <strong id="wf-cost-est">~$0.65</strong></span>
+                                </div>
+                            </div>
+
+                            <!-- Train Button -->
+                            <div class="train-button-wrapper">
+                                <button id="wf-train-btn" class="train-button-large" onclick="startWorkflowTraining()" disabled>
+                                    🚀 Start Training
+                                </button>
+                                <div id="wf-training-status" style="margin-top: 0.75rem; text-align: center; font-size: 0.85rem; color: var(--text-secondary);"></div>
+                            </div>
+
+                            <!-- Existing Adapters -->
+                            <div style="margin-top: 1.5rem;">
+                                <div style="font-weight: 500; margin-bottom: 0.5rem; color: var(--text-primary);">Trained Adapters</div>
+                                <div id="wf-adapters-list" style="max-height: 150px; overflow-y: auto;">
+                                    <div style="text-align: center; color: var(--text-secondary); font-size: 0.85rem; padding: 1rem;">
+                                        No adapters yet. Train to create one!
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- End workflow-content -->
+
+            <!-- OLD SUB-TABS (Hidden - keeping for backwards compatibility) -->
+            <div id="unified-skills" class="sub-tab-content" style="display: none;">
                 <!-- Header with Actions -->
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
                     <div>
@@ -9388,10 +10149,576 @@ pipeline = Pipeline([
         // ============================================================
         let currentSkillFilter = 'all';
         let currentModalSkillId = null;
+        let currentWorkflowSkill = null;  // Selected skill for workflow
+        let currentWorkflowStep = 1;
         let unifiedSkillsData = [];
         let modalTrainingPollInterval = null;
+        let workflowTrainingPollInterval = null;
 
-        // Sub-tab navigation for unified view
+        // ============================================================
+        // WORKFLOW NAVIGATION
+        // ============================================================
+
+        function goToWorkflowStep(step) {
+            // Prevent navigation to disabled steps
+            if (step > 1 && !currentWorkflowSkill) {
+                showToast('Please select a skill first', 'warning');
+                return;
+            }
+
+            if (step === currentWorkflowStep) return;
+
+            // Update step indicators
+            document.querySelectorAll('.workflow-step').forEach(s => {
+                const stepNum = parseInt(s.dataset.step);
+                s.classList.remove('active', 'completed', 'disabled');
+
+                if (stepNum === step) {
+                    s.classList.add('active');
+                } else if (stepNum < step) {
+                    s.classList.add('completed');
+                } else if (!currentWorkflowSkill) {
+                    s.classList.add('disabled');
+                }
+            });
+
+            // Update connectors
+            document.getElementById('connector-1-2').classList.toggle('completed', step > 1);
+            document.getElementById('connector-2-3').classList.toggle('completed', step > 2);
+
+            // Show/hide panels
+            document.querySelectorAll('.workflow-panel').forEach(p => p.classList.remove('active'));
+            const panel = document.getElementById('workflow-step-' + step);
+            if (panel) panel.classList.add('active');
+
+            currentWorkflowStep = step;
+
+            // Load step-specific data
+            if (step === 2) {
+                loadWorkflowTrainingData();
+            } else if (step === 3) {
+                updateWorkflowReadiness();
+                loadWorkflowAdapters();
+            }
+        }
+
+        function selectSkillForWorkflow(skillId) {
+            const skill = unifiedSkillsData.find(s => s.id === skillId);
+            if (!skill) {
+                showToast('Skill not found', 'error');
+                return;
+            }
+
+            currentWorkflowSkill = skill;
+            currentModalSkillId = skillId;  // For backwards compatibility
+
+            // Update context bar
+            const contextBar = document.getElementById('skill-context-bar');
+            contextBar.classList.add('visible');
+
+            document.getElementById('context-skill-icon').textContent = skill.icon || getSkillIcon(skillId);
+            document.getElementById('context-skill-name').textContent = skill.name;
+
+            const statusColors = {
+                'untrained': '#ff6b6b',
+                'has_data': 'var(--neon-orange)',
+                'trained': 'var(--neon-green)'
+            };
+            document.getElementById('context-skill-status').innerHTML =
+                `<span style="color: ${statusColors[skill.status] || '#888'}">● ${skill.status.replace('_', ' ')}</span>`;
+            document.getElementById('context-skill-examples').textContent = `📊 ${skill.training_data?.total || 0} examples`;
+            document.getElementById('context-skill-tokens').textContent = `🔤 ${skill.training_data?.tokens || 0} tokens`;
+
+            // Enable workflow steps
+            document.querySelectorAll('.workflow-step').forEach(s => {
+                s.classList.remove('disabled');
+            });
+
+            // Move to step 2
+            showToast(`Selected: ${skill.name}`, 'success');
+            goToWorkflowStep(2);
+        }
+
+        function changeSelectedSkill() {
+            goToWorkflowStep(1);
+        }
+
+        function editSkillDetails() {
+            if (currentWorkflowSkill) {
+                openSkillDetailModal(currentWorkflowSkill.id);
+            }
+        }
+
+        // Toast notification system
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const icons = {
+                'success': '✓',
+                'error': '✗',
+                'warning': '⚠',
+                'info': 'ℹ'
+            };
+
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + type;
+            toast.innerHTML = `<span style="font-size: 1.2rem;">${icons[type] || 'ℹ'}</span><span>${message}</span>`;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = 'slideIn 0.3s ease reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // ============================================================
+        // WORKFLOW STEP 2: TRAINING DATA FUNCTIONS
+        // ============================================================
+
+        async function loadWorkflowTrainingData() {
+            if (!currentWorkflowSkill) return;
+
+            try {
+                const response = await fetch(`/api/parser/data?skill_id=${currentWorkflowSkill.id}`);
+                const data = await response.json();
+                const items = data.items || [];
+
+                // Update stats
+                const approved = items.filter(i => i.is_approved).length;
+                const total = items.length;
+                const tokens = items.reduce((sum, i) => sum + (i.tokens || 0), 0);
+
+                document.getElementById('wf-data-total').textContent = total;
+                document.getElementById('wf-data-pending').textContent = total - approved;
+                document.getElementById('wf-data-approved').textContent = approved;
+                document.getElementById('wf-data-tokens').textContent = tokens;
+                document.getElementById('step2-data-count').textContent = `${total} examples`;
+
+                // Enable/disable continue button
+                const nextBtn = document.getElementById('step2-next-btn');
+                nextBtn.disabled = total < 5;
+                nextBtn.title = total < 5 ? 'Need at least 5 training examples' : '';
+
+                // Render training data list
+                const list = document.getElementById('wf-training-data-list');
+                if (items.length === 0) {
+                    list.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-secondary);">No entries yet. Add your first training example!</div>';
+                } else {
+                    list.innerHTML = items.slice(0, 10).map(item => `
+                        <div class="training-data-item" data-id="${item.id}">
+                            <div class="data-content">
+                                <div class="data-q" title="${escapeHtml(item.user_input)}">${escapeHtml(item.user_input)}</div>
+                                <div class="data-a" title="${escapeHtml(item.assistant_response)}">${escapeHtml(item.assistant_response.substring(0, 100))}</div>
+                            </div>
+                            <div class="data-actions">
+                                <button class="btn btn-sm btn-secondary" onclick="editWorkflowDataItem('${item.id}')" title="Edit">✏️</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteWorkflowDataItem('${item.id}')" title="Delete">🗑</button>
+                            </div>
+                        </div>
+                    `).join('');
+
+                    if (items.length > 10) {
+                        list.innerHTML += `<div style="padding: 0.5rem; text-align: center; color: var(--text-secondary); font-size: 0.85rem;">+ ${items.length - 10} more entries</div>`;
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load training data:', err);
+                showToast('Failed to load training data', 'error');
+            }
+        }
+
+        async function saveWorkflowEntry() {
+            if (!currentWorkflowSkill) {
+                showToast('Please select a skill first', 'warning');
+                return;
+            }
+
+            const userInput = document.getElementById('wf-user-input').value.trim();
+            const response = document.getElementById('wf-assistant-response').value.trim();
+
+            if (!userInput || !response) {
+                showToast('Both question and response are required', 'warning');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/parser/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        skill_id: currentWorkflowSkill.id,
+                        user_input: userInput,
+                        assistant_response: response,
+                        is_approved: false
+                    })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Training entry saved!', 'success');
+                    document.getElementById('wf-user-input').value = '';
+                    document.getElementById('wf-assistant-response').value = '';
+                    loadWorkflowTrainingData();
+                } else {
+                    showToast('Failed to save: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (err) {
+                showToast('Failed to save entry', 'error');
+            }
+        }
+
+        async function saveAndAddAnotherWorkflow() {
+            await saveWorkflowEntry();
+            document.getElementById('wf-user-input').focus();
+        }
+
+        async function deleteWorkflowDataItem(itemId) {
+            if (!confirm('Delete this training entry?')) return;
+
+            try {
+                const res = await fetch(`/api/parser/data/${itemId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Entry deleted', 'success');
+                    loadWorkflowTrainingData();
+                } else {
+                    showToast('Failed to delete', 'error');
+                }
+            } catch (err) {
+                showToast('Failed to delete entry', 'error');
+            }
+        }
+
+        function editWorkflowDataItem(itemId) {
+            // For now, open the existing modal
+            openManualEntryModal();
+            // TODO: Pre-populate with existing data
+        }
+
+        // File upload handlers for workflow
+        function handleWorkflowDrop(event) {
+            event.preventDefault();
+            event.target.classList.remove('dragover');
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                handleWorkflowUpload(files);
+            }
+        }
+
+        async function handleWorkflowUpload(files) {
+            if (!currentWorkflowSkill) {
+                showToast('Please select a skill first', 'warning');
+                return;
+            }
+
+            const statusDiv = document.getElementById('wf-upload-status');
+            statusDiv.innerHTML = `<span style="color: var(--neon-cyan);">Uploading ${files.length} file(s)...</span>`;
+
+            let successCount = 0;
+            let totalExtracted = 0;
+
+            for (const file of files) {
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('skill_id', currentWorkflowSkill.id);
+
+                    const response = await fetch('/api/parser/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await response.json();
+                    if (data.success) {
+                        successCount++;
+                        totalExtracted += data.extracted || 0;
+                    }
+                } catch (err) {
+                    console.error('Upload error:', err);
+                }
+            }
+
+            if (successCount > 0) {
+                statusDiv.innerHTML = `<span style="color: var(--neon-green);">✓ Uploaded ${successCount} file(s), extracted ${totalExtracted} Q&A pairs</span>`;
+                loadWorkflowTrainingData();
+            } else {
+                statusDiv.innerHTML = `<span style="color: #ff6b6b;">✗ Upload failed</span>`;
+            }
+
+            setTimeout(() => { statusDiv.innerHTML = ''; }, 5000);
+        }
+
+        async function generateWorkflowAiData() {
+            if (!currentWorkflowSkill) {
+                showToast('Please select a skill first', 'warning');
+                return;
+            }
+
+            const context = document.getElementById('wf-ai-context').value.trim();
+            const count = parseInt(document.getElementById('wf-ai-count').value);
+            const statusDiv = document.getElementById('wf-ai-status');
+
+            statusDiv.innerHTML = `<span style="color: var(--neon-cyan);">✨ Generating ${count} training examples...</span>`;
+
+            try {
+                const response = await fetch('/api/parser/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        skill_id: currentWorkflowSkill.id,
+                        context: context,
+                        count: count
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    statusDiv.innerHTML = `<span style="color: var(--neon-green);">✓ Generated ${data.generated || count} examples!</span>`;
+                    loadWorkflowTrainingData();
+                } else {
+                    statusDiv.innerHTML = `<span style="color: #ff6b6b;">✗ ${data.error || 'Generation failed'}</span>`;
+                }
+            } catch (err) {
+                statusDiv.innerHTML = `<span style="color: #ff6b6b;">✗ Failed to generate training data</span>`;
+            }
+
+            setTimeout(() => { statusDiv.innerHTML = ''; }, 5000);
+        }
+
+        // ============================================================
+        // WORKFLOW STEP 3: TEST & TRAIN FUNCTIONS
+        // ============================================================
+
+        function updateWorkflowReadiness() {
+            if (!currentWorkflowSkill) return;
+
+            const checksContainer = document.getElementById('wf-readiness-checks');
+            const examples = currentWorkflowSkill.training_data?.total || 0;
+            const hasSystemPrompt = !!(currentWorkflowSkill.system_prompt);
+
+            // Fetch latest data
+            fetch(`/api/parser/data?skill_id=${currentWorkflowSkill.id}`)
+                .then(r => r.json())
+                .then(data => {
+                    const items = data.items || [];
+                    const currentExamples = items.length;
+
+                    const checks = [
+                        {
+                            pass: currentExamples >= 10,
+                            warn: currentExamples >= 5 && currentExamples < 10,
+                            text: `Training examples: ${currentExamples} ${currentExamples < 10 ? '(need 10+)' : '✓'}`,
+                        },
+                        {
+                            pass: hasSystemPrompt,
+                            warn: !hasSystemPrompt,
+                            text: hasSystemPrompt ? 'System prompt defined ✓' : 'No system prompt (recommended)',
+                        },
+                        {
+                            pass: true,
+                            text: 'Modal GPU available ✓',
+                        }
+                    ];
+
+                    checksContainer.innerHTML = checks.map(check => `
+                        <div class="readiness-row">
+                            <div class="readiness-check ${check.pass ? 'pass' : (check.warn ? 'warn' : 'fail')}">
+                                ${check.pass ? '✓' : (check.warn ? '⚠' : '✗')}
+                            </div>
+                            <span>${check.text}</span>
+                        </div>
+                    `).join('');
+
+                    // Enable/disable train button
+                    const trainBtn = document.getElementById('wf-train-btn');
+                    const canTrain = currentExamples >= 5;
+                    trainBtn.disabled = !canTrain;
+
+                    // Update current skill data
+                    currentWorkflowSkill.training_data = {
+                        ...currentWorkflowSkill.training_data,
+                        total: currentExamples
+                    };
+                });
+        }
+
+        function updateWorkflowIntensityLabel() {
+            const val = document.getElementById('wf-training-intensity').value;
+            const labels = { '1': 'Quick', '2': 'Standard', '3': 'Deep' };
+            const times = { '1': '~5 min', '2': '~10 min', '3': '~20 min' };
+            const costs = { '1': '~$0.30', '2': '~$0.65', '3': '~$1.20' };
+
+            document.getElementById('wf-intensity-label').textContent = labels[val];
+            document.getElementById('wf-time-est').textContent = times[val];
+            document.getElementById('wf-cost-est').textContent = costs[val];
+        }
+
+        async function loadWorkflowAdapters() {
+            if (!currentWorkflowSkill) return;
+
+            const container = document.getElementById('wf-adapters-list');
+            const adapters = currentWorkflowSkill.adapters || [];
+
+            if (adapters.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); font-size: 0.85rem; padding: 1rem;">No adapters yet. Train to create one!</div>';
+                return;
+            }
+
+            container.innerHTML = adapters.map(adapter => `
+                <div style="padding: 0.5rem; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-weight: 500;">${adapter.adapter_name || adapter.id}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary);">Loss: ${adapter.final_loss?.toFixed(3) || '--'}</div>
+                    </div>
+                    <button class="btn btn-sm btn-secondary" onclick="testAdapter('${adapter.id}')">Test</button>
+                </div>
+            `).join('');
+        }
+
+        async function startWorkflowTraining() {
+            if (!currentWorkflowSkill) {
+                showToast('No skill selected', 'error');
+                return;
+            }
+
+            const intensity = document.getElementById('wf-training-intensity').value;
+            const epochs = { '1': 3, '2': 10, '3': 20 }[intensity];
+            const statusDiv = document.getElementById('wf-training-status');
+            const trainBtn = document.getElementById('wf-train-btn');
+
+            trainBtn.disabled = true;
+            trainBtn.innerHTML = '⏳ Starting training...';
+            statusDiv.textContent = 'Initializing Modal GPU...';
+
+            try {
+                const response = await fetch('/api/training/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        skill_id: currentWorkflowSkill.id,
+                        epochs: epochs,
+                        lora_r: 16,
+                        learning_rate: 2e-4
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showToast('Training started!', 'success');
+                    trainBtn.innerHTML = '🔄 Training in progress...';
+                    startWorkflowTrainingPoll();
+                } else {
+                    showToast('Training failed: ' + (data.error || 'Unknown error'), 'error');
+                    trainBtn.disabled = false;
+                    trainBtn.innerHTML = '🚀 Start Training';
+                }
+            } catch (err) {
+                showToast('Failed to start training', 'error');
+                trainBtn.disabled = false;
+                trainBtn.innerHTML = '🚀 Start Training';
+            }
+        }
+
+        function startWorkflowTrainingPoll() {
+            if (workflowTrainingPollInterval) clearInterval(workflowTrainingPollInterval);
+
+            workflowTrainingPollInterval = setInterval(async () => {
+                if (!currentWorkflowSkill) {
+                    clearInterval(workflowTrainingPollInterval);
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`/api/training/status/${currentWorkflowSkill.id}`);
+                    const data = await res.json();
+
+                    const statusDiv = document.getElementById('wf-training-status');
+                    const trainBtn = document.getElementById('wf-train-btn');
+
+                    if (data.status === 'completed') {
+                        clearInterval(workflowTrainingPollInterval);
+                        statusDiv.textContent = 'Training completed! New adapter created.';
+                        trainBtn.disabled = false;
+                        trainBtn.innerHTML = '🚀 Start Training';
+                        showToast('Training completed successfully!', 'success');
+                        loadWorkflowAdapters();
+                        loadUnifiedSkills();  // Refresh skill data
+                    } else if (data.status === 'failed') {
+                        clearInterval(workflowTrainingPollInterval);
+                        statusDiv.textContent = 'Training failed: ' + (data.error || 'Unknown error');
+                        trainBtn.disabled = false;
+                        trainBtn.innerHTML = '🚀 Start Training';
+                        showToast('Training failed', 'error');
+                    } else {
+                        statusDiv.textContent = `Training... ${data.progress || 0}% complete`;
+                    }
+                } catch (err) {
+                    console.error('Training poll error:', err);
+                }
+            }, 3000);
+        }
+
+        // Workflow chat functions
+        async function sendWorkflowChat() {
+            if (!currentWorkflowSkill) {
+                showToast('No skill selected', 'warning');
+                return;
+            }
+
+            const input = document.getElementById('wf-chat-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const messagesDiv = document.getElementById('wf-chat-messages');
+
+            // Add user message
+            messagesDiv.innerHTML += `<div class="chat-message user">${escapeHtml(message)}</div>`;
+            input.value = '';
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+            // Add loading indicator
+            const loadingId = 'loading-' + Date.now();
+            messagesDiv.innerHTML += `<div id="${loadingId}" class="chat-message assistant" style="opacity: 0.6;">Thinking...</div>`;
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        skill_id: currentWorkflowSkill.id,
+                        message: message
+                    })
+                });
+
+                const data = await response.json();
+                const loadingEl = document.getElementById(loadingId);
+                if (loadingEl) {
+                    loadingEl.remove();
+                }
+
+                if (data.response) {
+                    messagesDiv.innerHTML += `<div class="chat-message assistant">${escapeHtml(data.response)}</div>`;
+                } else {
+                    messagesDiv.innerHTML += `<div class="chat-message assistant" style="color: #ff6b6b;">Error: ${data.error || 'No response'}</div>`;
+                }
+            } catch (err) {
+                const loadingEl = document.getElementById(loadingId);
+                if (loadingEl) {
+                    loadingEl.innerHTML = 'Error: Failed to get response';
+                    loadingEl.style.color = '#ff6b6b';
+                }
+            }
+
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // ============================================================
+        // MODIFIED: Skill card click now uses workflow
+        // ============================================================
+
+        // Sub-tab navigation for unified view (legacy - kept for compatibility)
         function showUnifiedSubTab(tabName) {
             document.querySelectorAll('#tab-skills-training .sub-tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('#tab-skills-training .sub-tab-btn').forEach(b => b.classList.remove('active'));
@@ -9784,7 +11111,7 @@ pipeline = Pipeline([
                 const adapters = skill.adapters?.length || 0;
 
                 return `
-                    <div class="skill-card" onclick="openSkillDetailModal('${skill.id}')" data-skill-id="${skill.id}" data-status="${skill.status}">
+                    <div class="skill-card" onclick="selectSkillForWorkflow('${skill.id}')" data-skill-id="${skill.id}" data-status="${skill.status}">
                         <div class="skill-card-header">
                             <div class="skill-card-icon">${icon}</div>
                             <span class="skill-status-badge ${skill.status}">${statusLabels[skill.status]}</span>
