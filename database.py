@@ -1270,24 +1270,25 @@ def create_adapter(adapter_id: str, skill_id: str, skill_name: str = None, **kwa
 # =============================================================================
 
 def get_extracted_data_stats() -> Dict:
-    """Get overall stats for extracted training data."""
+    """Get overall stats for extracted training data (excludes archived)."""
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Overall stats
-        cursor.execute('SELECT COUNT(*) as total, SUM(tokens) as total_tokens FROM extracted_data')
+        # Overall stats (exclude archived)
+        cursor.execute('SELECT COUNT(*) as total, SUM(tokens) as total_tokens FROM extracted_data WHERE is_archived = 0')
         overall = dict(cursor.fetchone())
 
-        cursor.execute('SELECT COUNT(*) as approved FROM extracted_data WHERE is_approved = 1')
+        cursor.execute('SELECT COUNT(*) as approved FROM extracted_data WHERE is_approved = 1 AND is_archived = 0')
         overall['approved'] = cursor.fetchone()['approved']
 
-        cursor.execute('SELECT COUNT(*) as pending FROM extracted_data WHERE is_approved = 0')
+        cursor.execute('SELECT COUNT(*) as pending FROM extracted_data WHERE is_approved = 0 AND is_archived = 0')
         overall['pending'] = cursor.fetchone()['pending']
 
-        # By skill
+        # By skill (exclude archived)
         cursor.execute('''
             SELECT skill_id, COUNT(*) as total, SUM(tokens) as tokens
             FROM extracted_data
+            WHERE is_archived = 0
             GROUP BY skill_id
         ''')
         by_skill = [dict(row) for row in cursor.fetchall()]

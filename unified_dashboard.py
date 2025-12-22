@@ -837,11 +837,13 @@ def get_parser_stats():
     try:
         if USE_DATABASE:
             stats = db.get_extracted_data_stats()
+            print(f"[PARSER STATS] total={stats.get('total')}, approved={stats.get('approved')}, skills={len(stats.get('by_skill', []))}")
         else:
             stats = {'total': 0, 'total_tokens': 0, 'approved': 0, 'pending': 0, 'by_skill': []}
+            print("[PARSER STATS] USE_DATABASE is False - returning zeros")
         return jsonify(stats)
     except Exception as e:
-        print(f"Error loading parser stats: {e}")
+        print(f"[PARSER STATS] ERROR: {e}")
         return jsonify({'total': 0, 'total_tokens': 0, 'approved': 0, 'pending': 0, 'by_skill': [], 'error': str(e)})
 
 
@@ -3168,19 +3170,26 @@ def get_fast_brain_skills():
     try:
         skills = []
         selected = 'general'
+        source = 'none'
 
         if USE_DATABASE:
             try:
                 skills = db.get_all_skills()
                 selected = db.get_config('selected_skill', 'general') or 'general'
+                source = 'database'
+                print(f"[SKILLS] Loaded {len(skills)} skills from database")
             except Exception as db_error:
-                print(f"Database error loading skills: {db_error}")
+                print(f"[SKILLS] DATABASE FAILED: {db_error}")
                 # Try to initialize database if tables don't exist
                 try:
                     db.init_db()
                     skills = db.get_all_skills()
-                except:
-                    pass
+                    source = 'database_retry'
+                    print(f"[SKILLS] Retry successful: {len(skills)} skills")
+                except Exception as retry_error:
+                    print(f"[SKILLS] Retry also failed: {retry_error}")
+        else:
+            print("[SKILLS] USE_DATABASE is False!")
 
         # If no skills in database, try fetching from LPU API
         if not skills:
