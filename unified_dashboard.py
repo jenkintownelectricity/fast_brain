@@ -998,6 +998,85 @@ def get_skill_training_status(skill_id):
         return jsonify({"status": "error", "error": str(e)})
 
 
+@app.route('/api/chat', methods=['POST'])
+def chat_with_skill():
+    """
+    Chat with a skill using Groq API (before training).
+    Uses the skill's system prompt to simulate the trained behavior.
+
+    Request body:
+    {
+        "skill_id": "my-skill",
+        "message": "Hello, how are you?"
+    }
+    """
+    try:
+        data = request.json or {}
+        skill_id = data.get('skill_id')
+        message = data.get('message', '').strip()
+
+        if not skill_id:
+            return jsonify({'error': 'skill_id is required'}), 400
+        if not message:
+            return jsonify({'error': 'message is required'}), 400
+
+        # Get skill from database
+        if not USE_DATABASE:
+            return jsonify({'error': 'Database not available'}), 500
+
+        skill = db.get_skill(skill_id)
+        if not skill:
+            return jsonify({'error': f'Skill "{skill_id}" not found'}), 404
+
+        system_prompt = skill.get('system_prompt', 'You are a helpful assistant.')
+        skill_name = skill.get('name', skill_id)
+
+        # Get Groq API key
+        groq_key = db.get_api_key('groq') or os.environ.get('GROQ_API_KEY')
+        if not groq_key:
+            return jsonify({'error': 'Groq API key not configured. Please add it in Settings.'}), 400
+
+        # Call Groq API
+        response = httpx.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {groq_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": message}
+                ],
+                "temperature": 0.7,
+                "max_tokens": 1024
+            },
+            timeout=30.0
+        )
+
+        if response.status_code != 200:
+            return jsonify({
+                'error': f'Groq API error: {response.status_code} - {response.text[:200]}'
+            }), 500
+
+        result = response.json()
+        assistant_response = result['choices'][0]['message']['content'].strip()
+
+        return jsonify({
+            'success': True,
+            'response': assistant_response,
+            'skill_id': skill_id,
+            'skill_name': skill_name
+        })
+
+    except httpx.TimeoutException:
+        return jsonify({'error': 'Request timed out. Please try again.'}), 504
+    except Exception as e:
+        print(f"[CHAT] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/test-adapter/<skill_id>', methods=['POST'])
 def test_trained_adapter(skill_id):
     """
