@@ -7763,36 +7763,6 @@ DASHBOARD_HTML = '''
                         Loading skills...
                     </div>
                 </div>
-
-                <!-- Create Skill Form (inline) -->
-                <div class="glass-card" id="unified-create-skill-form" style="display: none; margin-top: 1.5rem;">
-                    <div class="section-header">
-                        <div class="section-title"><span class="section-icon">NEW</span> Create New Skill</div>
-                        <button class="btn btn-sm" onclick="hideUnifiedCreateSkill()" style="background: transparent; color: var(--text-secondary);">✕</button>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label">Skill ID (lowercase, no spaces)</label>
-                            <input type="text" class="form-input" id="unified-new-skill-id" placeholder="my_custom_skill">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Display Name</label>
-                            <input type="text" class="form-input" id="unified-new-skill-name" placeholder="My Custom Skill">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Description</label>
-                        <input type="text" class="form-input" id="unified-new-skill-description" placeholder="Brief description of what this skill does">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">System Prompt</label>
-                        <textarea class="form-textarea" id="unified-new-skill-prompt" rows="6" placeholder="You are an AI assistant specialized in..."></textarea>
-                    </div>
-                    <div class="form-row">
-                        <button class="btn btn-primary" onclick="createUnifiedSkill()">Create Skill</button>
-                        <button class="btn btn-secondary" onclick="hideUnifiedCreateSkill()">Cancel</button>
-                    </div>
-                </div>
             </div>
 
             <!-- Golden Prompts Sub-tab -->
