@@ -667,10 +667,40 @@ def get_training_job(skill_id):
         return jsonify({"error": "No training job found for this skill"}), 404
 
     job = TRAINING_JOBS[skill_id]
+
+    # Calculate progress percentage
+    status = job.get('status', 'idle')
+    progress = 0
+
+    if status == 'completed':
+        progress = 100
+    elif status == 'failed':
+        progress = 0
+    elif status == 'starting':
+        progress = 5
+    elif status == 'running':
+        # Try to parse epoch progress from logs
+        logs = job.get('logs', [])
+        total_epochs = job.get('config', {}).get('epochs', 10)
+        current_epoch = 0
+
+        for log in reversed(logs):
+            # Match patterns like "Epoch 3/10", "epoch 3", "Epoch: 3"
+            match = re.search(r'[Ee]poch[:\s]*(\d+)', log)
+            if match:
+                current_epoch = int(match.group(1))
+                break
+
+        if current_epoch > 0:
+            progress = min(95, int((current_epoch / total_epochs) * 100))
+        else:
+            progress = 10  # Running but no epoch info yet
+
     return jsonify({
         "job_id": job.get('job_id'),
         "skill_id": skill_id,
         "status": job.get('status'),
+        "progress": progress,
         "started_at": job.get('started_at'),
         "completed_at": job.get('completed_at'),
         "error": job.get('error'),
