@@ -553,11 +553,10 @@ def start_skill_training(skill_id):
     """
     Start a Modal-based LoRA training job for a skill.
 
-    Uses Modal Python API to call the deployed SkillTrainer.train function.
+    Uses Modal's spawn() for async execution that survives container shutdown.
     """
     try:
         import modal
-        import threading
 
         data = request.json or {}
 
@@ -581,63 +580,31 @@ def start_skill_training(skill_id):
             "lora_r": data.get('lora_r', 16),
         }
 
-        # Track job
+        # Get reference to deployed Modal function
+        SkillTrainerCls = modal.Cls.lookup("hive215-skill-trainer", "SkillTrainer")
+        trainer = SkillTrainerCls()
+
+        # Spawn training job on Modal (async - survives container shutdown)
+        call = trainer.train.spawn(skill_id=skill_id, config=config)
+
+        # Track job with Modal call ID
         job_id = f"{skill_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         TRAINING_JOBS[skill_id] = {
             "job_id": job_id,
             "skill_id": skill_id,
-            "status": "starting",
+            "status": "running",
             "started_at": datetime.now().isoformat(),
             "config": config,
-            "logs": ["Connecting to Modal..."],
-            "modal_call": None,
+            "logs": ["Training job spawned on Modal GPU..."],
+            "modal_call_id": call.object_id,
         }
 
-        def run_training():
-            """Run training via Modal Python API."""
-            try:
-                TRAINING_JOBS[skill_id]['logs'].append("Looking up SkillTrainer...")
-
-                # Get reference to deployed Modal function
-                SkillTrainerCls = modal.Cls.lookup("hive215-skill-trainer", "SkillTrainer")
-                trainer = SkillTrainerCls()
-
-                TRAINING_JOBS[skill_id]['logs'].append(f"Starting training for {skill_id}...")
-                TRAINING_JOBS[skill_id]['status'] = 'running'
-                add_activity(f"Started training: {skill_id}", "🚀", "training")
-
-                # Call the train method (blocking - runs on Modal GPU)
-                result = trainer.train.remote(
-                    skill_id=skill_id,
-                    config=config,
-                )
-
-                # Training completed
-                if result.get('success'):
-                    TRAINING_JOBS[skill_id]['status'] = 'completed'
-                    TRAINING_JOBS[skill_id]['completed_at'] = datetime.now().isoformat()
-                    TRAINING_JOBS[skill_id]['result'] = result
-                    TRAINING_JOBS[skill_id]['logs'].append(f"Training completed! Adapter: {result.get('adapter_path', 'unknown')}")
-                    add_activity(f"Training complete: {skill_id}", "✅", "training")
-                else:
-                    TRAINING_JOBS[skill_id]['status'] = 'failed'
-                    TRAINING_JOBS[skill_id]['error'] = result.get('error', 'Unknown error')
-                    TRAINING_JOBS[skill_id]['logs'].append(f"Training failed: {result.get('error')}")
-                    add_activity(f"Training failed: {skill_id}", "❌", "training")
-
-            except Exception as e:
-                TRAINING_JOBS[skill_id]['status'] = 'failed'
-                TRAINING_JOBS[skill_id]['error'] = str(e)
-                TRAINING_JOBS[skill_id]['logs'].append(f"Error: {str(e)}")
-                add_activity(f"Training error: {skill_id} - {str(e)[:50]}", "❌", "training")
-
-        # Start background thread
-        thread = threading.Thread(target=run_training, daemon=True)
-        thread.start()
+        add_activity(f"Started training: {skill_id}", "🚀", "training")
 
         return jsonify({
             "success": True,
             "job_id": job_id,
+            "modal_call_id": call.object_id,
             "message": f"Training started for skill '{skill_id}'",
             "status_url": f"/api/training-job/{skill_id}"
         })
@@ -650,11 +617,48 @@ def start_skill_training(skill_id):
 
 @app.route('/api/training-job/<skill_id>')
 def get_training_job(skill_id):
-    """Get status of a training job."""
+    """Get status of a training job by checking Modal call status."""
+    import modal
+
     if skill_id not in TRAINING_JOBS:
         return jsonify({"error": "No training job found for this skill"}), 404
 
     job = TRAINING_JOBS[skill_id]
+    modal_call_id = job.get('modal_call_id')
+
+    # Check Modal call status if we have a call ID and job is still running
+    if modal_call_id and job.get('status') == 'running':
+        try:
+            from modal.functions import FunctionCall
+            call = FunctionCall.from_id(modal_call_id)
+
+            # Try to get result (non-blocking with timeout=0)
+            try:
+                result = call.get(timeout=0)
+                # If we got here, the call completed
+                if result and result.get('success'):
+                    TRAINING_JOBS[skill_id]['status'] = 'completed'
+                    TRAINING_JOBS[skill_id]['completed_at'] = datetime.now().isoformat()
+                    TRAINING_JOBS[skill_id]['result'] = result
+                    TRAINING_JOBS[skill_id]['logs'].append(f"Training completed! Adapter: {result.get('adapter_path', 'unknown')}")
+                    add_activity(f"Training complete: {skill_id}", "✅", "training")
+                else:
+                    TRAINING_JOBS[skill_id]['status'] = 'failed'
+                    TRAINING_JOBS[skill_id]['error'] = result.get('error', 'Unknown error') if result else 'No result'
+                    TRAINING_JOBS[skill_id]['logs'].append(f"Training failed: {TRAINING_JOBS[skill_id]['error']}")
+                    add_activity(f"Training failed: {skill_id}", "❌", "training")
+            except TimeoutError:
+                # Still running - this is expected
+                pass
+            except Exception as e:
+                # Check if it's a "not ready" exception (still running)
+                if "not ready" not in str(e).lower() and "timeout" not in str(e).lower():
+                    TRAINING_JOBS[skill_id]['status'] = 'failed'
+                    TRAINING_JOBS[skill_id]['error'] = str(e)
+                    TRAINING_JOBS[skill_id]['logs'].append(f"Error checking status: {str(e)}")
+        except Exception as e:
+            # Error looking up call - log but don't fail
+            TRAINING_JOBS[skill_id]['logs'].append(f"Status check error: {str(e)[:100]}")
 
     # Calculate progress percentage
     status = job.get('status', 'idle')
@@ -664,25 +668,20 @@ def get_training_job(skill_id):
         progress = 100
     elif status == 'failed':
         progress = 0
-    elif status == 'starting':
-        progress = 5
     elif status == 'running':
-        # Try to parse epoch progress from logs
-        logs = job.get('logs', [])
-        total_epochs = job.get('config', {}).get('epochs', 10)
-        current_epoch = 0
-
-        for log in reversed(logs):
-            # Match patterns like "Epoch 3/10", "epoch 3", "Epoch: 3"
-            match = re.search(r'[Ee]poch[:\s]*(\d+)', log)
-            if match:
-                current_epoch = int(match.group(1))
-                break
-
-        if current_epoch > 0:
-            progress = min(95, int((current_epoch / total_epochs) * 100))
-        else:
-            progress = 10  # Running but no epoch info yet
+        # Estimate progress based on elapsed time (rough estimate)
+        started = job.get('started_at')
+        if started:
+            from datetime import datetime as dt
+            try:
+                start_time = dt.fromisoformat(started)
+                elapsed = (dt.now() - start_time).total_seconds()
+                # Assume ~10 min average training time
+                estimated_duration = 600  # 10 minutes
+                progress = min(90, int((elapsed / estimated_duration) * 100))
+                progress = max(10, progress)  # At least 10% if running
+            except:
+                progress = 25  # Default if can't calculate
 
     return jsonify({
         "job_id": job.get('job_id'),
@@ -692,7 +691,8 @@ def get_training_job(skill_id):
         "started_at": job.get('started_at'),
         "completed_at": job.get('completed_at'),
         "error": job.get('error'),
-        "logs": job.get('logs', [])[-20:],  # Last 20 lines
+        "logs": job.get('logs', [])[-20:],
+        "modal_call_id": job.get('modal_call_id'),
     })
 
 
