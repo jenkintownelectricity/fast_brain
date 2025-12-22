@@ -580,11 +580,10 @@ def start_skill_training(skill_id):
             "lora_r": data.get('lora_r', 16),
         }
 
-        # Get reference to deployed Modal function
-        train_fn = modal.Function.lookup("hive215-skill-trainer", "SkillTrainer.train")
-
-        # Spawn training job on Modal (async - survives container shutdown)
-        call = train_fn.spawn(skill_id=skill_id, config=config)
+        # Get reference to deployed Modal class and spawn training
+        SkillTrainer = modal.Cls.from_name("hive215-skill-trainer", "SkillTrainer")
+        trainer = SkillTrainer()
+        call = trainer.train.spawn(skill_id=skill_id, config=config)
 
         # Track job with Modal call ID
         job_id = f"{skill_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -720,11 +719,10 @@ def list_trained_adapters():
     try:
         import modal
 
-        # Get reference to deployed Modal function
-        list_adapters_fn = modal.Function.lookup("hive215-skill-trainer", "SkillTrainer.list_adapters")
-
-        # Call list_adapters method
-        adapters = list_adapters_fn.remote()
+        # Get reference to deployed Modal class
+        SkillTrainer = modal.Cls.from_name("hive215-skill-trainer", "SkillTrainer")
+        trainer = SkillTrainer()
+        adapters = trainer.list_adapters.remote()
 
         return jsonify({"adapters": adapters or []})
 
@@ -952,11 +950,10 @@ def test_trained_adapter(skill_id):
         data = request.json or {}
         prompt = data.get('prompt', 'Hello')
 
-        # Get reference to deployed Modal function
-        test_adapter_fn = modal.Function.lookup("hive215-skill-trainer", "SkillTrainer.test_adapter")
-
-        # Call test_adapter method
-        response = test_adapter_fn.remote(skill_id=skill_id, prompt=prompt)
+        # Get reference to deployed Modal class
+        SkillTrainer = modal.Cls.from_name("hive215-skill-trainer", "SkillTrainer")
+        trainer = SkillTrainer()
+        response = trainer.test_adapter.remote(skill_id=skill_id, prompt=prompt)
 
         return jsonify({
             "success": True,
