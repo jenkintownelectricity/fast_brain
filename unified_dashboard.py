@@ -678,6 +678,23 @@ def get_training_job(skill_id):
                     if USE_DATABASE:
                         db.update_training_job(skill_id, status='completed', result=result,
                                              completed_at=completed_at, logs=TRAINING_JOBS[skill_id]['logs'])
+                        # Save adapter to database so it shows in "Trained Adapters"
+                        try:
+                            db.create_adapter(
+                                adapter_id=f"{skill_id}_{completed_at.replace(':', '-').replace('.', '-')}",
+                                skill_id=skill_id,
+                                skill_name=result.get('skill_name', skill_id),
+                                adapter_name=result.get('adapter_name', skill_id),
+                                base_model=result.get('base_model', 'unsloth/Meta-Llama-3.1-8B-Instruct'),
+                                epochs=result.get('epochs', 3),
+                                lora_r=result.get('lora_r', 16),
+                                final_loss=result.get('final_loss'),
+                                training_time_seconds=result.get('training_time_seconds'),
+                                adapter_path=result.get('adapter_path'),
+                                status='completed'
+                            )
+                        except Exception as adapter_err:
+                            print(f"Warning: Failed to save adapter record: {adapter_err}")
                 else:
                     error_msg = result.get('error', 'Unknown error') if result else 'No result'
                     TRAINING_JOBS[skill_id]['status'] = 'failed'
