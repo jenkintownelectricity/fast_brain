@@ -10562,11 +10562,10 @@ pipeline = Pipeline([
             statusDiv.textContent = 'Initializing Modal GPU...';
 
             try {
-                const response = await fetch('/api/training/start', {
+                const response = await fetch(`/api/train-skill/${currentWorkflowSkill.id}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        skill_id: currentWorkflowSkill.id,
                         epochs: epochs,
                         lora_r: 16,
                         learning_rate: 2e-4
@@ -10600,7 +10599,7 @@ pipeline = Pipeline([
                 }
 
                 try {
-                    const res = await fetch(`/api/training/status/${currentWorkflowSkill.id}`);
+                    const res = await fetch(`/api/training-job/${currentWorkflowSkill.id}`);
                     const data = await res.json();
 
                     const statusDiv = document.getElementById('wf-training-status');
