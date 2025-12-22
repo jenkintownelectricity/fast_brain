@@ -11033,6 +11033,14 @@ pipeline = Pipeline([
                     };
                 });
 
+                // Update currentWorkflowSkill reference if it exists (prevent stale reference)
+                if (currentWorkflowSkill) {
+                    const updatedSkill = unifiedSkillsData.find(s => s.id === currentWorkflowSkill.id);
+                    if (updatedSkill) {
+                        currentWorkflowSkill = updatedSkill;
+                    }
+                }
+
                 renderSkillCards();
             } catch (err) {
                 console.error('Failed to load unified skills:', err);
