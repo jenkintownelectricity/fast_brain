@@ -1660,7 +1660,7 @@ Generate exactly {count} examples. Return ONLY the JSON array."""
                 "Content-Type": "application/json"
             },
             json={
-                "model": "llama-3.1-70b-versatile",
+                "model": "llama-3.3-70b-versatile",
                 "messages": [{"role": "user", "content": generation_prompt}],
                 "temperature": 0.7,
                 "max_tokens": 8000
