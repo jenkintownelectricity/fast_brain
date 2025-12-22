@@ -7720,51 +7720,6 @@ DASHBOARD_HTML = '''
 
             </div><!-- End workflow-content -->
 
-            <!-- OLD SUB-TABS (Hidden - keeping for backwards compatibility) -->
-            <div id="unified-skills" class="sub-tab-content" style="display: none;">
-                <!-- Header with Actions -->
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
-                    <div>
-                        <h3 style="margin: 0; color: var(--text-primary);">All Skills</h3>
-                        <p style="margin: 0.25rem 0 0 0; color: var(--text-secondary); font-size: 0.9rem;">Click a skill card to manage training and configuration</p>
-                    </div>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-primary" onclick="showUnifiedCreateSkill()">+ Create Skill</button>
-                        <button class="btn btn-secondary" onclick="syncSkillsFromLPU()">🔄 Sync from LPU</button>
-                        <button class="btn btn-secondary" onclick="seedDefaultSkills()">📦 Seed Defaults</button>
-                        <button class="btn btn-secondary" onclick="refreshUnifiedSkills()">Refresh</button>
-                    </div>
-                </div>
-
-                <!-- Filter/Search Bar -->
-                <div class="glass-card" style="padding: 1rem; margin-bottom: 1.5rem;">
-                    <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                        <div style="flex: 1; min-width: 200px;">
-                            <input type="text" id="skill-search-input" class="form-input" placeholder="Search skills..." onkeyup="filterSkillCards()">
-                        </div>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <button class="btn btn-sm skill-filter-btn active" data-filter="all" onclick="setSkillFilter('all')">All</button>
-                            <button class="btn btn-sm skill-filter-btn" data-filter="untrained" onclick="setSkillFilter('untrained')">Untrained</button>
-                            <button class="btn btn-sm skill-filter-btn" data-filter="has_data" onclick="setSkillFilter('has_data')">Has Data</button>
-                            <button class="btn btn-sm skill-filter-btn" data-filter="trained" onclick="setSkillFilter('trained')">Trained</button>
-                        </div>
-                        <select id="skill-sort-select" class="form-select" style="width: auto;" onchange="sortSkillCards()">
-                            <option value="name">Sort: Name</option>
-                            <option value="status">Sort: Status</option>
-                            <option value="recent">Sort: Recent</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Skills Grid with Cards -->
-                <div id="unified-skills-grid" class="skills-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;">
-                    <div class="loading-skills" style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);">
-                        <div style="font-size: 2rem; margin-bottom: 1rem;">🔄</div>
-                        Loading skills...
-                    </div>
-                </div>
-            </div>
-
             <!-- Golden Prompts Sub-tab -->
             <div id="unified-golden" class="sub-tab-content" style="display: none;">
                 <div class="glass-card">
