@@ -1281,14 +1281,25 @@ def upload_and_parse():
             current_q = None
             current_a = []
 
+            import re as regex
+
             for line in lines:
                 line = line.strip()
                 if not line:
                     continue
 
+                # Pattern 0: Arrow format - "question" -> answer OR question? -> answer
+                # Handles: "How do I do X?" -> Here's how to do X.
+                arrow_match = regex.search(r'^"?([^"]+\?)"?\s*->\s*(.+)$', line)
+                if arrow_match:
+                    q = arrow_match.group(1).strip().strip('"')
+                    a = arrow_match.group(2).strip()
+                    if q and a:
+                        qa_pairs.append((q, a))
+                    continue
+
                 # Pattern 1: Same-line format "Q: question? A: answer" or "1. Q: question? A: answer"
                 # Also handles numbered format like "1. Q: What is X? A: It is Y."
-                import re as regex
                 same_line_match = regex.search(r'Q:\s*(.+?\?)\s*A:\s*(.+)', line, regex.IGNORECASE)
                 if same_line_match:
                     q = same_line_match.group(1).strip()
