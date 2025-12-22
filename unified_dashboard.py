@@ -10022,8 +10022,13 @@ pipeline = Pipeline([
             const response = document.getElementById('manual-assistant-response').value.trim();
             const category = document.getElementById('manual-category').value.trim();
 
+            if (!currentModalSkillId) {
+                showToast('Please select a skill first before adding training data', 'error');
+                return;
+            }
+
             if (!userInput || !response) {
-                alert('Please fill in both user input and response');
+                showToast('Please fill in both user input and response', 'warning');
                 return;
             }
 
@@ -10041,8 +10046,9 @@ pipeline = Pipeline([
                 });
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error);
+                showToast('Training example saved!', 'success');
             } catch (err) {
-                alert('Failed to save: ' + err.message);
+                showToast('Failed to save: ' + err.message, 'error');
             }
         }
 
@@ -10078,6 +10084,11 @@ pipeline = Pipeline([
 
         async function processBulkImport() {
             if (bulkImportFiles.length === 0) return;
+
+            if (!currentModalSkillId) {
+                showToast('Please select a skill first before uploading documents', 'error');
+                return;
+            }
 
             const statusEl = document.getElementById('bulk-import-status');
             const progressEl = document.getElementById('bulk-import-progress');
@@ -10178,6 +10189,11 @@ pipeline = Pipeline([
             const style = document.getElementById('ai-generate-style').value;
             const btn = document.querySelector('#ai-generate-modal .btn-primary');
             const statusEl = document.getElementById('ai-generate-status');
+
+            if (!currentModalSkillId) {
+                showToast('Please select a skill first before generating training data', 'error');
+                return;
+            }
 
             if (!topic) {
                 showToast('Please enter a topic or context', 'warning');
@@ -10299,8 +10315,16 @@ pipeline = Pipeline([
         }
 
         async function startModalTraining() {
+            if (!currentModalSkillId) {
+                showToast('Please select a skill first', 'error');
+                return;
+            }
+
             const skill = unifiedSkillsData.find(s => s.id === currentModalSkillId);
-            if (!skill) return;
+            if (!skill) {
+                showToast('Skill not found', 'error');
+                return;
+            }
 
             const intensity = document.getElementById('modal-training-intensity').value;
             const epochs = { 1: 3, 2: 10, 3: 20 }[intensity];
