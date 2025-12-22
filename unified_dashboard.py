@@ -1646,8 +1646,8 @@ Return ONLY a valid JSON array with this exact format (no markdown, no explanati
 
 Generate exactly {count} examples. Return ONLY the JSON array."""
 
-    # Get API key
-    groq_key = API_KEYS.get('groq') or os.environ.get('GROQ_API_KEY')
+    # Get API key from database (not global variable, to ensure fresh value across Modal containers)
+    groq_key = (db.get_api_key('groq') if USE_DATABASE else None) or os.environ.get('GROQ_API_KEY')
 
     if not groq_key:
         return jsonify({'success': False, 'error': 'Groq API key not configured. Please add it in Settings.'}), 400
