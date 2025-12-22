@@ -10674,7 +10674,7 @@ pipeline = Pipeline([
                         <div style="font-weight: 500;">${adapter.adapter_name || adapter.id}</div>
                         <div style="font-size: 0.75rem; color: var(--text-secondary);">Loss: ${adapter.final_loss?.toFixed(3) || '--'}</div>
                     </div>
-                    <button class="btn btn-sm btn-secondary" onclick="testAdapter('${adapter.id}')">Test</button>
+                    <button class="btn btn-sm btn-secondary" onclick="testAdapter('${adapter.skill_id || adapter.id}')">Test</button>
                 </div>
             `).join('');
         }
@@ -10961,7 +10961,7 @@ pipeline = Pipeline([
                                 </div>
                             </div>
                             <div style="display: flex; gap: 0.5rem;">
-                                <button class="btn btn-secondary btn-sm" onclick="testAdapter('${a.id}')">Test</button>
+                                <button class="btn btn-secondary btn-sm" onclick="testAdapter('${a.skill_id || a.id}')">Test</button>
                             </div>
                         </div>
                     </div>
@@ -11394,7 +11394,7 @@ pipeline = Pipeline([
                             </div>
                         </div>
                         <div style="display: flex; gap: 0.5rem;">
-                            <button class="btn btn-secondary btn-sm" onclick="testAdapter('${adapter.id}')">🔬 Test</button>
+                            <button class="btn btn-secondary btn-sm" onclick="testAdapter('${adapter.skill_id || adapter.id}')">🔬 Test</button>
                             <button class="btn btn-primary btn-sm" onclick="deployAdapter('${adapter.id}')">🚀 Deploy</button>
                         </div>
                     </div>
