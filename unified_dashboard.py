@@ -581,11 +581,10 @@ def start_skill_training(skill_id):
         }
 
         # Get reference to deployed Modal function
-        SkillTrainerCls = modal.Cls.lookup("hive215-skill-trainer", "SkillTrainer")
-        trainer = SkillTrainerCls()
+        train_fn = modal.Function.lookup("hive215-skill-trainer", "SkillTrainer.train")
 
         # Spawn training job on Modal (async - survives container shutdown)
-        call = trainer.train.spawn(skill_id=skill_id, config=config)
+        call = train_fn.spawn(skill_id=skill_id, config=config)
 
         # Track job with Modal call ID
         job_id = f"{skill_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -722,11 +721,10 @@ def list_trained_adapters():
         import modal
 
         # Get reference to deployed Modal function
-        SkillTrainerCls = modal.Cls.lookup("hive215-skill-trainer", "SkillTrainer")
-        trainer = SkillTrainerCls()
+        list_adapters_fn = modal.Function.lookup("hive215-skill-trainer", "SkillTrainer.list_adapters")
 
         # Call list_adapters method
-        adapters = trainer.list_adapters.remote()
+        adapters = list_adapters_fn.remote()
 
         return jsonify({"adapters": adapters or []})
 
@@ -955,11 +953,10 @@ def test_trained_adapter(skill_id):
         prompt = data.get('prompt', 'Hello')
 
         # Get reference to deployed Modal function
-        SkillTrainerCls = modal.Cls.lookup("hive215-skill-trainer", "SkillTrainer")
-        trainer = SkillTrainerCls()
+        test_adapter_fn = modal.Function.lookup("hive215-skill-trainer", "SkillTrainer.test_adapter")
 
         # Call test_adapter method
-        response = trainer.test_adapter.remote(skill_id=skill_id, prompt=prompt)
+        response = test_adapter_fn.remote(skill_id=skill_id, prompt=prompt)
 
         return jsonify({
             "success": True,
