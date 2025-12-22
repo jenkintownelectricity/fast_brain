@@ -1298,9 +1298,9 @@ def upload_and_parse():
                         qa_pairs.append((q, a))
                     continue
 
-                # Pattern 1: Same-line format "Q: question? A: answer" or "1. Q: question? A: answer"
-                # Also handles numbered format like "1. Q: What is X? A: It is Y."
-                same_line_match = regex.search(r'Q:\s*(.+?\?)\s*A:\s*(.+)', line, regex.IGNORECASE)
+                # Pattern 1: Same-line format "Q: question A: answer" or "1. Q: question? A: answer"
+                # Handles numbered format and questions with or without "?" at the end
+                same_line_match = regex.search(r'Q:\s*(.+?)\s+A:\s*(.+)', line, regex.IGNORECASE)
                 if same_line_match:
                     q = same_line_match.group(1).strip()
                     a = same_line_match.group(2).strip()
