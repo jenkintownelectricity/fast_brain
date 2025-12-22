@@ -183,9 +183,9 @@ class SkillTrainer:
             else:
                 training_data = [
                     {
-                        "instruction": r.get('system_prompt', skill.get('system_prompt', '')),
-                        "input": r.get('user_input', ''),
-                        "output": r.get('assistant_output', ''),
+                        "instruction": skill.get('system_prompt', ''),
+                        "input": r.get('user_message', ''),
+                        "output": r.get('assistant_response', ''),
                     }
                     for r in training_records
                 ]
