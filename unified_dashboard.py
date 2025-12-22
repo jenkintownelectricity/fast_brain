@@ -2806,7 +2806,8 @@ def create_fast_brain_skill():
         if not data:
             return jsonify({"success": False, "error": "No data provided"})
 
-        skill_id = data.get('skill_id', '').lower().replace(' ', '_')
+        # Accept both 'skill_id' and 'id' field names for compatibility
+        skill_id = (data.get('skill_id') or data.get('id') or '').lower().replace(' ', '_')
         skill_id = re.sub(r'[^\w\-]', '_', skill_id)
 
         if not skill_id:
