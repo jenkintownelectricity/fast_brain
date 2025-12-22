@@ -553,17 +553,10 @@ def start_skill_training(skill_id):
     """
     Start a Modal-based LoRA training job for a skill.
 
-    This triggers the train_skill_modal.py script on Modal's A10G GPU.
-
-    Request body (optional):
-    {
-        "epochs": 3,
-        "learning_rate": 0.0002,
-        "lora_r": 16
-    }
+    Uses Modal Python API to call the deployed SkillTrainer.train function.
     """
     try:
-        import subprocess
+        import modal
         import threading
 
         data = request.json or {}
@@ -581,18 +574,12 @@ def start_skill_training(skill_id):
                 "error": f"Training already in progress for '{skill_id}'"
             })
 
-        # Build command
-        cmd = [
-            "modal", "run", "train_skill_modal.py",
-            "--skill-id", skill_id,
-        ]
-
-        if data.get('epochs'):
-            cmd.extend(["--epochs", str(data['epochs'])])
-        if data.get('learning_rate'):
-            cmd.extend(["--lr", str(data['learning_rate'])])
-        if data.get('lora_r'):
-            cmd.extend(["--lora-r", str(data['lora_r'])])
+        # Build config
+        config = {
+            "epochs": data.get('epochs', 10),
+            "learning_rate": data.get('learning_rate', 2e-4),
+            "lora_r": data.get('lora_r', 16),
+        }
 
         # Track job
         job_id = f"{skill_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -601,46 +588,47 @@ def start_skill_training(skill_id):
             "skill_id": skill_id,
             "status": "starting",
             "started_at": datetime.now().isoformat(),
-            "config": data,
-            "logs": [],
+            "config": config,
+            "logs": ["Connecting to Modal..."],
+            "modal_call": None,
         }
 
         def run_training():
-            """Run training in background thread."""
+            """Run training via Modal Python API."""
             try:
+                TRAINING_JOBS[skill_id]['logs'].append("Looking up SkillTrainer...")
+
+                # Get reference to deployed Modal function
+                SkillTrainerCls = modal.Cls.lookup("hive215-skill-trainer", "SkillTrainer")
+                trainer = SkillTrainerCls()
+
+                TRAINING_JOBS[skill_id]['logs'].append(f"Starting training for {skill_id}...")
                 TRAINING_JOBS[skill_id]['status'] = 'running'
                 add_activity(f"Started training: {skill_id}", "🚀", "training")
 
-                # Run Modal command
-                process = subprocess.Popen(
-                    cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    cwd=str(Path(__file__).parent),
+                # Call the train method (blocking - runs on Modal GPU)
+                result = trainer.train.remote(
+                    skill_id=skill_id,
+                    config=config,
                 )
 
-                # Stream output
-                for line in process.stdout:
-                    TRAINING_JOBS[skill_id]['logs'].append(line.strip())
-                    # Keep last 100 lines
-                    if len(TRAINING_JOBS[skill_id]['logs']) > 100:
-                        TRAINING_JOBS[skill_id]['logs'] = TRAINING_JOBS[skill_id]['logs'][-100:]
-
-                process.wait()
-
-                if process.returncode == 0:
+                # Training completed
+                if result.get('success'):
                     TRAINING_JOBS[skill_id]['status'] = 'completed'
                     TRAINING_JOBS[skill_id]['completed_at'] = datetime.now().isoformat()
+                    TRAINING_JOBS[skill_id]['result'] = result
+                    TRAINING_JOBS[skill_id]['logs'].append(f"Training completed! Adapter: {result.get('adapter_path', 'unknown')}")
                     add_activity(f"Training complete: {skill_id}", "✅", "training")
                 else:
                     TRAINING_JOBS[skill_id]['status'] = 'failed'
-                    TRAINING_JOBS[skill_id]['error'] = f"Process exited with code {process.returncode}"
+                    TRAINING_JOBS[skill_id]['error'] = result.get('error', 'Unknown error')
+                    TRAINING_JOBS[skill_id]['logs'].append(f"Training failed: {result.get('error')}")
                     add_activity(f"Training failed: {skill_id}", "❌", "training")
 
             except Exception as e:
                 TRAINING_JOBS[skill_id]['status'] = 'failed'
                 TRAINING_JOBS[skill_id]['error'] = str(e)
+                TRAINING_JOBS[skill_id]['logs'].append(f"Error: {str(e)}")
                 add_activity(f"Training error: {skill_id} - {str(e)[:50]}", "❌", "training")
 
         # Start background thread
@@ -728,42 +716,22 @@ def list_trained_adapters():
     """
     List all trained LoRA adapters from Modal volume.
 
-    This calls the Modal function to list adapters.
+    Uses Modal Python API to call SkillTrainer.list_adapters.
     """
     try:
-        import subprocess
+        import modal
 
-        result = subprocess.run(
-            ["modal", "run", "train_skill_modal.py", "--list-adapters"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            cwd=str(Path(__file__).parent),
-        )
+        # Get reference to deployed Modal function
+        SkillTrainerCls = modal.Cls.lookup("hive215-skill-trainer", "SkillTrainer")
+        trainer = SkillTrainerCls()
 
-        # Parse output (simple text parsing)
-        adapters = []
-        lines = result.stdout.split('\n')
-        current_adapter = None
+        # Call list_adapters method
+        adapters = trainer.list_adapters.remote()
 
-        for line in lines:
-            if line.strip().startswith('•'):
-                if current_adapter:
-                    adapters.append(current_adapter)
-                current_adapter = {"skill_id": line.strip()[2:].strip()}
-            elif current_adapter and ':' in line:
-                key, value = line.split(':', 1)
-                current_adapter[key.strip().lower()] = value.strip()
+        return jsonify({"adapters": adapters or []})
 
-        if current_adapter:
-            adapters.append(current_adapter)
-
-        return jsonify({"adapters": adapters})
-
-    except subprocess.TimeoutExpired:
-        return jsonify({"error": "Request timed out"}), 504
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e), "adapters": []}), 500
 
 
 # =============================================================================
@@ -973,35 +941,25 @@ def test_trained_adapter(skill_id):
     """
     Test a trained adapter with a prompt.
 
+    Uses Modal Python API to call SkillTrainer.test_adapter.
+
     Request body:
     {
         "prompt": "Hello, how are you?"
     }
     """
     try:
-        import subprocess
+        import modal
 
         data = request.json or {}
         prompt = data.get('prompt', 'Hello')
 
-        result = subprocess.run(
-            [
-                "modal", "run", "train_skill_modal.py",
-                "--skill-id", skill_id,
-                "--test-prompt", prompt
-            ],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            cwd=str(Path(__file__).parent),
-        )
+        # Get reference to deployed Modal function
+        SkillTrainerCls = modal.Cls.lookup("hive215-skill-trainer", "SkillTrainer")
+        trainer = SkillTrainerCls()
 
-        # Parse response from output
-        output = result.stdout
-        if "Response:" in output:
-            response = output.split("Response:")[-1].strip()
-        else:
-            response = output
+        # Call test_adapter method
+        response = trainer.test_adapter.remote(skill_id=skill_id, prompt=prompt)
 
         return jsonify({
             "success": True,
@@ -1010,8 +968,6 @@ def test_trained_adapter(skill_id):
             "response": response,
         })
 
-    except subprocess.TimeoutExpired:
-        return jsonify({"error": "Request timed out"}), 504
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
