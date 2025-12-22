@@ -157,19 +157,26 @@ The dashboard is organized into 4 main sections for streamlined workflow:
 | **Voice** | Voice Projects, Create Voice, Browse Voices, TTS Testing |
 | **Settings** | API Keys (7 providers), Platform Connections, Stats |
 
-### Unified Skills & Training Tab (New!)
+### 3-Step Workflow UI (New! December 2025)
 
-The Skills & Training section combines all skill management and training features into one unified interface with 7 sub-tabs:
+The Skills & Training tab now features a clean 3-step workflow design:
 
-| Sub-Tab | Description |
-|---------|-------------|
-| **Skills Manager** | Create, edit, delete, and sync skills with the database |
-| **Golden Prompts** | View and edit voice-optimized system prompts |
-| **Train LoRA** | Configure and launch LoRA training jobs with Unsloth |
-| **Test Chat** | Test skills with real LLM inference (Groq/Claude) |
-| **Outgoing API** | Configure external API integrations with auth support |
-| **Training Status** | Monitor active training jobs, view logs, cancel runs |
-| **Data Parser** | Review and approve extracted training data samples |
+```
+Step 1: Select Skill → Step 2: Add Training Data → Step 3: Test & Train
+```
+
+| Step | Features |
+|------|----------|
+| **Step 1: Select Skill** | Skills grid with search/filter, Create New Skill form |
+| **Step 2: Add Training Data** | Side-by-side layout: Manual Entry (left) + Bulk Upload & AI Generate (right) |
+| **Step 3: Test & Train** | Side-by-side layout: Test Chat (left) + Training Controls (right) |
+
+**New Features:**
+- **Persistent Skill Context Bar**: Shows selected skill info at all times
+- **Step Indicator**: Clickable navigation with completed/active states
+- **Toast Notifications**: Real-time success/error feedback
+- **Drag-and-Drop Upload**: Drop files directly into upload zone
+- **AI Generate**: Auto-generate training examples from topics
 
 ### Dark/Light Mode
 
@@ -511,7 +518,15 @@ model="claude-sonnet-4-5-20250929"
 
 ## Development
 
-### Recent Updates (December 2024)
+### Recent Updates
+
+**December 22, 2025 - 3-Step Workflow UI:**
+- **Major UX Restructure**: Replaced chaotic multi-tab interface with clean 3-step workflow
+- **Step 1**: Select Skill - Grid view with search, filter, and create inline
+- **Step 2**: Add Training Data - Side-by-side manual entry + bulk upload/AI generate
+- **Step 3**: Test & Train - Side-by-side test chat + training controls
+- **New Features**: Persistent skill context bar, step indicator, toast notifications
+- **Bug Fixes**: AI generate parameter, manual entry endpoint, tab redirects
 
 **December 21, 2024 - Unified Skills & Training:**
 - **Unified Tab**: Combined separate Skills and Training tabs into single "Skills & Training" section

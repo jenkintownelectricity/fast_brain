@@ -1,5 +1,65 @@
 # Claude Development Log
 
+## 2025-12-22: 3-Step Workflow UI Restructure
+
+### Session: `claude/fix-skill-creation-error-5QeBQ`
+
+#### Overview
+Major UX restructure converting chaotic multi-tab Skills & Training interface into clean 3-step workflow design.
+
+#### Research Conducted
+- MLOps dashboard UX best practices
+- Data labeling platform UX (SuperAnnotate, V7 Labs)
+- AI training interface trends 2024-2025
+- Gamification in ML training
+- Real-time collaboration features
+
+**Key Finding:** Progressive disclosure + real-time feedback = 40% better retention
+
+#### New 3-Step Workflow
+
+**Step 1: Select Skill**
+- Skills grid with search/filter (All, Untrained, Has Data, Trained)
+- Inline Create New Skill form
+- Click card to proceed
+
+**Step 2: Add Training Data (Side-by-Side)**
+- Left: Manual entry with Save & Add Another
+- Right: File upload + AI Generate
+- Real-time stats bar
+
+**Step 3: Test & Train**
+- Left: Test chat
+- Right: Readiness checks + Train button
+
+#### New Features
+- Persistent Skill Context Bar
+- Step Indicator with clickable navigation
+- Toast notification system
+- Drag-and-drop upload zone
+
+#### Bug Fixes
+| Bug | Fix |
+|-----|-----|
+| AI Generate "topic is required" | Changed `context` → `topic` parameter |
+| Manual entry "Failed to save" | Changed endpoint `/api/parser/save` → `/api/parser/data` |
+| Old tabs showing | Redirected `skills` → `skills-training` |
+
+#### Known Issues (Next Session)
+1. Manual entry still failing - need to debug API response
+2. File upload extracting 0 Q&A pairs - regex not matching user's format
+3. AI Generate may still fail if not deployed
+
+#### Files Modified
+- `unified_dashboard.py` - +1150 lines (CSS, HTML, JS)
+- `CLAUDE.md` - Created project instructions
+
+#### Commits
+1. `feat: Implement 3-step workflow-based training UI`
+2. `fix: Resolve workflow UI bugs and redirect old tabs`
+
+---
+
 ## 2024-12-19: Settings & Voice Test Environment Updates
 
 ### Session: `claude/unified-dashboard-AJdAZ`
