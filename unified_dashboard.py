@@ -1329,6 +1329,179 @@ def bulk_update_extracted(skill_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/parser/generate', methods=['POST'])
+def generate_ai_training_data():
+    """Generate AI training data using LLM based on a topic/context."""
+    import uuid
+    import httpx
+    import re as regex
+
+    data = request.json
+    if not data:
+        return jsonify({'success': False, 'error': 'No data provided'}), 400
+
+    skill_id = data.get('skill_id')
+    topic = data.get('topic', '').strip()
+    count = min(int(data.get('count', 10)), 50)  # Cap at 50
+    style = data.get('style', 'professional')
+
+    if not skill_id:
+        return jsonify({'success': False, 'error': 'skill_id is required'}), 400
+
+    if not topic:
+        return jsonify({'success': False, 'error': 'topic is required'}), 400
+
+    # Get skill context
+    skill_name = "AI Assistant"
+    skill_prompt = ""
+
+    if USE_DATABASE:
+        skill = db.get_skill(skill_id)
+        if skill:
+            skill_name = skill.get('name', skill_id)
+            skill_prompt = skill.get('system_prompt', '')[:500]
+
+    # Style instructions
+    style_instructions = {
+        'formal': 'Use formal, professional business language. Be precise and courteous.',
+        'casual': 'Use friendly, conversational language. Be warm and approachable.',
+        'technical': 'Use technical, detailed language. Include specifics and terminology.',
+        'sales': 'Use persuasive, benefit-focused language. Handle objections smoothly.',
+        'professional': 'Use clear, professional language. Be helpful and informative.'
+    }
+    style_instruction = style_instructions.get(style, style_instructions['professional'])
+
+    # Build generation prompt
+    generation_prompt = f"""You are an expert at creating high-quality training data for AI voice assistants.
+
+SKILL NAME: {skill_name}
+SKILL CONTEXT: {skill_prompt}
+
+USER'S TOPIC/CONTEXT:
+{topic}
+
+STYLE: {style_instruction}
+
+TASK: Generate exactly {count} realistic, high-quality training examples (question-answer pairs) for this AI assistant.
+
+REQUIREMENTS FOR EACH EXAMPLE:
+1. user_input: A realistic question/statement a real customer would say (10-50 words)
+2. assistant_response: A helpful, detailed response the AI should give (50-200 words)
+3. category: One of: greeting, pricing, technical, scheduling, objection, closing, faq, procedure, policy, general
+
+IMPORTANT GUIDELINES:
+- Make questions NATURAL - how real people actually speak
+- Responses should be HELPFUL, SPECIFIC, and ACTIONABLE
+- Vary the complexity and phrasing
+- Include edge cases and common scenarios
+- Base content on the provided topic/context
+
+Return ONLY a valid JSON array with this exact format (no markdown, no explanation):
+[
+  {{"user_input": "Customer question here", "assistant_response": "Detailed helpful response here", "category": "faq"}}
+]
+
+Generate exactly {count} examples. Return ONLY the JSON array."""
+
+    # Get API key
+    groq_key = API_KEYS.get('groq') or os.environ.get('GROQ_API_KEY')
+
+    if not groq_key:
+        return jsonify({'success': False, 'error': 'Groq API key not configured. Please add it in Settings.'}), 400
+
+    try:
+        response = httpx.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {groq_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "llama-3.1-70b-versatile",
+                "messages": [{"role": "user", "content": generation_prompt}],
+                "temperature": 0.7,
+                "max_tokens": 8000
+            },
+            timeout=120.0
+        )
+
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'AI API error: {response.status_code}'
+            }), 500
+
+        result = response.json()
+        content = result['choices'][0]['message']['content'].strip()
+
+        # Parse JSON from response - handle markdown code blocks
+        if '```json' in content:
+            content = content.split('```json')[1].split('```')[0]
+        elif '```' in content:
+            content = content.split('```')[1].split('```')[0]
+
+        content = content.strip()
+
+        try:
+            examples = json.loads(content)
+        except json.JSONDecodeError:
+            # Try to find JSON array in content
+            match = regex.search(r'\[[\s\S]*\]', content)
+            if match:
+                try:
+                    examples = json.loads(match.group())
+                except json.JSONDecodeError:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Failed to parse AI response as JSON'
+                    }), 500
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'AI did not return valid JSON array'
+                }), 500
+
+        # Validate and save examples
+        generated_count = 0
+
+        if USE_DATABASE:
+            for ex in examples:
+                user_input = str(ex.get('user_input', '')).strip()
+                assistant_response = str(ex.get('assistant_response', '')).strip()
+
+                if not user_input or not assistant_response:
+                    continue
+
+                item_id = str(uuid.uuid4())[:16]
+                tokens = (len(user_input) + len(assistant_response)) // 4
+                category = ex.get('category', 'general')
+
+                db.execute_query('''
+                    INSERT INTO extracted_data
+                    (id, skill_id, user_input, assistant_response, source_filename,
+                     source_type, category, importance_score, tokens)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (item_id, skill_id, user_input, assistant_response, 'ai_generated',
+                      'ai', category, 75, tokens))
+
+                generated_count += 1
+
+        add_activity(f"AI generated {generated_count} training examples for {skill_name}", "🤖", "training")
+
+        return jsonify({
+            'success': True,
+            'generated': generated_count,
+            'requested': count
+        })
+
+    except httpx.TimeoutException:
+        return jsonify({'success': False, 'error': 'AI request timed out. Try generating fewer examples.'}), 500
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/create-skill', methods=['POST'])
 def create_skill():
     """Create a new skill from the quick form."""
@@ -5335,6 +5508,7 @@ DASHBOARD_HTML = '''
             animation: spin 1s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
         /* Messages */
         .message {
@@ -7085,9 +7259,14 @@ DASHBOARD_HTML = '''
                     <div id="bulk-import-queue" style="display: none;">
                         <h4 style="margin: 0 0 1rem 0;">Files to Process:</h4>
                         <div id="bulk-import-file-list" style="max-height: 200px; overflow-y: auto;"></div>
+                        <div id="bulk-import-status" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--glass-bg); border-radius: 8px;">
+                            <div id="bulk-import-progress" style="text-align: center; color: var(--accent-color);">
+                                Processing...
+                            </div>
+                        </div>
                         <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem;">
                             <button class="btn btn-secondary" onclick="clearBulkImportQueue()">Clear</button>
-                            <button class="btn btn-primary" onclick="processBulkImport()">🚀 Process All</button>
+                            <button class="btn btn-primary" onclick="processBulkImport()">📤 Process Files</button>
                         </div>
                     </div>
                 </div>
@@ -7125,6 +7304,9 @@ DASHBOARD_HTML = '''
                             <option value="friendly">Friendly/Casual</option>
                             <option value="technical">Technical</option>
                         </select>
+                    </div>
+                    <div id="ai-generate-status" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--glass-bg); border-radius: 8px;">
+                        <!-- Status content will be inserted by JS -->
                     </div>
                     <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
                         <button class="btn btn-secondary" onclick="closeAiGenerateModal()">Cancel</button>
@@ -9675,21 +9857,88 @@ pipeline = Pipeline([
         async function processBulkImport() {
             if (bulkImportFiles.length === 0) return;
 
-            for (const file of bulkImportFiles) {
+            const statusEl = document.getElementById('bulk-import-status');
+            const progressEl = document.getElementById('bulk-import-progress');
+            const btn = document.querySelector('#bulk-import-modal .btn-primary');
+
+            // Show progress UI
+            if (statusEl) statusEl.style.display = 'block';
+            if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Processing...'; }
+
+            let totalExtracted = 0;
+            let filesProcessed = 0;
+            let errors = [];
+
+            for (let i = 0; i < bulkImportFiles.length; i++) {
+                const file = bulkImportFiles[i];
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('skill_id', currentModalSkillId);
 
+                // Update progress
+                if (progressEl) {
+                    progressEl.innerHTML = `Processing ${i + 1}/${bulkImportFiles.length}: ${file.name}`;
+                }
+
                 try {
-                    await fetch('/api/parser/upload', { method: 'POST', body: formData });
+                    const res = await fetch('/api/parser/upload', { method: 'POST', body: formData });
+                    const data = await res.json();
+
+                    if (data.success !== false) {
+                        filesProcessed++;
+                        totalExtracted += data.items_extracted || 0;
+                    } else {
+                        errors.push(`${file.name}: ${data.error || 'Unknown error'}`);
+                    }
                 } catch (err) {
                     console.error('Failed to upload:', file.name, err);
+                    errors.push(`${file.name}: ${err.message}`);
                 }
             }
 
-            clearBulkImportQueue();
-            closeBulkImportModal();
-            loadSkillTrainingData(currentModalSkillId);
+            // Show completion status
+            if (progressEl) {
+                if (errors.length > 0) {
+                    progressEl.innerHTML = `✅ Processed ${filesProcessed} files, extracted ${totalExtracted} examples. ⚠️ ${errors.length} errors.`;
+                } else {
+                    progressEl.innerHTML = `✅ Successfully processed ${filesProcessed} files and extracted ${totalExtracted} training examples!`;
+                }
+            }
+
+            // Reset button
+            if (btn) { btn.disabled = false; btn.innerHTML = '📤 Process Files'; }
+
+            // Wait a moment to show the result, then close
+            setTimeout(() => {
+                clearBulkImportQueue();
+                closeBulkImportModal();
+                loadSkillTrainingData(currentModalSkillId);
+
+                // Show toast notification
+                if (totalExtracted > 0) {
+                    showToast(`Extracted ${totalExtracted} training examples from ${filesProcessed} files!`, 'success');
+                } else if (filesProcessed > 0) {
+                    showToast(`Processed ${filesProcessed} files but no Q&A pairs found. Try different content.`, 'warning');
+                }
+            }, 1500);
+        }
+
+        // Toast notification helper
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = message;
+            toast.style.cssText = `
+                position: fixed; bottom: 20px; right: 20px; z-index: 99999;
+                padding: 16px 24px; border-radius: 12px; font-weight: 500;
+                animation: slideIn 0.3s ease;
+                ${type === 'success' ? 'background: linear-gradient(135deg, #10b981, #059669); color: #fff;' : ''}
+                ${type === 'error' ? 'background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff;' : ''}
+                ${type === 'warning' ? 'background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff;' : ''}
+                ${type === 'info' ? 'background: linear-gradient(135deg, #3b82f6, #2563eb); color: #fff;' : ''}
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
         }
 
         // AI Generate Modal
@@ -9705,10 +9954,26 @@ pipeline = Pipeline([
             const topic = document.getElementById('ai-generate-topic').value;
             const count = document.getElementById('ai-generate-count').value;
             const style = document.getElementById('ai-generate-style').value;
+            const btn = document.querySelector('#ai-generate-modal .btn-primary');
+            const statusEl = document.getElementById('ai-generate-status');
 
             if (!topic) {
-                alert('Please enter a topic');
+                showToast('Please enter a topic or context', 'warning');
                 return;
+            }
+
+            // Show loading state
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<span class="generating-dots">⏳</span> Generating ${count} examples...`;
+            }
+            if (statusEl) {
+                statusEl.style.display = 'block';
+                statusEl.innerHTML = `<div style="text-align: center; padding: 20px;">
+                    <div style="font-size: 2rem; animation: pulse 1s infinite;">🤖</div>
+                    <div style="margin-top: 10px; color: var(--text-secondary);">AI is generating training data...</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">This usually takes 15-30 seconds</div>
+                </div>`;
             }
 
             try {
@@ -9722,16 +9987,37 @@ pipeline = Pipeline([
                         style
                     })
                 });
+
+                // Check for non-JSON response (server error)
+                const contentType = res.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Server returned an error page. Please check your API keys in Settings.');
+                }
+
                 const data = await res.json();
+
                 if (data.success) {
                     closeAiGenerateModal();
                     loadSkillTrainingData(currentModalSkillId);
-                    alert(`Generated ${data.generated || count} examples!`);
+                    showToast(`✨ Generated ${data.generated} training examples!`, 'success');
                 } else {
                     throw new Error(data.error);
                 }
             } catch (err) {
-                alert('Failed to generate: ' + err.message);
+                console.error('AI Generate error:', err);
+                showToast('Failed to generate: ' + err.message, 'error');
+                if (statusEl) {
+                    statusEl.innerHTML = `<div style="text-align: center; padding: 20px; color: #ef4444;">
+                        <div style="font-size: 1.5rem;">❌</div>
+                        <div style="margin-top: 10px;">${err.message}</div>
+                    </div>`;
+                }
+            } finally {
+                // Reset button
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '🤖 Generate';
+                }
             }
         }
 
