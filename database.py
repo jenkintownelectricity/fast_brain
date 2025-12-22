@@ -278,6 +278,27 @@ def init_db():
             )
         ''')
 
+        # =================================================================
+        # TRAINING JOBS TABLE - Track Modal training job status
+        # =================================================================
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS training_jobs (
+                skill_id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL,
+                modal_call_id TEXT,
+                status TEXT DEFAULT 'running',
+                progress INTEGER DEFAULT 0,
+                config TEXT,  -- JSON training config
+                logs TEXT,    -- JSON array of log messages
+                error TEXT,
+                result TEXT,  -- JSON result data
+                started_at TEXT,
+                completed_at TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
         # Create indexes for common queries
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_skills_type ON skills(skill_type)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_skills_active ON skills(is_active)')
@@ -1293,6 +1314,109 @@ def get_extracted_data_by_skill(skill_id: str) -> List[Dict]:
                 'metadata': json.loads(row['metadata'] or '{}') if row['metadata'] else {}
             })
         return items
+
+
+# =============================================================================
+# TRAINING JOBS OPERATIONS
+# =============================================================================
+
+def save_training_job(
+    skill_id: str,
+    job_id: str,
+    modal_call_id: str,
+    config: Dict = None,
+    status: str = 'running'
+) -> bool:
+    """Save or update a training job."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        cursor.execute('''
+            INSERT INTO training_jobs (skill_id, job_id, modal_call_id, status, config, logs, started_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(skill_id) DO UPDATE SET
+                job_id = excluded.job_id,
+                modal_call_id = excluded.modal_call_id,
+                status = excluded.status,
+                config = excluded.config,
+                logs = excluded.logs,
+                started_at = excluded.started_at,
+                updated_at = excluded.updated_at
+        ''', (skill_id, job_id, modal_call_id, status, json.dumps(config or {}), json.dumps(['Training job started...']), now, now, now))
+        conn.commit()
+        return True
+
+
+def get_training_job(skill_id: str) -> Optional[Dict]:
+    """Get a training job by skill_id."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM training_jobs WHERE skill_id = ?', (skill_id,))
+        row = cursor.fetchone()
+        if row:
+            return {
+                **dict(row),
+                'config': json.loads(row['config'] or '{}'),
+                'logs': json.loads(row['logs'] or '[]'),
+                'result': json.loads(row['result'] or '{}') if row['result'] else None
+            }
+        return None
+
+
+def update_training_job(
+    skill_id: str,
+    status: str = None,
+    progress: int = None,
+    logs: List[str] = None,
+    error: str = None,
+    result: Dict = None,
+    completed_at: str = None
+) -> bool:
+    """Update a training job's status."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        updates = ['updated_at = ?']
+        values = [datetime.now().isoformat()]
+
+        if status is not None:
+            updates.append('status = ?')
+            values.append(status)
+        if progress is not None:
+            updates.append('progress = ?')
+            values.append(progress)
+        if logs is not None:
+            updates.append('logs = ?')
+            values.append(json.dumps(logs))
+        if error is not None:
+            updates.append('error = ?')
+            values.append(error)
+        if result is not None:
+            updates.append('result = ?')
+            values.append(json.dumps(result))
+        if completed_at is not None:
+            updates.append('completed_at = ?')
+            values.append(completed_at)
+
+        values.append(skill_id)
+        cursor.execute(f'UPDATE training_jobs SET {", ".join(updates)} WHERE skill_id = ?', values)
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def get_all_training_jobs() -> List[Dict]:
+    """Get all training jobs."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM training_jobs ORDER BY created_at DESC')
+        jobs = []
+        for row in cursor.fetchall():
+            jobs.append({
+                **dict(row),
+                'config': json.loads(row['config'] or '{}'),
+                'logs': json.loads(row['logs'] or '[]'),
+                'result': json.loads(row['result'] or '{}') if row['result'] else None
+            })
+        return jobs
 
 
 # =============================================================================

@@ -587,6 +587,8 @@ def start_skill_training(skill_id):
 
         # Track job with Modal call ID
         job_id = f"{skill_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        # Save to in-memory cache
         TRAINING_JOBS[skill_id] = {
             "job_id": job_id,
             "skill_id": skill_id,
@@ -596,6 +598,16 @@ def start_skill_training(skill_id):
             "logs": ["Training job spawned on Modal GPU..."],
             "modal_call_id": call.object_id,
         }
+
+        # Persist to database for cross-container access
+        if USE_DATABASE:
+            db.save_training_job(
+                skill_id=skill_id,
+                job_id=job_id,
+                modal_call_id=call.object_id,
+                config=config,
+                status='running'
+            )
 
         add_activity(f"Started training: {skill_id}", "🚀", "training")
 
@@ -618,10 +630,31 @@ def get_training_job(skill_id):
     """Get status of a training job by checking Modal call status."""
     import modal
 
-    if skill_id not in TRAINING_JOBS:
+    # Check in-memory cache first
+    job = TRAINING_JOBS.get(skill_id)
+
+    # If not in memory, try database
+    if not job and USE_DATABASE:
+        db_job = db.get_training_job(skill_id)
+        if db_job:
+            # Restore to in-memory cache
+            job = {
+                "job_id": db_job.get('job_id'),
+                "skill_id": skill_id,
+                "status": db_job.get('status', 'running'),
+                "started_at": db_job.get('started_at'),
+                "completed_at": db_job.get('completed_at'),
+                "config": db_job.get('config', {}),
+                "logs": db_job.get('logs', []),
+                "modal_call_id": db_job.get('modal_call_id'),
+                "error": db_job.get('error'),
+                "result": db_job.get('result'),
+            }
+            TRAINING_JOBS[skill_id] = job
+
+    if not job:
         return jsonify({"error": "No training job found for this skill"}), 404
 
-    job = TRAINING_JOBS[skill_id]
     modal_call_id = job.get('modal_call_id')
 
     # Check Modal call status if we have a call ID and job is still running
@@ -634,17 +667,27 @@ def get_training_job(skill_id):
             try:
                 result = call.get(timeout=0)
                 # If we got here, the call completed
+                completed_at = datetime.now().isoformat()
                 if result and result.get('success'):
                     TRAINING_JOBS[skill_id]['status'] = 'completed'
-                    TRAINING_JOBS[skill_id]['completed_at'] = datetime.now().isoformat()
+                    TRAINING_JOBS[skill_id]['completed_at'] = completed_at
                     TRAINING_JOBS[skill_id]['result'] = result
                     TRAINING_JOBS[skill_id]['logs'].append(f"Training completed! Adapter: {result.get('adapter_path', 'unknown')}")
                     add_activity(f"Training complete: {skill_id}", "✅", "training")
+                    # Persist to database
+                    if USE_DATABASE:
+                        db.update_training_job(skill_id, status='completed', result=result,
+                                             completed_at=completed_at, logs=TRAINING_JOBS[skill_id]['logs'])
                 else:
+                    error_msg = result.get('error', 'Unknown error') if result else 'No result'
                     TRAINING_JOBS[skill_id]['status'] = 'failed'
-                    TRAINING_JOBS[skill_id]['error'] = result.get('error', 'Unknown error') if result else 'No result'
-                    TRAINING_JOBS[skill_id]['logs'].append(f"Training failed: {TRAINING_JOBS[skill_id]['error']}")
+                    TRAINING_JOBS[skill_id]['error'] = error_msg
+                    TRAINING_JOBS[skill_id]['logs'].append(f"Training failed: {error_msg}")
                     add_activity(f"Training failed: {skill_id}", "❌", "training")
+                    # Persist to database
+                    if USE_DATABASE:
+                        db.update_training_job(skill_id, status='failed', error=error_msg,
+                                             logs=TRAINING_JOBS[skill_id]['logs'])
             except TimeoutError:
                 # Still running - this is expected
                 pass
@@ -654,6 +697,10 @@ def get_training_job(skill_id):
                     TRAINING_JOBS[skill_id]['status'] = 'failed'
                     TRAINING_JOBS[skill_id]['error'] = str(e)
                     TRAINING_JOBS[skill_id]['logs'].append(f"Error checking status: {str(e)}")
+                    # Persist to database
+                    if USE_DATABASE:
+                        db.update_training_job(skill_id, status='failed', error=str(e),
+                                             logs=TRAINING_JOBS[skill_id]['logs'])
         except Exception as e:
             # Error looking up call - log but don't fail
             TRAINING_JOBS[skill_id]['logs'].append(f"Status check error: {str(e)[:100]}")
