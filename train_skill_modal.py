@@ -152,6 +152,10 @@ class SkillTrainer:
         """
         Load training data for a skill from the database.
 
+        Gets examples from BOTH:
+        1. training_data table (manually added)
+        2. extracted_data table where is_approved=1 (approved parsed data)
+
         Returns:
             dict with 'data' (list of examples) and 'metadata'
         """
@@ -167,8 +171,8 @@ class SkillTrainer:
             if not skill:
                 return {"error": f"Skill '{skill_id}' not found in database"}
 
-            # Get training data
-            training_records = db.get_training_data(skill_id)
+            # Get ALL training examples (from both training_data and approved extracted_data)
+            training_records = db.get_all_training_examples(skill_id)
 
             if not training_records:
                 # Try to generate from skill knowledge

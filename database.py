@@ -1316,6 +1316,46 @@ def get_extracted_data_by_skill(skill_id: str) -> List[Dict]:
         return items
 
 
+def get_all_training_examples(skill_id: str) -> List[Dict]:
+    """
+    Get ALL training examples for a skill from both tables:
+    1. training_data table (manually added examples)
+    2. extracted_data table where is_approved=1 (approved parsed data)
+
+    Returns list of dicts with 'user_message' and 'assistant_response' keys.
+    """
+    examples = []
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Get from training_data table
+        cursor.execute(
+            'SELECT user_message, assistant_response FROM training_data WHERE skill_id = ?',
+            (skill_id,)
+        )
+        for row in cursor.fetchall():
+            examples.append({
+                'user_message': row['user_message'],
+                'assistant_response': row['assistant_response'],
+                'source': 'training_data'
+            })
+
+        # Get from extracted_data table (approved only)
+        cursor.execute(
+            'SELECT user_input, assistant_response FROM extracted_data WHERE skill_id = ? AND is_approved = 1 AND is_archived = 0',
+            (skill_id,)
+        )
+        for row in cursor.fetchall():
+            examples.append({
+                'user_message': row['user_input'],
+                'assistant_response': row['assistant_response'],
+                'source': 'extracted_data'
+            })
+
+    return examples
+
+
 # =============================================================================
 # TRAINING JOBS OPERATIONS
 # =============================================================================
