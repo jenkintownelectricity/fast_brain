@@ -33,6 +33,14 @@ except ImportError:
     USE_DATABASE = False
     print("Database module not found - using in-memory storage")
 
+# Helper function for raw SQL queries (uses existing db.get_db context manager)
+def execute_query(query, params=None):
+    """Execute a raw SQL query and return results."""
+    with db.get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(query, params or ())
+        return cursor.fetchall()
+
 app = Flask(__name__)
 CORS(app)
 
@@ -1356,7 +1364,7 @@ def upload_and_parse():
                     item_id = str(uuid.uuid4())[:16]
                     tokens = (len(q) + len(a)) // 4
 
-                    db.execute_query('''
+                    execute_query('''
                         INSERT INTO extracted_data
                         (id, skill_id, user_input, assistant_response, source_filename,
                          source_type, category, importance_score, tokens)
@@ -1423,13 +1431,13 @@ def get_extracted_data(skill_id):
 
         # Get total count
         count_query = query.replace("SELECT *", "SELECT COUNT(*)")
-        total = db.execute_query(count_query, params)[0][0] if db.execute_query(count_query, params) else 0
+        total = execute_query(count_query, params)[0][0] if execute_query(count_query, params) else 0
 
         # Get paginated data
         query += " ORDER BY importance_score DESC LIMIT ? OFFSET ?"
         params.extend([per_page, offset])
 
-        rows = db.execute_query(query, params) or []
+        rows = execute_query(query, params) or []
 
         # Convert to list of dicts
         data = []
@@ -1476,19 +1484,19 @@ def get_extracted_stats(skill_id):
 
     try:
         # Get counts
-        total = db.execute_query(
+        total = execute_query(
             "SELECT COUNT(*) FROM extracted_data WHERE skill_id = ? AND is_archived = 0",
             [skill_id]
         )
         total = total[0][0] if total else 0
 
-        approved = db.execute_query(
+        approved = execute_query(
             "SELECT COUNT(*) FROM extracted_data WHERE skill_id = ? AND is_approved = 1 AND is_archived = 0",
             [skill_id]
         )
         approved = approved[0][0] if approved else 0
 
-        tokens = db.execute_query(
+        tokens = execute_query(
             "SELECT SUM(tokens) FROM extracted_data WHERE skill_id = ? AND is_archived = 0",
             [skill_id]
         )
@@ -1526,7 +1534,7 @@ def bulk_update_extracted(skill_id):
 
         if action == 'approve':
             for item_id in item_ids:
-                db.execute_query(
+                execute_query(
                     "UPDATE extracted_data SET is_approved = 1 WHERE id = ? AND skill_id = ?",
                     [item_id, skill_id]
                 )
@@ -1534,7 +1542,7 @@ def bulk_update_extracted(skill_id):
 
         elif action == 'archive':
             for item_id in item_ids:
-                db.execute_query(
+                execute_query(
                     "UPDATE extracted_data SET is_archived = 1 WHERE id = ? AND skill_id = ?",
                     [item_id, skill_id]
                 )
@@ -1542,7 +1550,7 @@ def bulk_update_extracted(skill_id):
 
         elif action == 'delete':
             for item_id in item_ids:
-                db.execute_query(
+                execute_query(
                     "DELETE FROM extracted_data WHERE id = ? AND skill_id = ?",
                     [item_id, skill_id]
                 )
@@ -1551,16 +1559,16 @@ def bulk_update_extracted(skill_id):
         elif action == 'move_to_training':
             # Move approved items to training_data table
             for item_id in item_ids:
-                rows = db.execute_query(
+                rows = execute_query(
                     "SELECT user_input, assistant_response FROM extracted_data WHERE id = ? AND skill_id = ?",
                     [item_id, skill_id]
                 )
                 if rows:
-                    db.execute_query(
+                    execute_query(
                         "INSERT INTO training_data (skill_id, user_message, assistant_response, rating) VALUES (?, ?, ?, ?)",
                         [skill_id, rows[0][0], rows[0][1], 5]
                     )
-                    db.execute_query(
+                    execute_query(
                         "UPDATE extracted_data SET is_archived = 1 WHERE id = ?",
                         [item_id]
                     )
@@ -1719,7 +1727,7 @@ Generate exactly {count} examples. Return ONLY the JSON array."""
                 tokens = (len(user_input) + len(assistant_response)) // 4
                 category = ex.get('category', 'general')
 
-                db.execute_query('''
+                execute_query('''
                     INSERT INTO extracted_data
                     (id, skill_id, user_input, assistant_response, source_filename,
                      source_type, category, importance_score, tokens)
