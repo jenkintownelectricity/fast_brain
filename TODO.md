@@ -78,7 +78,7 @@
 ## Technical Debt
 
 ### Code Quality
-- [ ] Remove debug logging from production (`[DEBUG]`, `[TRAIN DEBUG]`)
+- [x] Remove debug logging from production (`[DEBUG]`, `[TRAIN DEBUG]`)
 - [ ] Consolidate dashboard_db.py with database.py
 - [ ] Add unit tests for voice caching
 - [ ] Add integration tests for provider APIs

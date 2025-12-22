@@ -3869,18 +3869,14 @@ def train_voice_endpoint(project_id):
             message = f"Voice configured for {provider}"
 
         if voice_id:
-            print(f"[TRAIN DEBUG] Got voice_id: {voice_id}, updating project {project_id}")
             updated_project = db.update_voice_project(
                 project_id,
                 status='trained',
                 voice_id=voice_id,
                 training_completed=datetime.now().isoformat()
             )
-            print(f"[TRAIN DEBUG] update_voice_project returned: status={updated_project.get('status') if updated_project else 'None'}, voice_id={updated_project.get('voice_id') if updated_project else 'None'}")
-
-            # Verify the update persisted by reading again
+            # Verify the update persisted
             verify_project = db.get_voice_project(project_id)
-            print(f"[TRAIN DEBUG] Verification read: status={verify_project.get('status') if verify_project else 'None'}, voice_id={verify_project.get('voice_id') if verify_project else 'None'}")
 
             job['status'] = 'completed'
             job['progress'] = 100
