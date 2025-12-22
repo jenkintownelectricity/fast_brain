@@ -12370,17 +12370,26 @@ pipeline = Pipeline([
             }
         }
 
-        function testAdapterFromGallery(skillId) {
-            currentTrainingSkillId = skillId;
+        async function testAdapterFromGallery(skillId) {
             const prompt = window.prompt('Enter a test prompt:');
-            if (prompt) {
-                document.getElementById('test-adapter-prompt').value = prompt;
-                showTrainingTab('progress');
-                document.querySelector('#tab-training .sub-tab-btn:nth-child(2)').click();
-                document.getElementById('training-complete-display').style.display = 'block';
-                document.getElementById('no-training-message').style.display = 'none';
-                document.getElementById('active-training-display').style.display = 'none';
-                testTrainedAdapter();
+            if (!prompt) return;
+
+            try {
+                const response = await fetch(`/api/test-adapter/${skillId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: prompt })
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.response) {
+                    alert('🧪 Trained Adapter Response:\\n\\n' + data.response);
+                } else {
+                    alert('❌ Error: ' + (data.error || 'No response from adapter'));
+                }
+            } catch (err) {
+                alert('❌ Error testing adapter: ' + err.message);
             }
         }
 
