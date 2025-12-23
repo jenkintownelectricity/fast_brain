@@ -1477,14 +1477,18 @@ def save_training_job(
     status: str = 'running',
     logs: List[str] = None
 ) -> bool:
-    """Save or update a training job."""
+    """Save or update a training job.
+
+    IMPORTANT: When starting a new job, this clears old completion data
+    (completed_at, result, error, progress) to prevent status confusion.
+    """
     with get_db() as conn:
         cursor = conn.cursor()
         now = datetime.now().isoformat()
         logs_json = json.dumps(logs if logs else ['Training job started...'])
         cursor.execute('''
-            INSERT INTO training_jobs (skill_id, job_id, modal_call_id, status, config, logs, started_at, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO training_jobs (skill_id, job_id, modal_call_id, status, config, logs, started_at, created_at, updated_at, completed_at, result, error, progress)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 0)
             ON CONFLICT(skill_id) DO UPDATE SET
                 job_id = excluded.job_id,
                 modal_call_id = excluded.modal_call_id,
@@ -1492,7 +1496,11 @@ def save_training_job(
                 config = excluded.config,
                 logs = excluded.logs,
                 started_at = excluded.started_at,
-                updated_at = excluded.updated_at
+                updated_at = excluded.updated_at,
+                completed_at = NULL,
+                result = NULL,
+                error = NULL,
+                progress = 0
         ''', (skill_id, job_id, modal_call_id, status, json.dumps(config or {}), logs_json, now, now, now))
         conn.commit()
         return True
