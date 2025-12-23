@@ -263,6 +263,7 @@ class BitNetEngine:
 # =============================================================================
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional as OptionalType
@@ -271,6 +272,22 @@ web_app = FastAPI(
     title="Fast Brain LPU",
     description="BitNet inference endpoint for Premier Voice Assistant",
     version="0.1.0",
+)
+
+# Add CORS middleware - allow requests from 453rahul.com
+web_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://453rahul.com",
+        "http://453rahul.com",
+        "https://www.453rahul.com",
+        "http://www.453rahul.com",
+        "http://localhost:3000",
+        "*",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
