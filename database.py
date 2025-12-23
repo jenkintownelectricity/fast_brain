@@ -1326,6 +1326,7 @@ def get_all_training_examples(skill_id: str) -> List[Dict]:
     Returns list of dicts with 'user_message' and 'assistant_response' keys.
     """
     examples = []
+    print(f"[DB DEBUG] get_all_training_examples called with skill_id: '{skill_id}'")
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -1335,7 +1336,9 @@ def get_all_training_examples(skill_id: str) -> List[Dict]:
             'SELECT user_message, assistant_response FROM training_data WHERE skill_id = ?',
             (skill_id,)
         )
-        for row in cursor.fetchall():
+        training_rows = cursor.fetchall()
+        print(f"[DB DEBUG] training_data table returned: {len(training_rows)} rows for skill_id='{skill_id}'")
+        for row in training_rows:
             examples.append({
                 'user_message': row['user_message'],
                 'assistant_response': row['assistant_response'],
@@ -1347,13 +1350,25 @@ def get_all_training_examples(skill_id: str) -> List[Dict]:
             'SELECT user_input, assistant_response FROM extracted_data WHERE skill_id = ? AND is_approved = 1 AND is_archived = 0',
             (skill_id,)
         )
-        for row in cursor.fetchall():
+        extracted_rows = cursor.fetchall()
+        print(f"[DB DEBUG] extracted_data table returned: {len(extracted_rows)} rows for skill_id='{skill_id}'")
+        for row in extracted_rows:
             examples.append({
                 'user_message': row['user_input'],
                 'assistant_response': row['assistant_response'],
                 'source': 'extracted_data'
             })
 
+        # Debug: Check what skill_ids exist in the tables
+        cursor.execute('SELECT DISTINCT skill_id FROM training_data LIMIT 10')
+        td_skills = [r[0] for r in cursor.fetchall()]
+        print(f"[DB DEBUG] skill_ids in training_data: {td_skills}")
+
+        cursor.execute('SELECT DISTINCT skill_id FROM extracted_data WHERE is_approved = 1 LIMIT 10')
+        ed_skills = [r[0] for r in cursor.fetchall()]
+        print(f"[DB DEBUG] skill_ids in extracted_data (approved): {ed_skills}")
+
+    print(f"[DB DEBUG] Total examples returned: {len(examples)}")
     return examples
 
 
