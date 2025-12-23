@@ -41,6 +41,26 @@ def execute_query(query, params=None):
         cursor.execute(query, params or ())
         return cursor.fetchall()
 
+# Modal volume commit helper - CRITICAL for persisting database writes
+def commit_volume():
+    """Commit changes to Modal volume to persist database writes across container restarts.
+
+    Modal volumes have eventual consistency - writes are not persisted until commit() is called.
+    This function safely handles both Modal and local environments.
+    """
+    try:
+        import modal
+        # Get the volume reference - this works because Modal injects the volume at runtime
+        volume = modal.Volume.from_name("hive215-data")
+        volume.commit()
+        print("[Volume] Committed database changes to Modal volume")
+    except ImportError:
+        # Not running on Modal (local development)
+        pass
+    except Exception as e:
+        # Log but don't fail - volume commit errors shouldn't break the app
+        print(f"[Volume] Warning: Failed to commit volume: {e}")
+
 app = Flask(__name__)
 CORS(app)
 
@@ -661,6 +681,7 @@ def start_skill_training(skill_id):
                 status='running',
                 logs=initial_logs
             )
+            commit_volume()  # Persist training job state
 
         add_activity(f"Started training: {skill_id}", "🚀", "training")
 
@@ -755,6 +776,7 @@ def get_training_job(skill_id):
                             )
                         except Exception as adapter_err:
                             print(f"Warning: Failed to save adapter record: {adapter_err}")
+                        commit_volume()  # Persist training completion
                 else:
                     error_msg = result.get('error', 'Unknown error') if result else 'No result'
                     TRAINING_JOBS[skill_id]['status'] = 'failed'
@@ -1048,6 +1070,7 @@ def add_parser_data():
                     1 if data.get('is_approved') else 0
                 ))
 
+            commit_volume()  # Persist to Modal volume
             return jsonify({"success": True, "id": item_id})
         else:
             return jsonify({"success": False, "error": "Database not available"})
@@ -1063,6 +1086,7 @@ def delete_parser_data(item_id):
             with db.get_db() as conn:
                 cursor = conn.cursor()
                 cursor.execute('DELETE FROM extracted_data WHERE id = ?', (item_id,))
+            commit_volume()  # Persist to Modal volume
             return jsonify({"success": True})
         else:
             return jsonify({"success": False, "error": "Database not available"})
@@ -1078,6 +1102,7 @@ def approve_parser_data(item_id):
             with db.get_db() as conn:
                 cursor = conn.cursor()
                 cursor.execute('UPDATE extracted_data SET is_approved = 1 WHERE id = ?', (item_id,))
+            commit_volume()  # Persist to Modal volume
             return jsonify({"success": True})
         else:
             return jsonify({"success": False, "error": "Database not available"})
@@ -1854,6 +1879,10 @@ def upload_and_parse():
             results['files_failed'] += 1
             results['errors'].append(f"{file.filename}: {str(e)}")
 
+    # Commit volume to persist database writes
+    if results['items_extracted'] > 0:
+        commit_volume()
+
     return jsonify({
         'success': True,
         'files_processed': results['files_processed'],
@@ -2039,6 +2068,7 @@ def bulk_update_extracted(skill_id):
                     )
                     affected += 1
 
+        commit_volume()  # Persist to Modal volume
         return jsonify({'success': True, 'affected': affected})
 
     except Exception as e:
@@ -2201,6 +2231,9 @@ Generate exactly {count} examples. Return ONLY the JSON array."""
                       'ai', category, 75, tokens))
 
                 generated_count += 1
+
+        # CRITICAL: Commit volume to persist database writes
+        commit_volume()
 
         add_activity(f"AI generated {generated_count} training examples for {skill_name}", "🤖", "training")
 
@@ -2396,6 +2429,7 @@ def save_api_keys():
         saved.append('PlayHT')
 
     if saved:
+        commit_volume()  # Persist to Modal volume
         add_activity(f"API keys saved: {', '.join(saved)}", "", "api")
         return jsonify({"success": True, "saved": saved})
     return jsonify({"success": True, "message": "No keys provided"})
@@ -3761,6 +3795,7 @@ def create_fast_brain_skill():
             except Exception as e:
                 add_activity(f"Skill created (sync failed: {str(e)[:50]})", "⚠️", "skills")
 
+        commit_volume()  # Persist to Modal volume
         add_activity(f"Created skill: {skill.get('name')}", "✨", "skills")
         return jsonify({"success": True, "skill": skill})
 
@@ -3793,6 +3828,7 @@ def update_fast_brain_skill(skill_id):
                 update_data[field] = data[field]
 
         skill = db.update_skill(skill_id, **update_data)
+        commit_volume()  # Persist to Modal volume
         add_activity(f"Updated skill: {skill.get('name')}", "📝", "skills")
         return jsonify({"success": True, "skill": skill})
     else:
@@ -3816,6 +3852,7 @@ def delete_fast_brain_skill(skill_id):
             return jsonify({"success": False, "error": "Cannot delete built-in skill"})
 
         db.delete_skill(skill_id)
+        commit_volume()  # Persist to Modal volume
         add_activity(f"Deleted skill: {skill_id}", "🗑️", "skills")
         return jsonify({"success": True})
     else:
