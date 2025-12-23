@@ -11208,7 +11208,7 @@ pipeline = Pipeline([
                 }
 
                 try {
-                    const res = await fetch(`/api/training-job/${currentWorkflowSkill.id}`);
+                    const res = await fetch(`/api/training/status/${currentWorkflowSkill.id}`);
                     const data = await res.json();
 
                     const statusDiv = document.getElementById('wf-training-status');
