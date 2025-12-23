@@ -62,7 +62,13 @@ def commit_volume():
         print(f"[Volume] Warning: Failed to commit volume: {e}")
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=[
+    "https://453rahul.com",
+    "http://453rahul.com",
+    "https://www.453rahul.com",
+    "http://www.453rahul.com",
+    "http://localhost:3000",  # For local dev
+], supports_credentials=True)
 
 # Data paths
 BUSINESS_PROFILES_DIR = Path("business_profiles")
