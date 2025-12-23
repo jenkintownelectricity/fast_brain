@@ -528,6 +528,7 @@ image = (
         "anthropic>=0.18.0",
         "fastapi>=0.109.0",
         "pydantic>=2.0.0",
+        "pyjwt>=2.8.0",
     )
     # Add database module for persistent skill storage
     .add_local_file("database.py", "/root/database.py")
@@ -1040,6 +1041,48 @@ async def health():
         "backend": f"groq-{FAST_MODEL}",
         "skills_available": all_skills,
         "version": "1.0.0",
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LIVEKIT TOKEN ENDPOINT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@web_app.get("/api/livekit/token")
+def get_livekit_token(room: str = "demo-room", identity: str = None):
+    """Generate LiveKit access token for voice demo"""
+    import jwt
+    import secrets
+
+    api_key = "APICitVpmeC5zL6"
+    api_secret = "GFOkmbbd1qP9WKfg7uiQux8SgPNLCIxd5EHCagqbVfj"
+
+    if not identity:
+        identity = f"visitor-{secrets.token_hex(4)}"
+
+    # Token expires in 1 hour
+    exp = int(time.time()) + 3600
+
+    claims = {
+        "iss": api_key,
+        "sub": identity,
+        "iat": int(time.time()),
+        "exp": exp,
+        "video": {
+            "room": room,
+            "roomJoin": True,
+            "canPublish": True,
+            "canSubscribe": True
+        }
+    }
+
+    token = jwt.encode(claims, api_secret, algorithm="HS256")
+
+    return {
+        "token": token,
+        "url": "wss://hive215-9diqhgoh.livekit.cloud",
+        "room": room,
+        "identity": identity
     }
 
 
