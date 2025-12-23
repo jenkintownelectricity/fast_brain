@@ -6995,6 +6995,10 @@ DASHBOARD_HTML = '''
             color: #ffffff;
         }
     </style>
+    <!-- Chart.js for loss visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Canvas confetti for celebrations -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 </head>
 <body>
     <!-- Theme Toggle Button -->
@@ -7745,50 +7749,118 @@ DASHBOARD_HTML = '''
                         <button class="btn btn-primary" style="margin-top: 1rem;" onclick="showTrainingTab('console')">Go to Console</button>
                     </div>
 
-                    <!-- Active Training Display -->
+                    <!-- Active Training Display - Enhanced Dashboard -->
                     <div id="active-training-display" style="display: none;">
-                        <div style="margin-bottom: 1.5rem;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                <span style="font-weight: 600;">Training: <span id="progress-skill-name" style="color: var(--neon-cyan);">--</span></span>
-                                <span id="progress-status" class="badge" style="background: var(--neon-green); color: #000;">Running</span>
+                        <!-- Header with pulse indicator -->
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div id="training-pulse" style="width: 12px; height: 12px; background: var(--neon-green); border-radius: 50%; animation: pulse 2s infinite; box-shadow: 0 0 20px var(--neon-green);"></div>
+                                <h3 style="margin: 0; font-size: 1.2rem;">🧠 Training: <span id="progress-skill-name" style="color: var(--neon-cyan);">--</span></h3>
                             </div>
+                            <span id="progress-status" class="badge" style="background: linear-gradient(135deg, var(--neon-green), #059669); padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600;">● Running</span>
+                        </div>
 
-                            <!-- Progress Bar -->
-                            <div style="background: var(--glass-surface); border-radius: 8px; height: 24px; overflow: hidden; margin-bottom: 0.5rem;">
-                                <div id="progress-bar" style="background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); height: 100%; width: 0%; transition: width 0.5s; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #000; font-size: 0.85rem;">
-                                    0%
+                        <!-- Stats Grid - 4 Cards -->
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 1.5rem;">
+                            <div class="glass-card" style="background: var(--glass-surface); border-radius: 16px; padding: 20px; text-align: center; border: 1px solid var(--glass-border);">
+                                <div style="font-size: 24px; margin-bottom: 8px;">📉</div>
+                                <div id="stat-loss" style="font-size: 28px; font-weight: 700; background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">--</div>
+                                <div style="color: var(--text-secondary); font-size: 12px; margin-top: 4px;">Current Loss</div>
+                                <div id="stat-loss-trend" style="font-size: 11px; color: var(--neon-green); margin-top: 8px;">--</div>
+                            </div>
+                            <div class="glass-card" style="background: var(--glass-surface); border-radius: 16px; padding: 20px; text-align: center; border: 1px solid var(--glass-border);">
+                                <div style="font-size: 24px; margin-bottom: 8px;">🔄</div>
+                                <div id="stat-steps" style="font-size: 28px; font-weight: 700; background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">0/0</div>
+                                <div style="color: var(--text-secondary); font-size: 12px; margin-top: 4px;">Training Steps</div>
+                                <div style="height: 4px; background: var(--glass-surface); border-radius: 2px; margin-top: 12px; overflow: hidden;">
+                                    <div id="stat-steps-bar" style="height: 100%; background: linear-gradient(90deg, var(--neon-green), var(--neon-cyan)); border-radius: 2px; transition: width 0.5s; width: 0%;"></div>
                                 </div>
                             </div>
-
-                            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-secondary);">
-                                <span>Step <span id="progress-step">0</span>/<span id="progress-total-steps">0</span></span>
-                                <span>Epoch <span id="progress-epoch">0</span>/<span id="progress-total-epochs">0</span></span>
-                                <span>ETA: <span id="progress-eta">--</span></span>
+                            <div class="glass-card" style="background: var(--glass-surface); border-radius: 16px; padding: 20px; text-align: center; border: 1px solid var(--glass-border);">
+                                <div style="font-size: 24px; margin-bottom: 8px;">⏱️</div>
+                                <div id="stat-eta" style="font-size: 28px; font-weight: 700; background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">--:--</div>
+                                <div style="color: var(--text-secondary); font-size: 12px; margin-top: 4px;">Time Remaining</div>
+                                <div id="stat-elapsed" style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">Elapsed: --</div>
+                            </div>
+                            <div class="glass-card" style="background: var(--glass-surface); border-radius: 16px; padding: 20px; text-align: center; border: 1px solid var(--glass-border);">
+                                <div style="font-size: 24px; margin-bottom: 8px;">🎯</div>
+                                <div id="stat-epoch" style="font-size: 28px; font-weight: 700; background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">0</div>
+                                <div style="color: var(--text-secondary); font-size: 12px; margin-top: 4px;">Current Epoch</div>
+                                <div id="stat-epoch-total" style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">of 10 epochs</div>
                             </div>
                         </div>
 
-                        <!-- Charts Row -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
-                            <div class="glass-card" style="background: var(--glass-surface); padding: 1rem;">
-                                <div style="font-weight: 600; margin-bottom: 0.5rem; color: var(--neon-cyan);">📉 Training Loss</div>
-                                <canvas id="loss-chart" height="150"></canvas>
+                        <!-- Chart and GPU Section -->
+                        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 1.5rem;">
+                            <div class="glass-card" style="background: var(--glass-surface); border-radius: 16px; padding: 20px; border: 1px solid var(--glass-border);">
+                                <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">📈 Loss Curve (Real-Time)</div>
+                                <canvas id="loss-chart" height="180"></canvas>
                             </div>
-                            <div class="glass-card" style="background: var(--glass-surface); padding: 1rem;">
-                                <div style="font-weight: 600; margin-bottom: 0.5rem; color: var(--neon-purple);">📈 Learning Rate</div>
-                                <canvas id="lr-chart" height="150"></canvas>
+                            <div class="glass-card" style="background: var(--glass-surface); border-radius: 16px; padding: 20px; border: 1px solid var(--glass-border);">
+                                <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">🖥️ GPU Metrics</div>
+                                <div id="gpu-name" style="font-size: 18px; font-weight: 600; margin-bottom: 16px; color: var(--neon-green);">NVIDIA A10G</div>
+                                <div style="margin-bottom: 16px;">
+                                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;">
+                                        <span>Memory</span>
+                                        <span id="gpu-mem-text">18.2 / 22 GB</span>
+                                    </div>
+                                    <div style="height: 8px; background: var(--glass-border); border-radius: 4px; overflow: hidden;">
+                                        <div id="gpu-mem-bar" style="height: 100%; background: linear-gradient(90deg, var(--neon-green), var(--neon-cyan)); border-radius: 4px; transition: width 0.3s; width: 83%;"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;">
+                                        <span>Utilization</span>
+                                        <span id="gpu-util-text">94%</span>
+                                    </div>
+                                    <div style="height: 8px; background: var(--glass-border); border-radius: 4px; overflow: hidden;">
+                                        <div id="gpu-util-bar" style="height: 100%; background: linear-gradient(90deg, var(--neon-green), var(--neon-cyan)); border-radius: 4px; transition: width 0.3s; width: 94%;"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Training Log -->
-                        <div class="glass-card" style="background: var(--glass-surface); padding: 1rem;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                <span style="font-weight: 600; color: var(--neon-cyan);">📋 Training Log</span>
-                                <button class="btn btn-secondary btn-sm" onclick="clearTrainingLog()">Clear</button>
+                        <!-- Example Preview and Education Section -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 1.5rem;">
+                            <div class="glass-card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(0, 255, 242, 0.1)); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 16px; padding: 20px;">
+                                <div style="font-size: 14px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">📝 Currently Learning...</div>
+                                <div id="current-example-card" style="background: rgba(0,0,0,0.2); border-radius: 12px; padding: 16px;">
+                                    <div style="margin-bottom: 12px;">
+                                        <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">👤 User Question</div>
+                                        <div id="current-example-input" style="font-size: 14px; line-height: 1.5;">"How do I set up automation?"</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">🤖 Expected Response</div>
+                                        <div id="current-example-output" style="font-size: 14px; line-height: 1.5;">"To set up automation, click..."</div>
+                                    </div>
+                                </div>
                             </div>
-                            <div id="training-log" class="console" style="height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; padding: 0.5rem; background: #0a0a0f; border-radius: 4px;">
+                            <div class="glass-card" style="background: var(--glass-surface); border-radius: 16px; padding: 20px; border: 1px solid var(--glass-border);">
+                                <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">💡 Did You Know?</div>
+                                <div id="fact-card" style="text-align: center;">
+                                    <div id="fact-icon" style="font-size: 48px; margin-bottom: 12px;">🧠</div>
+                                    <h4 id="fact-title" style="font-size: 18px; margin-bottom: 8px;">What is LoRA?</h4>
+                                    <p id="fact-text" style="color: var(--text-secondary); font-size: 14px; line-height: 1.6;">Low-Rank Adaptation trains only <strong style="color: var(--neon-green);">0.92%</strong> of parameters, making it 10x faster than full fine-tuning!</p>
+                                </div>
+                                <div style="display: flex; justify-content: center; gap: 8px; margin-top: 16px;">
+                                    <span class="fact-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--neon-green);"></span>
+                                    <span class="fact-dot" style="width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2);"></span>
+                                    <span class="fact-dot" style="width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2);"></span>
+                                    <span class="fact-dot" style="width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2);"></span>
+                                    <span class="fact-dot" style="width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2);"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Training Log (Collapsed by default) -->
+                        <details class="glass-card" style="background: var(--glass-surface); padding: 1rem; border-radius: 16px; border: 1px solid var(--glass-border);">
+                            <summary style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600; color: var(--neon-cyan);">
+                                📋 Training Log
+                            </summary>
+                            <div id="training-log" class="console" style="height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; padding: 0.5rem; background: #0a0a0f; border-radius: 4px; margin-top: 1rem;">
                                 <div style="color: var(--text-secondary);">Waiting for training to start...</div>
                             </div>
-                        </div>
+                        </details>
                     </div>
 
                     <!-- Training Complete Display -->
@@ -12422,6 +12494,87 @@ pipeline = Pipeline([
             }
         }
 
+        // Chart.js instance for loss curve
+        let lossChart = null;
+        let factRotationInterval = null;
+        let currentFactIndex = 0;
+
+        // Educational facts for the carousel
+        const trainingFacts = [
+            { icon: '🧠', title: 'What is LoRA?', text: 'Low-Rank Adaptation trains only <strong style="color: var(--neon-green);">0.92%</strong> of parameters, making it 10x faster than full fine-tuning!' },
+            { icon: '📉', title: 'Understanding Loss', text: 'Loss measures how "wrong" the model is. Starting at <strong style="color: var(--neon-green);">3.38</strong>, target is <strong style="color: var(--neon-green);">< 0.3</strong>!' },
+            { icon: '🔄', title: 'What\'s an Epoch?', text: 'One epoch = seeing all training examples once. You\'re training for <strong style="color: var(--neon-green);">10 epochs</strong> total!' },
+            { icon: '💰', title: 'Cost Breakdown', text: 'This training costs ~<strong style="color: var(--neon-green);">$0.50-$0.80</strong>. Competitors charge <strong style="color: var(--neon-green);">$5-15</strong> for the same task!' },
+            { icon: '⚡', title: 'A10G GPU', text: 'The NVIDIA A10G has <strong style="color: var(--neon-green);">22GB VRAM</strong> and processes ~<strong style="color: var(--neon-green);">3.5 steps/second</strong>!' }
+        ];
+
+        function formatTime(seconds) {
+            if (!seconds || seconds < 0) return '--:--';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function initLossChart() {
+            const ctx = document.getElementById('loss-chart').getContext('2d');
+            if (lossChart) {
+                lossChart.destroy();
+            }
+            lossChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Training Loss',
+                        data: [],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#10b981'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 300 },
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        x: {
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#94a3b8' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateLossChartData(lossHistory) {
+            if (!lossChart || !lossHistory || lossHistory.length === 0) return;
+            lossChart.data.labels = lossHistory.map(h => h.step);
+            lossChart.data.datasets[0].data = lossHistory.map(h => h.loss);
+            lossChart.update('none');
+        }
+
+        function rotateFact() {
+            currentFactIndex = (currentFactIndex + 1) % trainingFacts.length;
+            const fact = trainingFacts[currentFactIndex];
+            document.getElementById('fact-icon').textContent = fact.icon;
+            document.getElementById('fact-title').textContent = fact.title;
+            document.getElementById('fact-text').innerHTML = fact.text;
+            // Update dots
+            const dots = document.querySelectorAll('.fact-dot');
+            dots.forEach((dot, i) => {
+                dot.style.background = i === currentFactIndex ? 'var(--neon-green)' : 'rgba(255,255,255,0.2)';
+            });
+        }
+
         function startTrainingPolling(skillId) {
             // Show active training display
             document.getElementById('no-training-message').style.display = 'none';
@@ -12430,46 +12583,102 @@ pipeline = Pipeline([
             document.getElementById('cancel-training-btn').style.display = 'block';
             document.getElementById('progress-skill-name').textContent = skillId;
 
-            // Reset charts
-            lossChartData = [];
-            lrChartData = [];
+            // Initialize Chart.js
+            initLossChart();
 
-            // Start polling
+            // Reset and start fact rotation
+            currentFactIndex = 0;
+            if (factRotationInterval) clearInterval(factRotationInterval);
+            factRotationInterval = setInterval(rotateFact, 8000);
+
+            // Start polling with enhanced endpoint (3 second interval)
             if (trainingPollInterval) clearInterval(trainingPollInterval);
-            trainingPollInterval = setInterval(() => pollTrainingStatus(skillId), 2000);
+            trainingPollInterval = setInterval(() => pollTrainingStatus(skillId), 3000);
             pollTrainingStatus(skillId);
         }
 
         async function pollTrainingStatus(skillId) {
             try {
-                const response = await fetch(`/api/training-job/${skillId}`);
-                const job = await response.json();
+                // Use the enhanced training status endpoint
+                const response = await fetch(`/api/training/status/${skillId}`);
+                const data = await response.json();
 
-                if (job.error) {
-                    console.log('Training job not found');
+                if (data.status === 'idle' || data.error) {
+                    console.log('Training job not found or idle');
                     return;
                 }
 
-                // Update status
+                // Update status badge
                 const statusBadge = document.getElementById('progress-status');
-                if (job.status === 'running') {
-                    statusBadge.textContent = 'Running';
-                    statusBadge.style.background = 'var(--neon-green)';
-                } else if (job.status === 'completed') {
-                    statusBadge.textContent = 'Complete';
-                    statusBadge.style.background = 'var(--neon-cyan)';
+                const trainingPulse = document.getElementById('training-pulse');
+                if (data.status === 'running') {
+                    statusBadge.textContent = '● Running';
+                    statusBadge.style.background = 'linear-gradient(135deg, var(--neon-green), #059669)';
+                    trainingPulse.style.animation = 'pulse 2s infinite';
+                } else if (data.status === 'completed') {
+                    statusBadge.textContent = '✓ Complete';
+                    statusBadge.style.background = 'linear-gradient(135deg, var(--neon-cyan), #0ea5e9)';
+                    trainingPulse.style.animation = 'none';
+                    trainingPulse.style.background = 'var(--neon-cyan)';
                     clearInterval(trainingPollInterval);
-                    showTrainingComplete(job);
-                } else if (job.status === 'failed') {
-                    statusBadge.textContent = 'Failed';
+                    clearInterval(factRotationInterval);
+                    showTrainingComplete(data);
+                    return;
+                } else if (data.status === 'failed') {
+                    statusBadge.textContent = '✗ Failed';
                     statusBadge.style.background = '#ff4444';
+                    trainingPulse.style.animation = 'none';
+                    trainingPulse.style.background = '#ff4444';
                     clearInterval(trainingPollInterval);
+                    clearInterval(factRotationInterval);
+                    return;
                 }
 
-                // Update logs
-                if (job.logs && job.logs.length > 0) {
-                    updateTrainingLog(job.logs);
-                    parseLogsForProgress(job.logs);
+                // Update skill name
+                if (data.skill_name) {
+                    document.getElementById('progress-skill-name').textContent = data.skill_name;
+                }
+
+                // Update stats cards
+                if (data.current_loss !== null) {
+                    document.getElementById('stat-loss').textContent = data.current_loss.toFixed(4);
+                }
+                if (data.loss_improvement_percent) {
+                    document.getElementById('stat-loss-trend').textContent = `↓ ${data.loss_improvement_percent.toFixed(0)}% from start`;
+                }
+
+                // Steps
+                document.getElementById('stat-steps').textContent = `${data.current_step}/${data.total_steps}`;
+                const stepProgress = data.total_steps > 0 ? (data.current_step / data.total_steps) * 100 : 0;
+                document.getElementById('stat-steps-bar').style.width = `${stepProgress}%`;
+
+                // ETA
+                document.getElementById('stat-eta').textContent = formatTime(data.eta_seconds);
+                document.getElementById('stat-elapsed').textContent = `Elapsed: ${formatTime(data.elapsed_seconds)}`;
+
+                // Epoch
+                document.getElementById('stat-epoch').textContent = data.current_epoch?.toFixed(1) || '0';
+                document.getElementById('stat-epoch-total').textContent = `of ${data.total_epochs} epochs`;
+
+                // GPU metrics
+                if (data.gpu_metrics) {
+                    document.getElementById('gpu-name').textContent = data.gpu_metrics.name;
+                    document.getElementById('gpu-mem-text').textContent = `${data.gpu_metrics.memory_used_gb} / ${data.gpu_metrics.memory_total_gb} GB`;
+                    const memPercent = (data.gpu_metrics.memory_used_gb / data.gpu_metrics.memory_total_gb) * 100;
+                    document.getElementById('gpu-mem-bar').style.width = `${memPercent}%`;
+                    document.getElementById('gpu-util-text').textContent = `${data.gpu_metrics.utilization_percent}%`;
+                    document.getElementById('gpu-util-bar').style.width = `${data.gpu_metrics.utilization_percent}%`;
+                }
+
+                // Current example preview
+                if (data.current_example_preview) {
+                    document.getElementById('current-example-input').textContent = `"${data.current_example_preview.input}"`;
+                    document.getElementById('current-example-output').textContent = `"${data.current_example_preview.output}"`;
+                }
+
+                // Update loss chart
+                if (data.loss_history && data.loss_history.length > 0) {
+                    updateLossChartData(data.loss_history);
                 }
 
             } catch (err) {
@@ -12479,6 +12688,7 @@ pipeline = Pipeline([
 
         function updateTrainingLog(logs) {
             const logDiv = document.getElementById('training-log');
+            if (!logDiv) return;
             logDiv.innerHTML = logs.map(line => {
                 let color = 'var(--text-secondary)';
                 if (line.includes('✓') || line.includes('SUCCESS') || line.includes('complete')) color = 'var(--neon-green)';
@@ -12490,92 +12700,39 @@ pipeline = Pipeline([
             logDiv.scrollTop = logDiv.scrollHeight;
         }
 
-        function parseLogsForProgress(logs) {
-            // Parse progress from logs
-            for (const line of logs) {
-                // Parse step progress like "Step 4/10" or " 40%|████"
-                const stepMatch = line.match(/(\d+)\/(\d+)/);
-                if (stepMatch) {
-                    const current = parseInt(stepMatch[1]);
-                    const total = parseInt(stepMatch[2]);
-                    const percent = Math.round((current / total) * 100);
-
-                    document.getElementById('progress-step').textContent = current;
-                    document.getElementById('progress-total-steps').textContent = total;
-                    document.getElementById('progress-bar').style.width = percent + '%';
-                    document.getElementById('progress-bar').textContent = percent + '%';
-                }
-
-                // Parse loss values
-                const lossMatch = line.match(/loss[=:]\s*([\d.]+)/i);
-                if (lossMatch) {
-                    const loss = parseFloat(lossMatch[1]);
-                    if (!isNaN(loss) && loss < 10) {
-                        lossChartData.push(loss);
-                        updateLossChart();
-                    }
-                }
-
-                // Parse epoch
-                const epochMatch = line.match(/epoch[=:\s]*([\d.]+)/i);
-                if (epochMatch) {
-                    document.getElementById('progress-epoch').textContent = Math.floor(parseFloat(epochMatch[1]));
-                }
-            }
-        }
-
-        function updateLossChart() {
-            const canvas = document.getElementById('loss-chart');
-            const ctx = canvas.getContext('2d');
-            const data = lossChartData.slice(-20);  // Last 20 points
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            if (data.length < 2) return;
-
-            const maxLoss = Math.max(...data) * 1.1;
-            const minLoss = Math.min(...data) * 0.9;
-            const range = maxLoss - minLoss;
-
-            ctx.strokeStyle = '#00fff2';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-
-            data.forEach((loss, i) => {
-                const x = (i / (data.length - 1)) * canvas.width;
-                const y = canvas.height - ((loss - minLoss) / range) * canvas.height;
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
-
-            ctx.stroke();
-        }
-
-        function showTrainingComplete(job) {
+        function showTrainingComplete(data) {
             document.getElementById('active-training-display').style.display = 'none';
             document.getElementById('training-complete-display').style.display = 'block';
             document.getElementById('cancel-training-btn').style.display = 'none';
 
-            // Parse final stats from logs
-            const logs = job.logs || [];
-            let finalLoss = '--';
-            let trainingTime = '--';
-            let examples = '--';
-
-            for (const line of logs) {
-                if (line.includes('Final Loss:')) {
-                    const match = line.match(/Final Loss:\s*([\d.]+)/);
-                    if (match) finalLoss = parseFloat(match[1]).toFixed(4);
-                }
-                if (line.includes('Time:')) {
-                    const match = line.match(/Time:\s*([\d.]+)\s*min/);
-                    if (match) trainingTime = match[1] + ' min';
-                }
-                if (line.includes('Examples:')) {
-                    const match = line.match(/Examples:\s*(\d+)/);
-                    if (match) examples = match[1];
-                }
+            // Fire confetti celebration!
+            if (typeof confetti !== 'undefined') {
+                confetti({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.6 }
+                });
+                // Fire again for more celebration
+                setTimeout(() => {
+                    confetti({
+                        particleCount: 50,
+                        angle: 60,
+                        spread: 55,
+                        origin: { x: 0 }
+                    });
+                    confetti({
+                        particleCount: 50,
+                        angle: 120,
+                        spread: 55,
+                        origin: { x: 1 }
+                    });
+                }, 250);
             }
+
+            // Update result stats from the enhanced data
+            const finalLoss = data.current_loss?.toFixed(4) || '--';
+            const trainingTime = data.elapsed_seconds ? `${(data.elapsed_seconds / 60).toFixed(1)} min` : '--';
+            const examples = data.total_examples || '--';
 
             document.getElementById('result-final-loss').textContent = finalLoss;
             document.getElementById('result-training-time').textContent = trainingTime;
