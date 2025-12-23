@@ -7,6 +7,25 @@
 - **Python**: Always use `py -3.11` for all Python commands
 - **Git**: Standard git commands work in PowerShell
 
+## Current State (2024-12-23)
+
+### Deployment URLs
+- **Dashboard**: https://jenkintownelectricity--hive215-dashboard-flask-app.modal.run
+- **Trainer**: Modal app `hive215-skill-trainer` (A10G GPU)
+- **TTS**: Modal app `hive215-parler-tts`
+
+### Recent Training Success
+- **Skill**: monday_com_expert_skills
+- **Examples**: 126
+- **Final Loss**: 0.2660
+- **Training Time**: ~10 minutes
+
+### Key Architecture Decision
+**Modal volume is the single source of truth for adapters.**
+- Training saves to `/adapters/<skill_id>/training_metadata.json`
+- Dashboard reads via `trainer.list_adapters.remote()`
+- No database sync needed - always fresh data
+
 ## Development Philosophy
 
 ### No Quick Fixes or Workarounds
@@ -49,9 +68,6 @@ py -3.11 script.py
 
 **Note**: Skip `modal_lpu.py` - BitNet build is currently broken.
 
-### Dashboard URL
-https://jenkintownelectricity--hive215-dashboard-flask-app.modal.run
-
 ## Key Project Files
 
 | File | Purpose |
@@ -61,6 +77,33 @@ https://jenkintownelectricity--hive215-dashboard-flask-app.modal.run
 | `deploy_dashboard.py` | Modal deployment wrapper |
 | `train_skill_modal.py` | Skill training infrastructure |
 | `parler_integration.py` | Text-to-speech integration |
+
+## Important: Adapter Architecture
+
+### How Adapters Work Now
+
+```
+Training:
+  Dashboard → spawn(skill_id, training_data) → Modal Trainer
+                                                    ↓
+                                          Save to /adapters/<skill_id>/
+                                          - adapter_model.safetensors
+                                          - training_metadata.json
+                                                    ↓
+                                          volume.commit()
+
+Reading:
+  Dashboard → trainer.list_adapters.remote()
+                     ↓
+           Read training_metadata.json from each folder
+                     ↓
+           Return fresh data to UI
+```
+
+### What NOT to Do
+- Don't try to sync adapters to database (removed)
+- Don't add cleanup endpoints for duplicates (removed)
+- Don't store adapter info in `trained_adapters` table (deprecated)
 
 ## Code Standards
 
@@ -89,6 +132,23 @@ https://jenkintownelectricity--hive215-dashboard-flask-app.modal.run
 3. **After deploying**: Test the fix on the live dashboard
 4. **Always**: Commit with clear, descriptive messages
 
+## Debug Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/api/debug/database` | Database state, table counts, skill_ids |
+| `/api/trained-adapters` | Raw adapter data from Modal volume |
+
+## Documentation
+
+| File | Content |
+|------|---------|
+| `docs/ARCHITECTURE.md` | System architecture and data flow |
+| `docs/TROUBLESHOOTING.md` | Common issues and solutions |
+| `docs/API_REFERENCE.md` | All API endpoints |
+| `docs/SESSION_LOG_2024-12-23.md` | Today's changes |
+| `CHANGELOG.md` | All changes by date |
+
 ## Session Logging
 
-Document significant changes in: `docs/CLAUDE_CODE_SESSION_YYYY-MM-DD.md`
+Document significant changes in: `docs/SESSION_LOG_YYYY-MM-DD.md`
