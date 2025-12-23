@@ -577,6 +577,7 @@ def start_skill_training(skill_id):
     """
     try:
         import modal
+        from datetime import timedelta
 
         data = request.json or {}
 
@@ -586,12 +587,26 @@ def start_skill_training(skill_id):
             if not skill:
                 return jsonify({"success": False, "error": f"Skill '{skill_id}' not found"})
 
-        # Check if already training
-        if skill_id in TRAINING_JOBS and TRAINING_JOBS[skill_id].get('status') == 'running':
-            return jsonify({
-                "success": False,
-                "error": f"Training already in progress for '{skill_id}'"
-            })
+        # DOUBLE-START GUARD: Prevent multiple GPU jobs (saves money!)
+        existing_job = TRAINING_JOBS.get(skill_id)
+        if existing_job and existing_job.get('status') == 'running':
+            started_at = existing_job.get('started_at')
+            if started_at:
+                try:
+                    start_time = datetime.fromisoformat(started_at.replace('Z', '+00:00').replace('+00:00', ''))
+                    elapsed = datetime.now() - start_time
+                    # Consider training stale if older than 30 minutes
+                    if elapsed < timedelta(minutes=30):
+                        return jsonify({
+                            "success": False,
+                            "error": "Training already in progress for this skill",
+                            "status": "running",
+                            "job_id": existing_job.get('job_id'),
+                            "started_at": started_at,
+                            "elapsed_seconds": int(elapsed.total_seconds())
+                        }), 409  # Conflict status code
+                except Exception as e:
+                    print(f"[GUARD] Could not parse started_at: {e}")
 
         # Build config
         config = {
@@ -12528,17 +12543,36 @@ pipeline = Pipeline([
 
                 const result = await response.json();
 
-                if (result.success) {
+                // Handle 409 Conflict (already training)
+                if (response.status === 409) {
+                    const elapsed = result.elapsed_seconds ? Math.floor(result.elapsed_seconds / 60) : 0;
+                    alert(`Training already in progress for this skill (running for ${elapsed} minutes). Check the Progress tab!`);
+                    // Still show the progress tab since training is active
                     currentTrainingSkillId = skillId;
                     showTrainingTab('progress');
                     document.querySelector('#tab-training .sub-tab-btn:nth-child(2)').click();
+                    document.getElementById('active-training-display').style.display = 'block';
                     startTrainingPolling(skillId);
+                    return; // Don't re-enable button
+                }
+
+                if (result.success) {
+                    currentTrainingSkillId = skillId;
+                    // Show the progress tab and training UI
+                    showTrainingTab('progress');
+                    document.querySelector('#tab-training .sub-tab-btn:nth-child(2)').click();
+                    document.getElementById('active-training-display').style.display = 'block';
+                    startTrainingPolling(skillId);
+                    // Keep button disabled during training
+                    btn.textContent = '⏳ Training...';
+                    return; // Don't re-enable button
                 } else {
                     alert('Training failed: ' + (result.error || 'Unknown error'));
+                    btn.disabled = false;
+                    btn.textContent = '🚀 Start Training';
                 }
             } catch (err) {
                 alert('Training error: ' + err.message);
-            } finally {
                 btn.disabled = false;
                 btn.textContent = '🚀 Start Training';
             }
@@ -12681,6 +12715,10 @@ pipeline = Pipeline([
                     trainingPulse.style.background = '#ff4444';
                     clearInterval(trainingPollInterval);
                     clearInterval(factRotationInterval);
+                    // Re-enable the Start Training button
+                    const btn = document.getElementById('start-training-btn');
+                    btn.disabled = false;
+                    btn.textContent = '🚀 Start Training';
                     return;
                 }
 
@@ -12754,6 +12792,11 @@ pipeline = Pipeline([
             document.getElementById('active-training-display').style.display = 'none';
             document.getElementById('training-complete-display').style.display = 'block';
             document.getElementById('cancel-training-btn').style.display = 'none';
+
+            // Re-enable the Start Training button
+            const btn = document.getElementById('start-training-btn');
+            btn.disabled = false;
+            btn.textContent = '🚀 Start Training';
 
             // Fire confetti celebration!
             if (typeof confetti !== 'undefined') {
