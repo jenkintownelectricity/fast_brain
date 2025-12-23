@@ -1321,7 +1321,7 @@ def get_all_training_examples(skill_id: str) -> List[Dict]:
     """
     Get ALL training examples for a skill from both tables:
     1. training_data table (manually added examples)
-    2. extracted_data table where is_approved=1 (approved parsed data)
+    2. extracted_data table (all non-archived parsed data)
 
     Returns list of dicts with 'user_message' and 'assistant_response' keys.
     """
@@ -1345,9 +1345,9 @@ def get_all_training_examples(skill_id: str) -> List[Dict]:
                 'source': 'training_data'
             })
 
-        # Get from extracted_data table (approved only)
+        # Get from extracted_data table (all non-archived - removed is_approved filter for training)
         cursor.execute(
-            'SELECT user_input, assistant_response FROM extracted_data WHERE skill_id = ? AND is_approved = 1 AND is_archived = 0',
+            'SELECT user_input, assistant_response FROM extracted_data WHERE skill_id = ? AND is_archived = 0',
             (skill_id,)
         )
         extracted_rows = cursor.fetchall()
@@ -1358,15 +1358,6 @@ def get_all_training_examples(skill_id: str) -> List[Dict]:
                 'assistant_response': row['assistant_response'],
                 'source': 'extracted_data'
             })
-
-        # Debug: Check what skill_ids exist in the tables
-        cursor.execute('SELECT DISTINCT skill_id FROM training_data LIMIT 10')
-        td_skills = [r[0] for r in cursor.fetchall()]
-        print(f"[DB DEBUG] skill_ids in training_data: {td_skills}")
-
-        cursor.execute('SELECT DISTINCT skill_id FROM extracted_data WHERE is_approved = 1 LIMIT 10')
-        ed_skills = [r[0] for r in cursor.fetchall()]
-        print(f"[DB DEBUG] skill_ids in extracted_data (approved): {ed_skills}")
 
     print(f"[DB DEBUG] Total examples returned: {len(examples)}")
     return examples
