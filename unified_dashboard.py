@@ -826,6 +826,78 @@ def list_trained_adapters():
         return jsonify({"error": str(e), "adapters": []}), 500
 
 
+@app.route('/api/training/adapters/sync', methods=['POST'])
+def sync_adapters_from_volume():
+    """
+    Sync adapters from Modal volume to database.
+    This reads the actual training metadata from the volume and updates the database.
+    """
+    try:
+        import modal
+        from datetime import datetime
+
+        # Get adapters from Modal volume
+        SkillTrainer = modal.Cls.from_name("hive215-skill-trainer", "SkillTrainer")
+        trainer = SkillTrainer()
+        volume_adapters = trainer.list_adapters.remote() or []
+
+        synced = []
+        for adapter in volume_adapters:
+            skill_id = adapter.get('skill_id')
+            if not skill_id:
+                continue
+
+            # Delete existing entries for this skill (we'll recreate with fresh data)
+            if USE_DATABASE:
+                try:
+                    with db.get_db() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute('DELETE FROM trained_adapters WHERE skill_id = ?', (skill_id,))
+                except Exception as del_err:
+                    print(f"Warning: Could not delete old adapters for {skill_id}: {del_err}")
+
+                # Create new entry with data from volume
+                try:
+                    adapter_id = f"{skill_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    db.create_adapter(
+                        adapter_id=adapter_id,
+                        skill_id=skill_id,
+                        skill_name=adapter.get('skill_name', skill_id),
+                        adapter_name=adapter.get('skill_name', skill_id),
+                        base_model=adapter.get('base_model', 'unsloth/Qwen2.5-1.5B-Instruct'),
+                        epochs=adapter.get('epochs', 3),
+                        lora_r=adapter.get('lora_r', 16),
+                        final_loss=adapter.get('final_loss'),
+                        training_time_seconds=adapter.get('training_time_seconds'),
+                        adapter_path=f"/adapters/{skill_id}",
+                        status='completed',
+                        metadata={
+                            'training_examples': adapter.get('training_examples'),
+                            'trained_at': adapter.get('trained_at'),
+                            'synced_from_volume': True
+                        }
+                    )
+                    synced.append({
+                        'skill_id': skill_id,
+                        'final_loss': adapter.get('final_loss'),
+                        'training_examples': adapter.get('training_examples')
+                    })
+                except Exception as create_err:
+                    print(f"Warning: Could not create adapter for {skill_id}: {create_err}")
+
+        return jsonify({
+            "success": True,
+            "message": f"Synced {len(synced)} adapters from Modal volume",
+            "synced": synced,
+            "volume_adapters": len(volume_adapters)
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)})
+
+
 # =============================================================================
 # TRAINING & PARSER API ENDPOINTS (Required by unified Skills & Training tab)
 # =============================================================================
