@@ -8322,6 +8322,58 @@ DASHBOARD_HTML = '''
                                 <div id="wf-training-status" style="margin-top: 0.75rem; text-align: center; font-size: 0.85rem; color: var(--text-secondary);"></div>
                             </div>
 
+                            <!-- Enhanced Training Display (hidden until training starts) -->
+                            <div id="wf-enhanced-training" style="display: none; margin-top: 1rem; background: rgba(0,0,0,0.2); border-radius: 12px; padding: 1.5rem;">
+                                <!-- Header -->
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem;">
+                                    <div id="wf-pulse" style="width: 12px; height: 12px; background: #10B981; border-radius: 50%; animation: pulse 1.5s infinite;"></div>
+                                    <span style="font-weight: 600; color: #10B981;">Training in Progress</span>
+                                </div>
+
+                                <!-- Stats Grid -->
+                                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.5rem;">
+                                    <div style="background: rgba(124, 58, 237, 0.15); padding: 0.75rem; border-radius: 8px; text-align: center;">
+                                        <div style="font-size: 0.65rem; color: #A1A1AA; margin-bottom: 0.25rem;">LOSS</div>
+                                        <div id="wf-stat-loss" style="font-size: 1.25rem; font-weight: 700; color: #A78BFA;">--</div>
+                                    </div>
+                                    <div style="background: rgba(0, 217, 255, 0.15); padding: 0.75rem; border-radius: 8px; text-align: center;">
+                                        <div style="font-size: 0.65rem; color: #A1A1AA; margin-bottom: 0.25rem;">STEPS</div>
+                                        <div id="wf-stat-steps" style="font-size: 1.25rem; font-weight: 700; color: #00D9FF;">--</div>
+                                    </div>
+                                    <div style="background: rgba(16, 185, 129, 0.15); padding: 0.75rem; border-radius: 8px; text-align: center;">
+                                        <div style="font-size: 0.65rem; color: #A1A1AA; margin-bottom: 0.25rem;">ETA</div>
+                                        <div id="wf-stat-eta" style="font-size: 1.25rem; font-weight: 700; color: #10B981;">--</div>
+                                    </div>
+                                    <div style="background: rgba(245, 158, 11, 0.15); padding: 0.75rem; border-radius: 8px; text-align: center;">
+                                        <div style="font-size: 0.65rem; color: #A1A1AA; margin-bottom: 0.25rem;">EPOCH</div>
+                                        <div id="wf-stat-epoch" style="font-size: 1.25rem; font-weight: 700; color: #F59E0B;">--</div>
+                                    </div>
+                                </div>
+
+                                <!-- Progress Bar -->
+                                <div style="margin-bottom: 1.5rem;">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                        <span style="font-size: 0.75rem; color: #A1A1AA;">Progress</span>
+                                        <span id="wf-progress-percent" style="font-size: 0.75rem; font-weight: 600; color: #00D9FF;">0%</span>
+                                    </div>
+                                    <div style="background: rgba(255,255,255,0.1); border-radius: 4px; height: 8px; overflow: hidden;">
+                                        <div id="wf-progress-bar" style="height: 100%; background: linear-gradient(90deg, #10B981, #00D9FF); width: 0%; transition: width 0.3s;"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Loss Chart -->
+                                <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                                    <div style="font-size: 0.75rem; color: #A1A1AA; margin-bottom: 0.5rem;">📈 Loss Curve</div>
+                                    <canvas id="wf-loss-chart" height="120"></canvas>
+                                </div>
+
+                                <!-- Educational Fact -->
+                                <div style="background: rgba(124, 58, 237, 0.1); border: 1px solid rgba(124, 58, 237, 0.3); border-radius: 8px; padding: 0.75rem;">
+                                    <div style="font-size: 0.65rem; color: #A78BFA; margin-bottom: 0.25rem;">💡 DID YOU KNOW?</div>
+                                    <div id="wf-training-fact" style="font-size: 0.8rem; color: #E5E5E5;">LoRA trains only 0.1-1% of model parameters, making it 10-100x cheaper than full fine-tuning.</div>
+                                </div>
+                            </div>
+
                             <!-- Existing Adapters -->
                             <div style="margin-top: 1.5rem;">
                                 <div style="font-weight: 500; margin-bottom: 0.5rem; color: var(--text-primary);">Trained Adapters</div>
@@ -11185,6 +11237,9 @@ pipeline = Pipeline([
                 if (data.success) {
                     showToast('Training started!', 'success');
                     trainBtn.innerHTML = '🔄 Training in progress...';
+                    // Show enhanced training display immediately
+                    const enhancedDiv = document.getElementById('wf-enhanced-training');
+                    if (enhancedDiv) enhancedDiv.style.display = 'block';
                     startWorkflowTrainingPoll();
                 } else {
                     showToast('Training failed: ' + (data.error || 'Unknown error'), 'error');
@@ -11198,12 +11253,84 @@ pipeline = Pipeline([
             }
         }
 
+        // Workflow training chart and facts
+        let wfLossChart = null;
+        let wfFactIndex = 0;
+        let wfFactInterval = null;
+        const wfTrainingFacts = [
+            "LoRA trains only 0.1-1% of model parameters, making it 10-100x cheaper than full fine-tuning.",
+            "The A10G GPU has 24GB VRAM and can process about 3.5 training steps per second.",
+            "Loss measures prediction error - starting around 3.0, a good final loss is below 0.3.",
+            "One epoch means the model has seen every training example once.",
+            "Your adapter will be saved and can be used immediately after training completes."
+        ];
+
+        function initWfLossChart() {
+            const canvas = document.getElementById('wf-loss-chart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (wfLossChart) wfLossChart.destroy();
+            wfLossChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [{ label: 'Loss', data: [], borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.4, pointRadius: 2 }] },
+                options: { responsive: true, maintainAspectRatio: false, animation: { duration: 300 }, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#A1A1AA', font: { size: 10 } } } } }
+            });
+        }
+
+        function rotateWfFact() {
+            wfFactIndex = (wfFactIndex + 1) % wfTrainingFacts.length;
+            const factEl = document.getElementById('wf-training-fact');
+            if (factEl) factEl.textContent = wfTrainingFacts[wfFactIndex];
+        }
+
+        function updateWfTrainingUI(data) {
+            // Show enhanced display
+            const enhancedDiv = document.getElementById('wf-enhanced-training');
+            if (enhancedDiv) enhancedDiv.style.display = 'block';
+
+            // Update stats
+            const lossEl = document.getElementById('wf-stat-loss');
+            const stepsEl = document.getElementById('wf-stat-steps');
+            const etaEl = document.getElementById('wf-stat-eta');
+            const epochEl = document.getElementById('wf-stat-epoch');
+            const progressPct = document.getElementById('wf-progress-percent');
+            const progressBar = document.getElementById('wf-progress-bar');
+
+            if (lossEl) lossEl.textContent = data.current_loss ? data.current_loss.toFixed(4) : '--';
+            if (stepsEl) stepsEl.textContent = `${data.current_step || 0}/${data.total_steps || 0}`;
+            if (etaEl) etaEl.textContent = data.eta_seconds ? Math.ceil(data.eta_seconds / 60) + 'm' : '--';
+            if (epochEl) epochEl.textContent = `${data.current_epoch || 1}/${data.total_epochs || 10}`;
+
+            const progress = data.progress || 0;
+            if (progressPct) progressPct.textContent = progress.toFixed(0) + '%';
+            if (progressBar) progressBar.style.width = progress + '%';
+
+            // Update chart
+            if (wfLossChart && data.loss_history && data.loss_history.length > 0) {
+                wfLossChart.data.labels = data.loss_history.map((_, i) => i + 1);
+                wfLossChart.data.datasets[0].data = data.loss_history;
+                wfLossChart.update('none');
+            }
+        }
+
+        function hideWfTrainingUI() {
+            const enhancedDiv = document.getElementById('wf-enhanced-training');
+            if (enhancedDiv) enhancedDiv.style.display = 'none';
+            if (wfFactInterval) { clearInterval(wfFactInterval); wfFactInterval = null; }
+        }
+
         function startWorkflowTrainingPoll() {
             if (workflowTrainingPollInterval) clearInterval(workflowTrainingPollInterval);
+
+            // Initialize chart and start fact rotation
+            initWfLossChart();
+            if (wfFactInterval) clearInterval(wfFactInterval);
+            wfFactInterval = setInterval(rotateWfFact, 6000);
 
             workflowTrainingPollInterval = setInterval(async () => {
                 if (!currentWorkflowSkill) {
                     clearInterval(workflowTrainingPollInterval);
+                    hideWfTrainingUI();
                     return;
                 }
 
@@ -11216,20 +11343,27 @@ pipeline = Pipeline([
 
                     if (data.status === 'completed') {
                         clearInterval(workflowTrainingPollInterval);
+                        hideWfTrainingUI();
                         statusDiv.textContent = 'Training completed! New adapter created.';
                         trainBtn.disabled = false;
                         trainBtn.innerHTML = '🚀 Start Training';
                         showToast('Training completed successfully!', 'success');
+                        // Fire confetti!
+                        if (typeof confetti !== 'undefined') {
+                            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                        }
                         loadWorkflowAdapters();
-                        loadUnifiedSkills();  // Refresh skill data
+                        loadUnifiedSkills();
                     } else if (data.status === 'failed') {
                         clearInterval(workflowTrainingPollInterval);
+                        hideWfTrainingUI();
                         statusDiv.textContent = 'Training failed: ' + (data.error || 'Unknown error');
                         trainBtn.disabled = false;
                         trainBtn.innerHTML = '🚀 Start Training';
                         showToast('Training failed', 'error');
                     } else {
                         statusDiv.textContent = `Training... ${data.progress || 0}% complete`;
+                        updateWfTrainingUI(data);
                     }
                 } catch (err) {
                     console.error('Training poll error:', err);
