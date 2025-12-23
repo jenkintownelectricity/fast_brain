@@ -11208,17 +11208,24 @@ pipeline = Pipeline([
         }
 
         async function startWorkflowTraining() {
+            // Prevent double-click: check button state immediately
+            const trainBtn = document.getElementById('wf-train-btn');
+            if (trainBtn.disabled) {
+                console.log('[Training] Button already disabled, ignoring duplicate click');
+                return;
+            }
+            trainBtn.disabled = true; // Disable immediately to prevent double-click
+
             if (!currentWorkflowSkill) {
                 showToast('No skill selected', 'error');
+                trainBtn.disabled = false;
                 return;
             }
 
             const intensity = document.getElementById('wf-training-intensity').value;
             const epochs = { '1': 3, '2': 10, '3': 20 }[intensity];
             const statusDiv = document.getElementById('wf-training-status');
-            const trainBtn = document.getElementById('wf-train-btn');
 
-            trainBtn.disabled = true;
             trainBtn.innerHTML = '⏳ Starting training...';
             statusDiv.textContent = 'Initializing Modal GPU...';
 
@@ -12637,14 +12644,21 @@ pipeline = Pipeline([
         }
 
         async function startTraining() {
+            // Prevent double-click: check button state immediately
+            const btn = document.getElementById('start-training-btn');
+            if (btn.disabled) {
+                console.log('[Training] Button already disabled, ignoring duplicate click');
+                return;
+            }
+            btn.disabled = true; // Disable immediately to prevent double-click
+
             const skillId = document.getElementById('training-skill-select').value;
             if (!skillId) {
                 alert('Please select a skill to train');
+                btn.disabled = false;
                 return;
             }
 
-            const btn = document.getElementById('start-training-btn');
-            btn.disabled = true;
             btn.textContent = '⏳ Starting...';
 
             // Get configuration
