@@ -1585,6 +1585,7 @@ def initialize_database(seed_data=False):
     print(f"Database initialized at: {DB_PATH}")
 
 
-# Auto-initialize on import if database doesn't exist
-if not Path(DB_PATH).exists():
-    initialize_database()
+# Auto-initialize on import - always run init_db() to ensure all tables exist
+# (uses CREATE TABLE IF NOT EXISTS, so safe to run multiple times)
+init_db()
+print(f"[DATABASE] Schema ensured at: {DB_PATH}")

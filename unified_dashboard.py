@@ -905,8 +905,8 @@ def debug_database():
             with db.get_db() as conn:
                 cursor = conn.cursor()
 
-                # Count rows in each table
-                for table in ['skills', 'training_data', 'extracted_data', 'adapters']:
+                # Count rows in each table (use correct table name: trained_adapters)
+                for table in ['skills', 'training_data', 'extracted_data', 'trained_adapters']:
                     try:
                         cursor.execute(f'SELECT COUNT(*) FROM {table}')
                         result["tables"][table] = cursor.fetchone()[0]
