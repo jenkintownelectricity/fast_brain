@@ -1265,6 +1265,108 @@ def create_adapter(adapter_id: str, skill_id: str, skill_name: str = None, **kwa
         return {"id": adapter_id, "skill_id": skill_id}
 
 
+def delete_adapter(adapter_id: str) -> bool:
+    """Delete a trained adapter by ID."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM trained_adapters WHERE id = ?', (adapter_id,))
+        return cursor.rowcount > 0
+
+
+def delete_adapters_by_skill(skill_id: str, keep_best: bool = True) -> int:
+    """
+    Delete adapters for a skill.
+    If keep_best=True, keeps the one with lowest loss.
+    Returns number of deleted adapters.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        if keep_best:
+            # Find the best adapter (lowest loss)
+            cursor.execute('''
+                SELECT id FROM trained_adapters
+                WHERE skill_id = ? AND final_loss IS NOT NULL
+                ORDER BY final_loss ASC LIMIT 1
+            ''', (skill_id,))
+            best = cursor.fetchone()
+
+            if best:
+                # Delete all except the best
+                cursor.execute('''
+                    DELETE FROM trained_adapters
+                    WHERE skill_id = ? AND id != ?
+                ''', (skill_id, best['id']))
+            else:
+                # No adapter with loss, keep the newest
+                cursor.execute('''
+                    DELETE FROM trained_adapters
+                    WHERE skill_id = ? AND id NOT IN (
+                        SELECT id FROM trained_adapters
+                        WHERE skill_id = ?
+                        ORDER BY created_at DESC LIMIT 1
+                    )
+                ''', (skill_id, skill_id))
+        else:
+            cursor.execute('DELETE FROM trained_adapters WHERE skill_id = ?', (skill_id,))
+
+        return cursor.rowcount
+
+
+def cleanup_duplicate_adapters() -> Dict:
+    """
+    Clean up duplicate adapters across all skills.
+    Keeps only the best (lowest loss) adapter for each skill.
+    Returns summary of cleanup.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Find skills with multiple adapters
+        cursor.execute('''
+            SELECT skill_id, COUNT(*) as count
+            FROM trained_adapters
+            GROUP BY skill_id
+            HAVING count > 1
+        ''')
+        duplicates = cursor.fetchall()
+
+        total_deleted = 0
+        cleaned_skills = []
+
+        for row in duplicates:
+            skill_id = row['skill_id']
+
+            # Find best adapter for this skill
+            cursor.execute('''
+                SELECT id, final_loss FROM trained_adapters
+                WHERE skill_id = ?
+                ORDER BY COALESCE(final_loss, 999) ASC, created_at DESC
+                LIMIT 1
+            ''', (skill_id,))
+            best = cursor.fetchone()
+
+            if best:
+                # Delete all others
+                cursor.execute('''
+                    DELETE FROM trained_adapters
+                    WHERE skill_id = ? AND id != ?
+                ''', (skill_id, best['id']))
+                deleted = cursor.rowcount
+                total_deleted += deleted
+                cleaned_skills.append({
+                    'skill_id': skill_id,
+                    'kept_id': best['id'],
+                    'kept_loss': best['final_loss'],
+                    'deleted': deleted
+                })
+
+        return {
+            'total_deleted': total_deleted,
+            'skills_cleaned': cleaned_skills
+        }
+
+
 # =============================================================================
 # EXTRACTED DATA / PARSER STATS FUNCTIONS
 # =============================================================================

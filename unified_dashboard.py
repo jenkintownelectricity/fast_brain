@@ -860,6 +860,25 @@ def get_skill_adapters(skill_id):
         return jsonify({"adapters": [], "success": False, "error": str(e)})
 
 
+@app.route('/api/training/adapters/cleanup', methods=['POST'])
+def cleanup_adapters():
+    """
+    Clean up duplicate adapters, keeping only the best (lowest loss) for each skill.
+    """
+    try:
+        if USE_DATABASE:
+            result = db.cleanup_duplicate_adapters()
+            return jsonify({
+                "success": True,
+                "message": f"Deleted {result['total_deleted']} duplicate adapters",
+                **result
+            })
+        else:
+            return jsonify({"success": False, "error": "Database not available"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
 @app.route('/api/debug/database')
 def debug_database():
     """Debug endpoint to check database state."""
