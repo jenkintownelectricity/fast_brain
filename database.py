@@ -1474,12 +1474,14 @@ def save_training_job(
     job_id: str,
     modal_call_id: str,
     config: Dict = None,
-    status: str = 'running'
+    status: str = 'running',
+    logs: List[str] = None
 ) -> bool:
     """Save or update a training job."""
     with get_db() as conn:
         cursor = conn.cursor()
         now = datetime.now().isoformat()
+        logs_json = json.dumps(logs if logs else ['Training job started...'])
         cursor.execute('''
             INSERT INTO training_jobs (skill_id, job_id, modal_call_id, status, config, logs, started_at, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1491,7 +1493,7 @@ def save_training_job(
                 logs = excluded.logs,
                 started_at = excluded.started_at,
                 updated_at = excluded.updated_at
-        ''', (skill_id, job_id, modal_call_id, status, json.dumps(config or {}), json.dumps(['Training job started...']), now, now, now))
+        ''', (skill_id, job_id, modal_call_id, status, json.dumps(config or {}), logs_json, now, now, now))
         conn.commit()
         return True
 

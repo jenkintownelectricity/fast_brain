@@ -128,9 +128,25 @@ Training examples are stored here with:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/training/start/<skill_id>` | POST | Start training job |
-| `/api/training-job/<skill_id>` | GET | Get training status |
+| `/api/train-skill/<skill_id>` | POST | Start training job |
+| `/api/training/status/<skill_id>` | GET | **Enhanced** real-time training status with metrics |
+| `/api/training-job/<skill_id>` | GET | Legacy training status |
 | `/api/training-jobs` | GET | List all training jobs |
+
+### Enhanced Training Status API
+
+The `/api/training/status/<skill_id>` endpoint provides comprehensive real-time metrics:
+
+- **Progress tracking**: current_step, total_steps, progress percentage
+- **Loss monitoring**: current_loss, starting_loss, loss_history, loss_improvement_percent
+- **Time estimates**: elapsed_seconds, eta_seconds
+- **Training context**: current_epoch, total_epochs, examples_processed
+- **GPU metrics**: memory usage, utilization (simulated for A10G)
+- **Live preview**: current_example_preview showing what's being learned
+
+**Usage**: Poll every 3 seconds from frontend to power real-time training dashboard.
+
+See `docs/training_experience_spec.md` for full UI implementation spec.
 
 ### Debug Endpoints
 

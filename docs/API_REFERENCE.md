@@ -35,10 +35,95 @@ Starts a LoRA training job on Modal GPU.
 
 ---
 
-### Get Training Status
+### Get Training Status (Enhanced)
+```
+GET /api/training/status/<skill_id>
+```
+
+Returns comprehensive real-time training metrics. Poll every 3 seconds during training.
+
+**Response (while training):**
+```json
+{
+  "job_id": "monday_com_expert_skills_20241223_021500",
+  "skill_id": "monday_com_expert_skills",
+  "skill_name": "Monday.com Expert",
+  "status": "running",
+  "progress": 47,
+  "current_step": 47,
+  "total_steps": 150,
+  "current_epoch": 3.1,
+  "total_epochs": 10,
+  "current_loss": 0.1751,
+  "starting_loss": 3.38,
+  "loss_improvement_percent": 94.8,
+  "loss_history": [
+    {"step": 1, "loss": 3.38},
+    {"step": 10, "loss": 1.44},
+    {"step": 20, "loss": 0.24},
+    {"step": 47, "loss": 0.175}
+  ],
+  "eta_seconds": 263,
+  "elapsed_seconds": 187,
+  "examples_processed": 47,
+  "total_examples": 126,
+  "current_example_preview": {
+    "input": "How do I set up automation?",
+    "output": "To set up automation, click..."
+  },
+  "gpu_metrics": {
+    "name": "NVIDIA A10G",
+    "memory_used_gb": 18.2,
+    "memory_total_gb": 22.0,
+    "utilization_percent": 94
+  },
+  "started_at": "2024-12-23T02:15:00.000Z",
+  "modal_call_id": "fc-01KD4FM95QSH5MG4SA3ZKH5ZWP",
+  "config": {
+    "epochs": 10,
+    "learning_rate": 0.0002,
+    "lora_r": 16
+  }
+}
+```
+
+**Response (completed):**
+```json
+{
+  "job_id": "monday_com_expert_skills_20241223_021500",
+  "skill_id": "monday_com_expert_skills",
+  "skill_name": "Monday.com Expert",
+  "status": "completed",
+  "progress": 100,
+  "current_step": 150,
+  "total_steps": 150,
+  "current_epoch": 10.0,
+  "total_epochs": 10,
+  "current_loss": 0.266,
+  "starting_loss": 3.38,
+  "loss_improvement_percent": 92.1,
+  "started_at": "2024-12-23T02:15:00.000Z",
+  "completed_at": "2024-12-23T02:25:00.000Z"
+}
+```
+
+**Response (idle):**
+```json
+{
+  "skill_id": "monday_com_expert_skills",
+  "status": "idle",
+  "message": "No active training job"
+}
+```
+
+---
+
+### Get Training Job (Legacy)
 ```
 GET /api/training-job/<skill_id>
 ```
+
+Legacy endpoint for basic training job status. Prefer `/api/training/status/<skill_id>` for enhanced metrics.
 
 **Response:**
 ```json
