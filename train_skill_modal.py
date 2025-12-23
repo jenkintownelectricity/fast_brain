@@ -241,6 +241,8 @@ class SkillTrainer:
         skill_id: str,
         config: dict = None,
         callback_url: str = None,
+        training_data: list = None,
+        skill_metadata: dict = None,
     ) -> dict:
         """
         Train a LoRA adapter for a skill.
@@ -249,6 +251,8 @@ class SkillTrainer:
             skill_id: ID of the skill to train
             config: Training config (uses defaults if not provided)
             callback_url: Optional webhook for progress updates
+            training_data: Pre-fetched training examples from dashboard (avoids SQLite sync issue)
+            skill_metadata: Skill info (name, system_prompt) from dashboard
 
         Returns:
             dict with training results and adapter path
@@ -275,16 +279,29 @@ class SkillTrainer:
 
         # Step 1: Load training data
         print("[1/5] Loading training data...")
-        data_result = self._get_training_data(skill_id)
 
-        if "error" in data_result:
-            return {"success": False, "error": data_result["error"]}
+        # CRITICAL FIX: Use passed training_data if provided (from dashboard's Supabase)
+        # This avoids the issue where Modal's local SQLite has no data
+        if training_data and len(training_data) > 0:
+            print(f"  ✓ Using {len(training_data)} examples passed from dashboard")
+            metadata = skill_metadata or {
+                "skill_id": skill_id,
+                "skill_name": skill_id,
+                "system_prompt": training_data[0].get('instruction', '') if training_data else '',
+            }
+        else:
+            # Fallback to local database (legacy behavior)
+            print("  ⚠ No training data passed, falling back to local database...")
+            data_result = self._get_training_data(skill_id)
 
-        training_data = data_result["data"]
-        metadata = data_result["metadata"]
+            if "error" in data_result:
+                return {"success": False, "error": data_result["error"]}
+
+            training_data = data_result["data"]
+            metadata = data_result["metadata"]
 
         print(f"  ✓ Loaded {len(training_data)} examples")
-        print(f"  ✓ Skill: {metadata['skill_name']}")
+        print(f"  ✓ Skill: {metadata.get('skill_name', skill_id)}")
 
         if len(training_data) < 10:
             print(f"  ⚠ Warning: Only {len(training_data)} examples. Consider adding more for better results.")

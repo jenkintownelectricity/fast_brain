@@ -580,10 +580,37 @@ def start_skill_training(skill_id):
             "lora_r": data.get('lora_r', 16),
         }
 
+        # CRITICAL: Fetch training data from dashboard's database (Supabase)
+        # and pass it directly to Modal to avoid the separate SQLite DB issue
+        training_examples = []
+        if USE_DATABASE:
+            raw_examples = db.get_all_training_examples(skill_id)
+            training_examples = [
+                {
+                    "instruction": skill.get('system_prompt', ''),
+                    "input": ex.get('user_message', ''),
+                    "output": ex.get('assistant_response', ''),
+                }
+                for ex in raw_examples
+            ]
+            print(f"[TRAIN] Passing {len(training_examples)} examples to Modal trainer")
+
+        # Prepare skill metadata for Modal
+        skill_metadata = {
+            "skill_id": skill_id,
+            "skill_name": skill.get('name', skill_id),
+            "system_prompt": skill.get('system_prompt', ''),
+        }
+
         # Get reference to deployed Modal class and spawn training
         SkillTrainer = modal.Cls.from_name("hive215-skill-trainer", "SkillTrainer")
         trainer = SkillTrainer()
-        call = trainer.train.spawn(skill_id=skill_id, config=config)
+        call = trainer.train.spawn(
+            skill_id=skill_id,
+            config=config,
+            training_data=training_examples,
+            skill_metadata=skill_metadata
+        )
 
         # Track job with Modal call ID
         job_id = f"{skill_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
