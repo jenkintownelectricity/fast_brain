@@ -3175,6 +3175,7 @@ def save_golden_prompt(skill_id):
 
         prefill_ms = int((tokens / 6000) * 1000)
 
+        commit_volume()  # Persist to Modal volume
         add_activity(f"Updated golden prompt: {skill_id}", "", "prompts")
 
         return jsonify({
@@ -3197,6 +3198,7 @@ def reset_golden_prompt(skill_id):
         if USE_DATABASE:
             deleted = db.delete_golden_prompt(skill_id)
             if deleted:
+                commit_volume()  # Persist to Modal volume
                 add_activity(f"Reset golden prompt: {skill_id}", "", "prompts")
                 return jsonify({"success": True, "message": f"Prompt for '{skill_id}' reset to default"})
             else:
@@ -3331,6 +3333,7 @@ def connect_platform(platform_id):
         PLATFORM_CONNECTIONS[platform_id]['status'] = 'connected'
         # Save to database
         db.save_platform(platform_id, PLATFORM_CONNECTIONS[platform_id]['config'], 'connected')
+        commit_volume()  # Persist to Modal volume
         add_activity(f"Connected to {PLATFORM_CONNECTIONS[platform_id]['name']}", "", "platform")
         return jsonify({
             "success": True,
@@ -3357,6 +3360,7 @@ def disconnect_platform(platform_id):
     PLATFORM_CONNECTIONS[platform_id]['status'] = 'disconnected'
     # Save to database
     db.update_platform_status(platform_id, 'disconnected')
+    commit_volume()  # Persist to Modal volume
     add_activity(f"Disconnected from {PLATFORM_CONNECTIONS[platform_id]['name']}", "", "platform")
 
     return jsonify({
@@ -4070,6 +4074,7 @@ def create_api_connection():
                 webhook_secret=data.get('webhook_secret'),
                 settings=data.get('settings')
             )
+            commit_volume()  # Persist to Modal volume
             add_activity(f"API connection created: {data.get('name')}", "", "integration")
             return jsonify({"success": True, "id": connection_id})
         return jsonify({"error": "Database not available"}), 500
@@ -4084,6 +4089,7 @@ def update_api_connection_endpoint(connection_id):
         data = request.json
         if USE_DATABASE:
             db.update_api_connection(connection_id, **data)
+            commit_volume()  # Persist to Modal volume
             add_activity(f"API connection updated: {connection_id}", "", "integration")
             return jsonify({"success": True})
         return jsonify({"error": "Database not available"}), 500
@@ -4098,6 +4104,7 @@ def delete_api_connection_endpoint(connection_id):
         if USE_DATABASE:
             conn = db.get_api_connection(connection_id)
             db.delete_api_connection(connection_id)
+            commit_volume()  # Persist to Modal volume
             add_activity(f"API connection deleted: {conn.get('name') if conn else connection_id}", "", "integration")
             return jsonify({"success": True})
         return jsonify({"error": "Database not available"}), 500
@@ -4619,6 +4626,7 @@ def create_voice_project_endpoint():
                 }),
                 skill_id=data.get("skill_id")
             )
+            commit_volume()  # Persist to Modal volume
             add_activity(f"Voice project created: {project['name']}", "", "voice")
             return jsonify({"success": True, "project": project})
 
@@ -4651,6 +4659,7 @@ def update_voice_project_endpoint(project_id):
     project = db.update_voice_project(project_id, **data)
 
     if project:
+        commit_volume()  # Persist to Modal volume
         return jsonify({"success": True, "project": project})
     return jsonify({"error": "Project not found"}), 404
 
@@ -4667,6 +4676,7 @@ def delete_voice_project_endpoint(project_id):
                     os.remove(sample['file_path'])
 
             if db.delete_voice_project(project_id):
+                commit_volume()  # Persist to Modal volume
                 add_activity(f"Voice project deleted: {project['name']}", "", "voice")
                 return jsonify({"success": True})
 
@@ -4708,6 +4718,7 @@ def add_voice_sample_endpoint(project_id):
                 emotion=emotion
             )
 
+            commit_volume()  # Persist to Modal volume
             add_activity(f"Voice sample added to {project['name']}", "", "voice")
             return jsonify({"success": True, "sample": sample})
 
@@ -4725,6 +4736,7 @@ def add_voice_sample_endpoint(project_id):
         emotion=data.get('emotion', 'neutral')
     )
 
+    commit_volume()  # Persist to Modal volume
     return jsonify({"success": True, "sample": sample})
 
 
@@ -4741,6 +4753,7 @@ def delete_voice_sample_endpoint(project_id, sample_id):
                 break
 
         if db.delete_voice_sample(sample_id):
+            commit_volume()  # Persist to Modal volume
             return jsonify({"success": True})
 
     return jsonify({"error": "Sample not found"}), 404
