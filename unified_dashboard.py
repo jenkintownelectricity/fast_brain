@@ -585,6 +585,7 @@ def start_skill_training(skill_id):
         training_examples = []
         if USE_DATABASE:
             raw_examples = db.get_all_training_examples(skill_id)
+            print(f"[DEBUG] USE_DATABASE={USE_DATABASE}, raw_examples count: {len(raw_examples)}")
             training_examples = [
                 {
                     "instruction": skill.get('system_prompt', ''),
@@ -594,6 +595,10 @@ def start_skill_training(skill_id):
                 for ex in raw_examples
             ]
             print(f"[TRAIN] Passing {len(training_examples)} examples to Modal trainer")
+            if training_examples:
+                print(f"[DEBUG] First example: {training_examples[0]}")
+        else:
+            print(f"[DEBUG] USE_DATABASE is False - cannot fetch training data!")
 
         # Prepare skill metadata for Modal
         skill_metadata = {

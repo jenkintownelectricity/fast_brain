@@ -279,6 +279,8 @@ class SkillTrainer:
 
         # Step 1: Load training data
         print("[1/5] Loading training data...")
+        print(f"[DEBUG] training_data param: {type(training_data)}, len: {len(training_data) if training_data else 'None'}")
+        print(f"[DEBUG] skill_metadata param: {skill_metadata}")
 
         # CRITICAL FIX: Use passed training_data if provided (from dashboard's Supabase)
         # This avoids the issue where Modal's local SQLite has no data
