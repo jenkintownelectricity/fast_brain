@@ -12553,7 +12553,7 @@ pipeline = Pipeline([
         const trainingFacts = [
             { icon: '🧠', title: 'What is LoRA?', text: 'Low-Rank Adaptation trains only <strong style="color: var(--neon-green);">0.92%</strong> of parameters, making it 10x faster than full fine-tuning!' },
             { icon: '📉', title: 'Understanding Loss', text: 'Loss measures how "wrong" the model is. Starting at <strong style="color: var(--neon-green);">3.38</strong>, target is <strong style="color: var(--neon-green);">< 0.3</strong>!' },
-            { icon: '🔄', title: 'What\'s an Epoch?', text: 'One epoch = seeing all training examples once. You\'re training for <strong style="color: var(--neon-green);">10 epochs</strong> total!' },
+            { icon: '🔄', title: "What is an Epoch?", text: "One epoch = seeing all training examples once. Training runs for <strong style='color: var(--neon-green);'>10 epochs</strong> total!" },
             { icon: '💰', title: 'Cost Breakdown', text: 'This training costs ~<strong style="color: var(--neon-green);">$0.50-$0.80</strong>. Competitors charge <strong style="color: var(--neon-green);">$5-15</strong> for the same task!' },
             { icon: '⚡', title: 'A10G GPU', text: 'The NVIDIA A10G has <strong style="color: var(--neon-green);">22GB VRAM</strong> and processes ~<strong style="color: var(--neon-green);">3.5 steps/second</strong>!' }
         ];
