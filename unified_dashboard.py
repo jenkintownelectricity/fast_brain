@@ -860,6 +860,53 @@ def get_skill_adapters(skill_id):
         return jsonify({"adapters": [], "success": False, "error": str(e)})
 
 
+@app.route('/api/debug/database')
+def debug_database():
+    """Debug endpoint to check database state."""
+    import os
+    from pathlib import Path
+
+    db_path = os.environ.get('HIVE215_DB_PATH', '/data/hive215.db')
+    result = {
+        "db_path": db_path,
+        "db_exists": Path(db_path).exists(),
+        "db_size_bytes": Path(db_path).stat().st_size if Path(db_path).exists() else 0,
+        "data_dir_contents": [],
+        "tables": {},
+    }
+
+    # List /data directory
+    data_dir = Path("/data")
+    if data_dir.exists():
+        result["data_dir_contents"] = [str(f) for f in data_dir.iterdir()]
+
+    # Check table row counts
+    if USE_DATABASE:
+        try:
+            with db.get_db() as conn:
+                cursor = conn.cursor()
+
+                # Count rows in each table
+                for table in ['skills', 'training_data', 'extracted_data', 'adapters']:
+                    try:
+                        cursor.execute(f'SELECT COUNT(*) FROM {table}')
+                        result["tables"][table] = cursor.fetchone()[0]
+                    except Exception as e:
+                        result["tables"][table] = f"ERROR: {e}"
+
+                # Sample skill_ids from each table
+                cursor.execute('SELECT DISTINCT skill_id FROM training_data LIMIT 5')
+                result["training_data_skill_ids"] = [r[0] for r in cursor.fetchall()]
+
+                cursor.execute('SELECT DISTINCT skill_id FROM extracted_data LIMIT 5')
+                result["extracted_data_skill_ids"] = [r[0] for r in cursor.fetchall()]
+
+        except Exception as e:
+            result["db_error"] = str(e)
+
+    return jsonify(result)
+
+
 @app.route('/api/parser/stats')
 def get_parser_stats():
     """
