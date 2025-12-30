@@ -348,34 +348,61 @@ Data persists across Modal container restarts via the `hive215-data` volume.
 ## File Structure
 
 ```
-fast_brain/
-├── deploy_groq.py          # Main Fast Brain API (v3.0 Hybrid)
-├── golden_prompts.py       # Voice-optimized skill manuals
-├── parler_integration.py   # Parler TTS Modal deployment
-├── training_collector.py   # Supabase metrics + LoRA export
-├── skills.py               # Skills definitions
-├── config.py               # Configuration dataclasses
-├── client.py               # Python client library
-└── __init__.py             # Package exports
-
-deploy_dashboard.py         # Dashboard Modal deployment
-unified_dashboard.py        # Full management UI (Flask + HTML/JS)
-database.py                 # SQLite database with CRUD operations
-golden_prompts.py           # Voice-optimized skill prompts
-
-worker/
-├── voice_agent.py          # LiveKit voice agent
-├── requirements.txt        # Worker dependencies
-└── test_fast_brain.py      # Test client
-
-docs/
-├── HIVE215_INTEGRATION_GUIDE.md  # Complete integration guide for voice agents
-└── visuals/                      # Visual HTML documentation
-    ├── index.html                # Documentation library index
-    ├── dashboard-improvement-plan.html
-    ├── 2024-12-18_fast-brain-hive215-architecture.html
-    └── 2024-12-18_unified-dashboard-features.html
+fast_brain/                         # Repository root
+│
+├── fast_brain/                     # Python package
+│   ├── __init__.py                 # Package exports
+│   ├── deploy_groq.py              # Main Fast Brain API (v3.0 Hybrid)
+│   ├── deploy.py                   # Legacy deployment script
+│   ├── skills.py                   # Skills definitions
+│   ├── config.py                   # Configuration dataclasses
+│   ├── client.py                   # Python client library
+│   ├── model.py                    # Model definitions
+│   └── requirements.txt            # Package dependencies
+│
+├── _TRANSFER_TO_HIVE215/           # Voice files for HIVE215 migration
+│   ├── skill_command_center.py     # LatencyMasker, SmartRouter (430 lines)
+│   ├── turn_taking.py              # Silence detection, backchanneling (575 lines)
+│   └── READ_ME_FIRST.txt           # Transfer instructions
+│
+├── deploy_dashboard.py             # Dashboard Modal deployment
+├── unified_dashboard.py            # Full management UI (Flask + HTML/JS)
+├── database.py                     # SQLite database with CRUD operations
+├── golden_prompts.py               # Voice-optimized skill prompts
+├── parler_integration.py           # Parler TTS Modal deployment
+├── train_skill_modal.py            # LoRA training infrastructure
+├── training_collector.py           # Supabase metrics + LoRA export
+├── continuous_learner.py           # Feedback collection + DPO training
+│
+├── worker/                         # LiveKit voice agent
+│   ├── voice_agent.py              # Main agent implementation
+│   ├── requirements.txt            # Worker dependencies
+│   └── test_fast_brain.py          # Test client
+│
+├── docs/                           # Documentation
+│   ├── HIVE215_INTEGRATION_GUIDE.md
+│   ├── FAST_BRAIN_ARCHITECTURE.html
+│   └── visuals/                    # Visual HTML documentation
+│
+├── smart_cleanup/                  # Cleanup tracking
+│   ├── README.md                   # Extracted file inventory
+│   └── inventory.csv               # Detailed feature tracking
+│
+├── CLAUDE.md                       # Claude Code instructions
+├── CLAUDE_LOG.md                   # Development session log
+├── README.md                       # This file
+└── CHANGELOG.md                    # Version history
 ```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `fast_brain/deploy_groq.py` | Main API with System 1/2 hybrid, skill persistence |
+| `unified_dashboard.py` | Full management UI with retry logic |
+| `continuous_learner.py` | Feedback collection with `/data/` volume paths |
+| `database.py` | SQLite operations for skills, API keys, training data |
+| `_TRANSFER_TO_HIVE215/` | Voice features staged for HIVE215 migration |
 
 ---
 
