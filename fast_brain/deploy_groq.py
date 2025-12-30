@@ -530,6 +530,7 @@ image = (
         modal.Secret.from_name("groq-api-key"),
         modal.Secret.from_name("anthropic-api-key"),
     ],
+    volumes={"/data": skills_volume},  # Mount shared volume for database access
     container_idle_timeout=CONTAINER_IDLE_TIMEOUT,
     keep_warm=KEEP_WARM,
     region=MODAL_REGION,
