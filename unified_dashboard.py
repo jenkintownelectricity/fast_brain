@@ -3769,6 +3769,8 @@ def sync_skills_from_lpu():
                             )
                             synced += 1
 
+        if synced > 0:
+            commit_volume()  # Persist to Modal volume
         return jsonify({"success": True, "synced": synced, "message": f"Synced {synced} skills from LPU"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
@@ -3780,6 +3782,7 @@ def seed_default_skills():
     try:
         if USE_DATABASE:
             db.seed_builtin_skills()
+            commit_volume()  # Persist to Modal volume
             return jsonify({"success": True, "message": "Default skills seeded"})
         else:
             return jsonify({"success": False, "error": "Database not enabled"})
