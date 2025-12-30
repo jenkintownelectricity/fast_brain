@@ -435,60 +435,50 @@ def add_activity(message, icon="", category="general"):
 
 @app.route('/api/skills')
 def get_skills():
-    """Get all registered skills with their status."""
+    """Get all registered skills with their status from database."""
     skills = []
-    for profile_path in BUSINESS_PROFILES_DIR.glob("*.json"):
-        try:
-            with open(profile_path) as f:
-                profile = json.load(f)
-            safe_name = profile_path.stem
-            adapter_path = ADAPTERS_DIR / safe_name
-            has_adapter = adapter_path.exists()
-            training_files = list(TRAINING_DATA_DIR.glob(f"{safe_name}*.jsonl"))
-            training_examples = sum(sum(1 for _ in open(tf)) for tf in training_files) if training_files else 0
+    if USE_DATABASE:
+        db_skills = db.get_all_skills()
+        for skill in db_skills:
+            skill_id = skill.get('id')
+            # Count training examples from database (training_data + extracted_data)
+            training_examples = len(db.get_all_training_examples(skill_id)) if skill_id else 0
 
             skills.append({
-                "id": safe_name,
-                "name": profile.get("business_name", safe_name),
-                "type": profile.get("business_type", "Unknown"),
-                "status": "deployed" if has_adapter else "training" if training_examples > 0 else "draft",
-                "personality": profile.get("personality", ""),
-                "description": profile.get("description", ""),
+                "id": skill_id,
+                "name": skill.get("name", skill_id),
+                "type": skill.get("skill_type", "custom"),
+                "status": "training" if training_examples > 0 else "draft",
+                "personality": "",
+                "description": skill.get("description", ""),
                 "training_examples": training_examples,
-                "created_at": profile.get("created_at", ""),
-                "requests_today": 0,
-                "avg_latency_ms": 0,
-                "satisfaction_rate": 0,
+                "created_at": skill.get("created_at", ""),
+                "requests_today": skill.get("total_requests", 0),
+                "avg_latency_ms": skill.get("avg_latency_ms", 0),
+                "satisfaction_rate": skill.get("satisfaction_rate", 0),
             })
-        except Exception as e:
-            print(f"Error loading {profile_path}: {e}")
     return jsonify(skills)
 
 
 @app.route('/api/skills-table')
 def get_skills_table():
-    """Get skills in table format for filtering."""
+    """Get skills in table format for filtering from database."""
     skills = []
-    for profile_path in BUSINESS_PROFILES_DIR.glob("*.json"):
-        try:
-            with open(profile_path) as f:
-                profile = json.load(f)
-            safe_name = profile_path.stem
-            adapter_path = ADAPTERS_DIR / safe_name
-            has_adapter = adapter_path.exists()
-            training_files = list(TRAINING_DATA_DIR.glob(f"{safe_name}*.jsonl"))
-            training_examples = sum(sum(1 for _ in open(tf)) for tf in training_files) if training_files else 0
+    if USE_DATABASE:
+        db_skills = db.get_all_skills()
+        for skill in db_skills:
+            skill_id = skill.get('id')
+            training_examples = len(db.get_all_training_examples(skill_id)) if skill_id else 0
+            created_at = skill.get("created_at", "")
 
             skills.append({
-                "id": safe_name,
-                "business": profile.get("business_name", safe_name),
-                "type": profile.get("business_type", "Unknown"),
-                "status": "Deployed" if has_adapter else "Training" if training_examples > 0 else "Draft",
+                "id": skill_id,
+                "business": skill.get("name", skill_id),
+                "type": skill.get("skill_type", "custom"),
+                "status": "Training" if training_examples > 0 else "Draft",
                 "examples": training_examples,
-                "created": profile.get("created_at", "")[:10] if profile.get("created_at") else "Unknown",
+                "created": created_at[:10] if created_at else "Unknown",
             })
-        except Exception as e:
-            print(f"Error loading {profile_path}: {e}")
     return jsonify(skills)
 
 
@@ -2273,41 +2263,53 @@ Generate exactly {count} examples. Return ONLY the JSON array."""
 
 
 @app.route('/api/create-skill', methods=['POST'])
-def create_skill():
-    """Create a new skill from the quick form."""
+def create_skill_endpoint():
+    """Create a new skill from the quick form - saves to database."""
     data = request.json
     safe_name = data['name'].lower().replace(' ', '_')
     safe_name = re.sub(r'[^\w\-]', '_', safe_name)
-    profile_path = BUSINESS_PROFILES_DIR / f"{safe_name}.json"
 
-    profile = {
-        "business_name": data['name'],
-        "business_type": data.get('type', 'General'),
-        "description": data.get('description', ''),
-        "greeting": data.get('greeting', f"Hello! How can I help you with {data['name']}?"),
-        "personality": data.get('personality', 'Friendly and helpful'),
-        "key_services": data.get('services', '').split('\n') if data.get('services') else [],
-        "faq": [],
-        "custom_instructions": data.get('customInstructions', ''),
-        "created_at": datetime.now().isoformat(),
-    }
+    if USE_DATABASE:
+        # Build system prompt from greeting, personality, and custom instructions
+        greeting = data.get('greeting', f"Hello! How can I help you with {data['name']}?")
+        personality = data.get('personality', 'Friendly and helpful')
+        custom_instructions = data.get('customInstructions', '')
 
-    with open(profile_path, 'w') as f:
-        json.dump(profile, f, indent=2)
+        system_prompt = f"{greeting}\n\nPersonality: {personality}"
+        if custom_instructions:
+            system_prompt += f"\n\nInstructions: {custom_instructions}"
 
-    add_activity(f"New skill created: {data['name']}", "")
-    return jsonify({"success": True, "id": safe_name})
+        # Create skill in database
+        db.create_skill(
+            skill_id=safe_name,
+            name=data['name'],
+            description=data.get('description', ''),
+            skill_type=data.get('type', 'General'),
+            system_prompt=system_prompt,
+            knowledge=data.get('services', '').split('\n') if data.get('services') else [],
+            is_builtin=False
+        )
+        commit_volume()  # Persist to Modal volume
+
+        add_activity(f"New skill created: {data['name']}", "")
+        return jsonify({"success": True, "id": safe_name})
+    else:
+        return jsonify({"success": False, "error": "Database not available"}), 500
 
 
 @app.route('/api/delete-skill/<skill_id>', methods=['DELETE'])
-def delete_skill(skill_id):
-    """Delete a skill."""
-    profile_path = BUSINESS_PROFILES_DIR / f"{skill_id}.json"
-    if profile_path.exists():
-        profile_path.unlink()
-        add_activity(f"Skill deleted: {skill_id}", "")
-        return jsonify({"success": True})
-    return jsonify({"error": "Skill not found"}), 404
+def delete_skill_endpoint(skill_id):
+    """Delete a skill from database."""
+    if USE_DATABASE:
+        existing = db.get_skill(skill_id)
+        if existing:
+            db.delete_skill(skill_id)
+            commit_volume()  # Persist deletion to Modal volume
+            add_activity(f"Skill deleted: {skill_id}", "")
+            return jsonify({"success": True})
+        return jsonify({"error": "Skill not found"}), 404
+    else:
+        return jsonify({"success": False, "error": "Database not available"}), 500
 
 
 @app.route('/api/upload-document', methods=['POST'])
@@ -2335,12 +2337,36 @@ def upload_document():
                 text = f.read()
             examples = process_text_to_training(text, skill_id)
         elif safe_name.endswith('.json') or safe_name.endswith('.jsonl'):
-            # Copy directly to training data
-            training_path = TRAINING_DATA_DIR / f"{skill_id}_imported.jsonl"
-            with open(file_path, 'r') as src:
-                with open(training_path, 'w') as dst:
-                    dst.write(src.read())
-            examples = sum(1 for _ in open(training_path))
+            # Parse JSONL and save to database
+            if USE_DATABASE:
+                with open(file_path, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            item = json.loads(line)
+                            # Support multiple JSONL formats
+                            user_msg = item.get('input') or item.get('user_message') or item.get('question', '')
+                            asst_msg = item.get('output') or item.get('assistant_response') or item.get('answer', '')
+                            # Also support messages array format
+                            if not user_msg and 'messages' in item:
+                                for msg in item['messages']:
+                                    if msg.get('role') == 'user':
+                                        user_msg = msg.get('content', '')
+                                    elif msg.get('role') == 'assistant':
+                                        asst_msg = msg.get('content', '')
+                            if user_msg and asst_msg:
+                                db.add_training_example(
+                                    skill_id=skill_id,
+                                    user_message=user_msg,
+                                    assistant_response=asst_msg,
+                                    metadata={"source": "jsonl_upload", "filename": safe_name}
+                                )
+                                examples += 1
+                        except json.JSONDecodeError:
+                            continue
+                commit_volume()  # Persist to Modal volume
         else:
             examples = 10  # Placeholder for PDF processing
     except Exception as e:
@@ -2351,63 +2377,71 @@ def upload_document():
 
 
 def process_text_to_training(text, skill_id):
-    """Convert text to training data."""
+    """Convert text to training data and save to database."""
     paragraphs = [p.strip() for p in text.split('\n\n') if len(p.strip()) > 50]
-    training_data = []
+    count = 0
 
-    for para in paragraphs[:100]:
-        training_data.append({
-            "instruction": f"You are an expert assistant for {skill_id}.",
-            "input": f"Tell me about: {para[:100]}...",
-            "output": para
-        })
+    if USE_DATABASE:
+        for para in paragraphs[:100]:
+            user_message = f"Tell me about: {para[:100]}..."
+            assistant_response = para
+            db.add_training_example(
+                skill_id=skill_id,
+                user_message=user_message,
+                assistant_response=assistant_response,
+                metadata={"source": "text_upload"}
+            )
+            count += 1
+        commit_volume()  # Persist to Modal volume
 
-    output_path = TRAINING_DATA_DIR / f"{skill_id}_docs.jsonl"
-    with open(output_path, 'w') as f:
-        for item in training_data:
-            f.write(json.dumps(item) + '\n')
-
-    return len(training_data)
+    return count
 
 
 @app.route('/api/generate-training/<skill_id>', methods=['POST'])
 def generate_training(skill_id):
-    """Generate training data from profile."""
-    profile_path = BUSINESS_PROFILES_DIR / f"{skill_id}.json"
-    if not profile_path.exists():
-        return jsonify({"error": "Profile not found"}), 404
+    """Generate training data from skill info in database."""
+    if not USE_DATABASE:
+        return jsonify({"error": "Database not available"}), 500
 
-    with open(profile_path) as f:
-        profile = json.load(f)
+    skill = db.get_skill(skill_id)
+    if not skill:
+        return jsonify({"error": "Skill not found"}), 404
 
-    training_data = []
-    system_prompt = f"You are {profile['business_name']}, a {profile['business_type']} assistant. {profile.get('personality', '')}"
+    skill_name = skill.get('name', skill_id)
+    skill_type = skill.get('skill_type', 'assistant')
+    description = skill.get('description', '')
+    system_prompt = skill.get('system_prompt', f"You are {skill_name}, a helpful {skill_type} assistant.")
+    knowledge = skill.get('knowledge', [])
+
+    count = 0
 
     # Greeting examples
-    for greet in ["Hello", "Hi", "Hey", "Good morning", "I need help"]:
-        training_data.append({
-            "instruction": system_prompt,
-            "input": greet,
-            "output": profile.get('greeting', 'Hello! How can I help you?')
-        })
+    greetings = ["Hello", "Hi", "Hey", "Good morning", "I need help"]
+    greeting_response = f"Hello! I'm {skill_name}. How can I help you today?"
+    for greet in greetings:
+        db.add_training_example(
+            skill_id=skill_id,
+            user_message=greet,
+            assistant_response=greeting_response,
+            metadata={"source": "generated", "type": "greeting"}
+        )
+        count += 1
 
-    # Service examples
-    for service in profile.get('key_services', []):
-        if service.strip():
-            training_data.append({
-                "instruction": system_prompt,
-                "input": f"Tell me about {service}",
-                "output": f"Absolutely! {service} is one of our key services. {profile.get('description', '')}"
-            })
+    # Service/knowledge examples
+    for item in knowledge:
+        if item and item.strip():
+            db.add_training_example(
+                skill_id=skill_id,
+                user_message=f"Tell me about {item}",
+                assistant_response=f"Absolutely! {item} is one of our key offerings. {description}",
+                metadata={"source": "generated", "type": "service"}
+            )
+            count += 1
 
-    # Save
-    output_path = TRAINING_DATA_DIR / f"{skill_id}_profile.jsonl"
-    with open(output_path, 'w') as f:
-        for item in training_data:
-            f.write(json.dumps(item) + '\n')
+    commit_volume()  # Persist to Modal volume
 
-    add_activity(f"Training data generated: {len(training_data)} examples", "")
-    return jsonify({"success": True, "examples": len(training_data)})
+    add_activity(f"Training data generated: {count} examples", "")
+    return jsonify({"success": True, "examples": count})
 
 
 @app.route('/api/save-api-keys', methods=['POST'])
@@ -5308,7 +5342,7 @@ SKILL_TRAINING_JOBS = {}
 
 @app.route('/api/skills/<skill_id>/fine-tune', methods=['POST'])
 def fine_tune_skill(skill_id):
-    """Start fine-tuning a skill with new examples."""
+    """Start fine-tuning a skill with new examples - saves to database."""
     data = request.json
     examples = data.get('examples', [])
 
@@ -5330,11 +5364,19 @@ def fine_tune_skill(skill_id):
         }
     }
 
-    # Save examples to training data
-    training_file = TRAINING_DATA_DIR / f"{skill_id}_finetune.jsonl"
-    with open(training_file, 'a') as f:
+    # Save examples to database
+    if USE_DATABASE:
         for ex in examples:
-            f.write(json.dumps(ex) + '\n')
+            user_msg = ex.get('input') or ex.get('user_message') or ex.get('question', '')
+            asst_msg = ex.get('output') or ex.get('assistant_response') or ex.get('answer', '')
+            if user_msg and asst_msg:
+                db.add_training_example(
+                    skill_id=skill_id,
+                    user_message=user_msg,
+                    assistant_response=asst_msg,
+                    metadata={"source": "fine_tune", "job_id": job_id}
+                )
+        commit_volume()  # Persist to Modal volume
 
     add_activity(f"Fine-tuning started for {skill_id} with {len(examples)} examples", "")
 
@@ -5355,39 +5397,43 @@ def get_fine_tune_status(skill_id):
 
 @app.route('/api/skills/<skill_id>/feedback', methods=['POST'])
 def add_skill_feedback(skill_id):
-    """Add feedback for a skill response."""
+    """Add feedback for a skill response - saves to database."""
     data = request.json
 
-    feedback = {
-        "skill_id": skill_id,
-        "query": data.get("query", ""),
-        "response": data.get("response", ""),
-        "rating": data.get("rating", 0),  # 1-5 or thumbs up/down
-        "corrected_response": data.get("corrected_response"),
-        "timestamp": datetime.now().isoformat(),
-    }
-
-    # Save to feedback file
-    feedback_file = TRAINING_DATA_DIR / f"{skill_id}_feedback.jsonl"
-    with open(feedback_file, 'a') as f:
-        f.write(json.dumps(feedback) + '\n')
+    if USE_DATABASE:
+        # Save as training example with rating and optional correction
+        db.add_training_example(
+            skill_id=skill_id,
+            user_message=data.get("query", ""),
+            assistant_response=data.get("response", ""),
+            rating=data.get("rating", 0),
+            corrected_response=data.get("corrected_response"),
+            metadata={"source": "feedback", "timestamp": datetime.now().isoformat()}
+        )
+        commit_volume()  # Persist to Modal volume
 
     add_activity(f"Feedback added for {skill_id}", "")
 
-    return jsonify({"success": True, "feedback": feedback})
+    return jsonify({"success": True, "message": "Feedback saved to database"})
 
 
 @app.route('/api/skills/<skill_id>/auto-improve', methods=['POST'])
 def auto_improve_skill(skill_id):
-    """Automatically improve skill based on collected feedback."""
-    feedback_file = TRAINING_DATA_DIR / f"{skill_id}_feedback.jsonl"
+    """Automatically improve skill based on collected feedback from database."""
+    if not USE_DATABASE:
+        return jsonify({"success": False, "error": "Database not available"})
 
-    if not feedback_file.exists():
+    # Count feedback from training_data table (entries with rating set)
+    with db.get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT COUNT(*) FROM training_data WHERE skill_id = ? AND rating IS NOT NULL',
+            (skill_id,)
+        )
+        feedback_count = cursor.fetchone()[0]
+
+    if feedback_count == 0:
         return jsonify({"success": False, "error": "No feedback collected yet"})
-
-    # Count feedback
-    with open(feedback_file, 'r') as f:
-        feedback_count = sum(1 for _ in f)
 
     if feedback_count < 10:
         return jsonify({
