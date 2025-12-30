@@ -21,16 +21,16 @@ from datetime import datetime, timedelta
 from typing import Optional
 import hashlib
 
-# Configuration
-FEEDBACK_LOG_PATH = Path("logs/feedback.jsonl")
-CORRECTIONS_LOG_PATH = Path("logs/corrections.jsonl")
-TRAINING_DATA_DIR = Path("training_data")
-ADAPTERS_DIR = Path("adapters")
-IMPROVEMENT_HISTORY = Path("logs/improvement_history.json")
+# Configuration - Use absolute paths for Modal volume persistence
+FEEDBACK_LOG_PATH = Path("/data/logs/feedback.jsonl")
+CORRECTIONS_LOG_PATH = Path("/data/logs/corrections.jsonl")
+TRAINING_DATA_DIR = Path("/data/training_data")
+ADAPTERS_DIR = Path("/data/adapters")
+IMPROVEMENT_HISTORY = Path("/data/logs/improvement_history.json")
 
-# Ensure directories
-for d in [TRAINING_DATA_DIR, ADAPTERS_DIR, Path("logs")]:
-    d.mkdir(exist_ok=True)
+# Ensure directories exist on startup
+for d in [TRAINING_DATA_DIR, ADAPTERS_DIR, Path("/data/logs")]:
+    os.makedirs(d, exist_ok=True)
 
 
 # =============================================================================
@@ -268,7 +268,7 @@ model, tokenizer = FastLanguageModel.from_pretrained(
 # 2. Load existing adapter if specified
 {"" if not base_adapter else f'''
 from peft import PeftModel
-model = PeftModel.from_pretrained(model, "adapters/{base_adapter}")
+model = PeftModel.from_pretrained(model, "/data/adapters/{base_adapter}")
 model = model.merge_and_unload()  # Merge for continued training
 '''}
 
@@ -287,7 +287,7 @@ dataset = load_dataset("json", data_files="{data_path}", split="train")
 
 # 5. DPO Training
 training_args = DPOConfig(
-    output_dir="outputs_{output_name}",
+    output_dir="/data/outputs_{output_name}",
     per_device_train_batch_size=2,
     gradient_accumulation_steps=4,
     learning_rate=5e-5,
@@ -309,13 +309,13 @@ trainer = DPOTrainer(
 trainer.train()
 
 # 6. Save improved adapter
-model.save_pretrained("adapters/{output_name}")
-print("✅ Improved adapter saved: adapters/{output_name}")
+model.save_pretrained("/data/adapters/{output_name}")
+print("✅ Improved adapter saved: /data/adapters/{output_name}")
 
 # 7. Upload to Modal (uncomment to auto-deploy)
 # import subprocess
 # subprocess.run(["modal", "volume", "put", "lpu-skills",
-#                 "adapters/{output_name}", "/root/skills/{output_name}.lora"])
+#                 "/data/adapters/{output_name}", "/root/skills/{output_name}.lora"])
 # print("🚀 Deployed to Modal!")
 '''
 
