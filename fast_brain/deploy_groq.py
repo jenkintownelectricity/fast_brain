@@ -439,30 +439,6 @@ When interested, say: "That's great! The easiest next step is to book a free dem
 RUNTIME_SKILLS = {}
 
 
-def _load_database_skill(skill_id: str) -> Optional[dict]:
-    """Load a skill from the persistent database (if available)."""
-    try:
-        import sys
-        sys.path.insert(0, "/root")
-        os.environ.setdefault('HIVE215_DB_PATH', '/data/hive215.db')
-        import database as db
-        skill = db.get_skill(skill_id)
-        if skill:
-            # Convert to format expected by get_skill()
-            return {
-                "name": skill.get("name", skill_id),
-                "description": skill.get("description", ""),
-                "system_prompt": skill.get("system_prompt", ""),
-                "greeting": skill.get("greeting", "Hello!"),
-                "voice": skill.get("voice_config", {}).get("description", VOICE_CONTEXTS.get("default", "")),
-                "version": skill.get("version", "1.0"),
-                "knowledge": skill.get("knowledge", []),
-            }
-    except Exception:
-        pass
-    return None
-
-
 def _load_all_database_skill_ids() -> list[str]:
     """Get all skill IDs from the persistent database."""
     try:
@@ -490,9 +466,18 @@ def get_skill(skill_id: str) -> dict:
         return RUNTIME_SKILLS[skill_id]
 
     # Check database skills (persistent, from dashboard)
-    db_skill = _load_database_skill(skill_id)
+    db_skill = _get_database_skill(skill_id)
     if db_skill:
-        return db_skill
+        # Convert to format expected by callers
+        return {
+            "name": db_skill.get("name", skill_id),
+            "description": db_skill.get("description", ""),
+            "system_prompt": db_skill.get("system_prompt", ""),
+            "greeting": db_skill.get("greeting", "Hello!"),
+            "voice": db_skill.get("voice_config", {}).get("description", VOICE_CONTEXTS.get("default", "")),
+            "version": db_skill.get("version", "1.0"),
+            "knowledge": db_skill.get("knowledge", []),
+        }
 
     # Check built-in skills
     if skill_id in BUILT_IN_SKILLS:
