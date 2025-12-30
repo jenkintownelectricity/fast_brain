@@ -3836,29 +3836,47 @@ def create_fast_brain_skill():
             }
             FAST_BRAIN_SKILLS[skill_id] = skill
 
-        # Try to sync to deployed LPU
+        # Try to sync to deployed LPU with retry logic
         url = FAST_BRAIN_CONFIG.get('url')
+        lpu_sync_success = False
         if url:
-            try:
-                import httpx
-                with httpx.Client(timeout=10.0) as client:
-                    response = client.post(
-                        f"{url}/v1/skills",
-                        json={
-                            "skill_id": skill_id,
-                            "name": skill.get("name"),
-                            "description": skill.get("description"),
-                            "system_prompt": skill.get("system_prompt"),
-                            "knowledge": skill.get("knowledge", []),
-                        }
-                    )
-                    if response.status_code == 200:
-                        add_activity(f"Skill '{skill.get('name')}' synced to LPU", "🔄", "skills")
-            except Exception as e:
-                add_activity(f"Skill created (sync failed: {str(e)[:50]})", "⚠️", "skills")
+            import httpx
+            import time as sync_time
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    with httpx.Client(timeout=10.0) as client:
+                        response = client.post(
+                            f"{url}/v1/skills",
+                            json={
+                                "skill_id": skill_id,
+                                "name": skill.get("name"),
+                                "description": skill.get("description"),
+                                "system_prompt": skill.get("system_prompt"),
+                                "knowledge": skill.get("knowledge", []),
+                            }
+                        )
+                        if response.status_code == 200:
+                            add_activity(f"Skill '{skill.get('name')}' synced to LPU", "🔄", "skills")
+                            lpu_sync_success = True
+                            break
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        sync_time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s
+                        continue
+                    add_activity(f"Skill created (sync failed after {max_retries} attempts)", "⚠️", "skills")
 
         commit_volume()  # Persist to Modal volume
         add_activity(f"Created skill: {skill.get('name')}", "✨", "skills")
+
+        # Return 202 Accepted if saved locally but LPU sync failed
+        if not lpu_sync_success and url:
+            return jsonify({
+                "success": True,
+                "skill": skill,
+                "warning": "Saved locally. LPU sync will occur on next request."
+            }), 202
+
         return jsonify({"success": True, "skill": skill})
 
     except Exception as e:

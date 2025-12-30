@@ -1100,6 +1100,8 @@ def _get_database_skill(skill_id: str) -> Optional[dict]:
     Returns None if database is not available or skill not found.
     """
     try:
+        # Reload volume to get fresh data from other containers
+        skills_volume.reload()
         import sys
         sys.path.insert(0, "/root")
         os.environ.setdefault('HIVE215_DB_PATH', '/data/hive215.db')
@@ -1171,6 +1173,7 @@ async def create_skill(request: SkillRequest):
     Create a new skill dynamically.
 
     This allows HIVE215 to register custom skills at runtime.
+    Persists to both database and Modal volume for durability.
     """
     # Build knowledge section if provided
     knowledge_text = ""
@@ -1190,6 +1193,26 @@ async def create_skill(request: SkillRequest):
 
     # Store in runtime skills
     RUNTIME_SKILLS[request.skill_id] = skill
+
+    # Persist to database for durability across container restarts
+    try:
+        import sys
+        sys.path.insert(0, "/root")
+        os.environ.setdefault('HIVE215_DB_PATH', '/data/hive215.db')
+        import database as db
+        db.create_skill(
+            skill_id=request.skill_id,
+            name=request.name,
+            description=request.description,
+            skill_type="custom",
+            system_prompt=request.system_prompt + knowledge_text,
+            knowledge=request.knowledge,
+            is_builtin=False
+        )
+        # Commit volume to persist database changes
+        skills_volume.commit()
+    except Exception as e:
+        print(f"Warning: Could not persist skill to database: {e}")
 
     return SkillResponse(
         success=True,
