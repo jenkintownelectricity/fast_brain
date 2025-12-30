@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fast Brain Architecture - Source of Truth</title>
+    <style>
+        :root {
+            --bg-dark: #0a0a0f;
+            --bg-card: #12121a;
+            --border: #2a2a3a;
+            --text: #e0e0e0;
+            --text-dim: #888;
+            --accent: #00d4ff;
+            --green: #00ff88;
+            --orange: #ff9500;
+            --red: #ff4444;
+            --purple: #a855f7;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 20px;
+        }
+        h1, h2, h3 { color: var(--accent); margin-bottom: 15px; }
+        h1 { font-size: 2rem; border-bottom: 2px solid var(--accent); padding-bottom: 10px; }
+        h2 { font-size: 1.5rem; margin-top: 40px; }
+        h3 { font-size: 1.2rem; color: var(--green); }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin: 20px 0; }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        .badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-deployed { background: var(--green); color: #000; }
+        .badge-modal { background: var(--purple); color: #fff; }
+        .badge-local { background: var(--orange); color: #000; }
+        .badge-package { background: var(--accent); color: #000; }
+        code {
+            background: #1a1a2e;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            color: var(--green);
+        }
+        .file-ref {
+            color: var(--accent);
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        .flow-diagram {
+            background: #0d0d15;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            font-family: monospace;
+            white-space: pre;
+            overflow-x: auto;
+            line-height: 1.4;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border: 1px solid var(--border);
+        }
+        th { background: #1a1a2e; color: var(--accent); }
+        tr:hover { background: #1a1a25; }
+        .endpoint { color: var(--green); }
+        .method { color: var(--orange); font-weight: bold; }
+        .section { margin: 40px 0; }
+        .warning {
+            background: rgba(255, 149, 0, 0.1);
+            border-left: 4px solid var(--orange);
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .success {
+            background: rgba(0, 255, 136, 0.1);
+            border-left: 4px solid var(--green);
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .toc {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .toc ul { list-style: none; columns: 2; }
+        .toc li { margin: 5px 0; }
+        .toc a { color: var(--accent); text-decoration: none; }
+        .toc a:hover { text-decoration: underline; }
+        .arrow { color: var(--accent); }
+        .dim { color: var(--text-dim); }
+        hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧠 Fast Brain Architecture - Source of Truth</h1>
+        <p class="dim">Last updated: 2025-12-30 | Repository: fast_brain</p>
+
+        <div class="toc">
+            <h3>Table of Contents</h3>
+            <ul>
+                <li><a href="#overview">1. System Overview</a></li>
+                <li><a href="#modal-apps">2. Modal Apps (Deployed)</a></li>
+                <li><a href="#data-flow">3. Data Flow Diagrams</a></li>
+                <li><a href="#api-endpoints">4. API Endpoints</a></li>
+                <li><a href="#database">5. Database Schema</a></li>
+                <li><a href="#file-inventory">6. Complete File Inventory</a></li>
+                <li><a href="#packages">7. Python Package Structure</a></li>
+                <li><a href="#volumes">8. Modal Volumes</a></li>
+                <li><a href="#secrets">9. Required Secrets</a></li>
+                <li><a href="#deployment">10. Deployment Commands</a></li>
+            </ul>
+        </div>
+
+        <!-- SECTION 1: OVERVIEW -->
+        <section id="overview" class="section">
+            <h2>1. System Overview</h2>
+            <div class="flow-diagram">
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              FAST BRAIN ECOSYSTEM                                    │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                      │
+│   ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐           │
+│   │   HIVE215 UI     │     │  Fast Brain LPU  │     │  Skill Trainer   │           │
+│   │   (Dashboard)    │────▶│  (Inference)     │     │  (GPU Training)  │           │
+│   │                  │     │                  │     │                  │           │
+│   │  Modal App:      │     │  Modal App:      │     │  Modal App:      │           │
+│   │  hive215-        │     │  fast-brain-lpu  │     │  hive215-skill-  │           │
+│   │  dashboard       │     │                  │     │  trainer         │           │
+│   └────────┬─────────┘     └────────┬─────────┘     └────────┬─────────┘           │
+│            │                        │                        │                      │
+│            │                        │                        │                      │
+│            ▼                        ▼                        ▼                      │
+│   ┌─────────────────────────────────────────────────────────────────────┐          │
+│   │                    SHARED VOLUME: hive215-data                       │          │
+│   │                    Mount path: /data/hive215.db                      │          │
+│   └─────────────────────────────────────────────────────────────────────┘          │
+│                                                                                      │
+│   ┌──────────────────┐     ┌──────────────────┐                                    │
+│   │   Parler TTS     │     │   Voice Agent    │                                    │
+│   │   (Text-to-      │     │   (LiveKit       │                                    │
+│   │    Speech)       │     │    Worker)       │                                    │
+│   │                  │     │                  │                                    │
+│   │  Modal App:      │     │  Local/Railway:  │                                    │
+│   │  hive215-parler  │     │  worker/         │                                    │
+│   │  -tts            │     │  voice_agent.py  │                                    │
+│   └──────────────────┘     └──────────────────┘                                    │
+│                                                                                      │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+            </div>
+        </section>
+
+        <!-- SECTION 2: MODAL APPS -->
+        <section id="modal-apps" class="section">
+            <h2>2. Modal Apps (Deployed)</h2>
+            <div class="grid">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>hive215-dashboard</h3>
+                        <span class="badge badge-deployed">DEPLOYED</span>
+                    </div>
+                    <p><strong>Purpose:</strong> Main web dashboard for skill management, training, and monitoring</p>
+                    <p><strong>URL:</strong> <code>https://jenkintownelectricity--hive215-dashboard-flask-app.modal.run</code></p>
+                    <p class="file-ref">📁 deploy_dashboard.py:23</p>
+                    <p class="file-ref">📁 unified_dashboard.py (16,723 lines)</p>
+                    <br>
+                    <p><strong>Key Features:</strong></p>
+                    <ul>
+                        <li>Skill CRUD operations</li>
+                        <li>Training data management</li>
+                        <li>Voice lab / TTS testing</li>
+                        <li>API key management</li>
+                        <li>Training job dispatch</li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3>fast-brain-lpu</h3>
+                        <span class="badge badge-deployed">DEPLOYED</span>
+                    </div>
+                    <p><strong>Purpose:</strong> Hybrid inference engine (System 1 + System 2)</p>
+                    <p><strong>URL:</strong> <code>https://jenkintownelectricity--fast-brain-lpu-fastapi-app.modal.run</code></p>
+                    <p class="file-ref">📁 fast_brain/deploy_groq.py:518</p>
+                    <br>
+                    <p><strong>Architecture:</strong></p>
+                    <ul>
+                        <li><strong>System 1 (Fast):</strong> Groq + Llama 3.3 70B (~80ms)</li>
+                        <li><strong>System 2 (Deep):</strong> Claude 3.5 Sonnet (~2s)</li>
+                        <li>Automatic routing based on query complexity</li>
+                        <li>Filler phrase strategy for latency masking</li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3>hive215-skill-trainer</h3>
+                        <span class="badge badge-deployed">DEPLOYED</span>
+                    </div>
+                    <p><strong>Purpose:</strong> GPU-based LoRA fine-tuning</p>
+                    <p><strong>GPU:</strong> A10G (24GB VRAM)</p>
+                    <p class="file-ref">📁 train_skill_modal.py:39</p>
+                    <br>
+                    <p><strong>Training Pipeline:</strong></p>
+                    <ul>
+                        <li>Base model: Qwen2.5-1.5B-Instruct</li>
+                        <li>Method: LoRA (r=16, alpha=16)</li>
+                        <li>Output: /adapters/{skill_id}/</li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3>hive215-parler-tts</h3>
+                        <span class="badge badge-deployed">DEPLOYED</span>
+                    </div>
+                    <p><strong>Purpose:</strong> Text-to-speech synthesis</p>
+                    <p class="file-ref">📁 parler_integration.py:191</p>
+                    <br>
+                    <p><strong>Features:</strong></p>
+                    <ul>
+                        <li>Parler TTS model</li>
+                        <li>Voice cloning support</li>
+                        <li>Streaming audio output</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="warning">
+                <strong>⚠️ Not Deployed:</strong>
+                <ul>
+                    <li><code>bitnet-lpu-v1</code> - BitNet build currently broken (modal_lpu.py)</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- SECTION 3: DATA FLOW -->
+        <section id="data-flow" class="section">
+            <h2>3. Data Flow Diagrams</h2>
+
+            <h3>3.1 Skill Creation & Training Flow</h3>
+            <div class="flow-diagram">
+User creates skill in Dashboard UI
+         │
+         ▼
+┌─────────────────────────────────────┐
+│  unified_dashboard.py               │
+│  POST /api/skills                   │
+│  └─▶ database.py:create_skill()    │
+└─────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────┐
+│  SQLite Database                    │
+│  /data/hive215.db                   │
+│  Table: skills                      │
+└─────────────────────────────────────┘
+         │
+         ▼
+User adds training data (manual/bulk/AI)
+         │
+         ▼
+┌─────────────────────────────────────┐
+│  unified_dashboard.py               │
+│  POST /api/parser/data              │
+│  └─▶ database.py:add_training_data()│
+└─────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────┐
+│  SQLite Database                    │
+│  Table: extracted_data              │
+└─────────────────────────────────────┘
+         │
+         ▼
+User clicks "Start Training"
+         │
+         ▼
+┌─────────────────────────────────────┐
+│  unified_dashboard.py               │
+│  POST /api/training/start           │
+│  └─▶ trainer.train.spawn()          │
+└─────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────┐
+│  train_skill_modal.py               │
+│  SkillTrainer.train()               │
+│  - Loads training data              │
+│  - Fine-tunes with LoRA             │
+│  - Saves adapter to volume          │
+└─────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────┐
+│  Modal Volume: hive215-adapters     │
+│  /adapters/{skill_id}/              │
+│  ├── adapter_model.safetensors      │
+│  └── training_metadata.json         │
+└─────────────────────────────────────┘
+            </div>
+
+            <h3>3.2 Voice Call Flow (HIVE215 → Fast Brain)</h3>
+            <div class="flow-diagram">
+Incoming Voice Call (LiveKit)
+         │
+         ▼
+┌─────────────────────────────────────┐
+│  worker/voice_agent.py              │
+│  VoiceAgent receives audio          │
+│  └─▶ STT (Whisper/Deepgram)        │
+└─────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────┐
+│  worker/voice_agent.py:447          │
+│  FastBrainClient(                   │
+│      base_url=FAST_BRAIN_URL,       │
+│      skill=skill_from_metadata      │
+│  )                                  │
+└─────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────┐
+│  fast_brain/deploy_groq.py          │
+│  POST /v1/chat/hybrid               │
+│  ├─▶ get_skill(skill_id)            │
+│  │   └─▶ _get_database_skill()      │  ◀── FIXED 2025-12-30
+│  │       └─▶ database.py            │
+│  ├─▶ Apply system_prompt            │
+│  └─▶ Call Groq (System 1)           │
+│      └─▶ If complex: Claude         │
+└─────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────┐
+│  Response returned                  │
+│  {                                  │
+│    "content": "...",                │
+│    "filler": "Let me check...",     │
+│    "system_used": "fast",           │
+│    "skill": "plumbing_receptionist" │
+│  }                                  │
+└─────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────┐
+│  worker/voice_agent.py              │
+│  └─▶ TTS (Cartesia/ElevenLabs)     │
+│  └─▶ Play audio to caller          │
+└─────────────────────────────────────┘
+            </div>
+
+            <h3>3.3 Skill Loading Priority</h3>
+            <div class="flow-diagram">
+get_skill(skill_id) called
+         │
+         ▼
+┌─────────────────────────────────────┐
+│  1. Check RUNTIME_SKILLS            │  ◀── API-created, temporary
+│     (fast_brain/deploy_groq.py:489) │
+└─────────────────────────────────────┘
+         │ Not found
+         ▼
+┌─────────────────────────────────────┐
+│  2. Check Database                  │  ◀── Dashboard-created, persistent
+│     _get_database_skill(skill_id)   │
+│     (fast_brain/deploy_groq.py:493) │
+└─────────────────────────────────────┘
+         │ Not found
+         ▼
+┌─────────────────────────────────────┐
+│  3. Check BUILT_IN_SKILLS           │  ◀── Hardcoded defaults
+│     (fast_brain/deploy_groq.py:507) │
+└─────────────────────────────────────┘
+         │ Not found
+         ▼
+┌─────────────────────────────────────┐
+│  4. Fallback to "default" skill     │
+│     (fast_brain/deploy_groq.py:510) │
+└─────────────────────────────────────┘
+            </div>
+        </section>
+
+        <!-- SECTION 4: API ENDPOINTS -->
+        <section id="api-endpoints" class="section">
+            <h2>4. API Endpoints</h2>
+
+            <h3>4.1 Fast Brain LPU (fast_brain/deploy_groq.py)</h3>
+            <table>
+                <tr>
+                    <th>Method</th>
+                    <th>Endpoint</th>
+                    <th>Purpose</th>
+                    <th>Line</th>
+                </tr>
+                <tr>
+                    <td class="method">GET</td>
+                    <td class="endpoint">/health</td>
+                    <td>Health check with skills list</td>
+                    <td>1028</td>
+                </tr>
+                <tr>
+                    <td class="method">GET</td>
+                    <td class="endpoint">/v1/skills</td>
+                    <td>List all skills</td>
+                    <td>1127</td>
+                </tr>
+                <tr>
+                    <td class="method">POST</td>
+                    <td class="endpoint">/v1/skills</td>
+                    <td>Create runtime skill</td>
+                    <td>1182</td>
+                </tr>
+                <tr>
+                    <td class="method">GET</td>
+                    <td class="endpoint">/v1/skills/{skill_id}</td>
+                    <td>Get skill details</td>
+                    <td>1215</td>
+                </tr>
+                <tr>
+                    <td class="method">POST</td>
+                    <td class="endpoint">/v1/chat/completions</td>
+                    <td>Standard chat (System 1 only)</td>
+                    <td>1296</td>
+                </tr>
+                <tr>
+                    <td class="method">POST</td>
+                    <td class="endpoint">/v1/chat/hybrid</td>
+                    <td>Hybrid chat (System 1 + 2)</td>
+                    <td>1365</td>
+                </tr>
+                <tr>
+                    <td class="method">POST</td>
+                    <td class="endpoint">/v1/chat/voice</td>
+                    <td>Hybrid + voice descriptions</td>
+                    <td>1400</td>
+                </tr>
+                <tr>
+                    <td class="method">GET</td>
+                    <td class="endpoint">/v1/greeting/{skill_id}</td>
+                    <td>Get skill greeting</td>
+                    <td>1254</td>
+                </tr>
+            </table>
+
+            <h3>4.2 Dashboard (unified_dashboard.py)</h3>
+            <table>
+                <tr>
+                    <th>Method</th>
+                    <th>Endpoint</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td class="method">GET</td>
+                    <td class="endpoint">/api/skills</td>
+                    <td>List all skills</td>
+                </tr>
+                <tr>
+                    <td class="method">POST</td>
+                    <td class="endpoint">/api/skills</td>
+                    <td>Create skill</td>
+                </tr>
+                <tr>
+                    <td class="method">GET</td>
+                    <td class="endpoint">/api/fast-brain/health</td>
+                    <td>Check Fast Brain connection</td>
+                </tr>
+                <tr>
+                    <td class="method">POST</td>
+                    <td class="endpoint">/api/training/start</td>
+                    <td>Start training job</td>
+                </tr>
+                <tr>
+                    <td class="method">GET</td>
+                    <td class="endpoint">/api/training/status/{skill_id}</td>
+                    <td>Get training status</td>
+                </tr>
+                <tr>
+                    <td class="method">GET</td>
+                    <td class="endpoint">/api/trained-adapters</td>
+                    <td>List trained adapters</td>
+                </tr>
+                <tr>
+                    <td class="method">POST</td>
+                    <td class="endpoint">/api/parser/data</td>
+                    <td>Add training data</td>
+                </tr>
+                <tr>
+                    <td class="method">GET</td>
+                    <td class="endpoint">/api/parser/stats</td>
+                    <td>Training data statistics</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- SECTION 5: DATABASE -->
+        <section id="database" class="section">
+            <h2>5. Database Schema</h2>
+            <p class="file-ref">📁 database.py (57,418 bytes)</p>
+            <p><strong>Location:</strong> <code>/data/hive215.db</code> (Modal volume)</p>
+
+            <h3>Key Tables</h3>
+            <table>
+                <tr>
+                    <th>Table</th>
+                    <th>Purpose</th>
+                    <th>Key Columns</th>
+                </tr>
+                <tr>
+                    <td><code>skills</code></td>
+                    <td>Skill definitions</td>
+                    <td>id, name, system_prompt, greeting, voice_config</td>
+                </tr>
+                <tr>
+                    <td><code>extracted_data</code></td>
+                    <td>Training data</td>
+                    <td>id, skill_id, prompt, response, status</td>
+                </tr>
+                <tr>
+                    <td><code>trained_adapters</code></td>
+                    <td>LoRA adapter records</td>
+                    <td>id, skill_id, adapter_path, final_loss, status</td>
+                </tr>
+                <tr>
+                    <td><code>api_keys</code></td>
+                    <td>Provider API keys</td>
+                    <td>provider, api_key, encrypted</td>
+                </tr>
+                <tr>
+                    <td><code>agents</code></td>
+                    <td>HIVE215 agent configs</td>
+                    <td>id, name, skill_id, voice_provider, llm_provider</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- SECTION 6: FILE INVENTORY -->
+        <section id="file-inventory" class="section">
+            <h2>6. Complete File Inventory</h2>
+
+            <h3>🚀 Deployed Files (Production)</h3>
+            <table>
+                <tr>
+                    <th>File</th>
+                    <th>Lines</th>
+                    <th>Purpose</th>
+                    <th>Modal App</th>
+                </tr>
+                <tr>
+                    <td><code>unified_dashboard.py</code></td>
+                    <td>16,723</td>
+                    <td>Main Flask dashboard application</td>
+                    <td>hive215-dashboard</td>
+                </tr>
+                <tr>
+                    <td><code>deploy_dashboard.py</code></td>
+                    <td>~100</td>
+                    <td>Modal deployment wrapper for dashboard</td>
+                    <td>hive215-dashboard</td>
+                </tr>
+                <tr>
+                    <td><code>database.py</code></td>
+                    <td>~1,500</td>
+                    <td>SQLite database operations</td>
+                    <td>(shared)</td>
+                </tr>
+                <tr>
+                    <td><code>train_skill_modal.py</code></td>
+                    <td>~600</td>
+                    <td>GPU training infrastructure</td>
+                    <td>hive215-skill-trainer</td>
+                </tr>
+                <tr>
+                    <td><code>parler_integration.py</code></td>
+                    <td>~500</td>
+                    <td>Text-to-speech integration</td>
+                    <td>hive215-parler-tts</td>
+                </tr>
+                <tr>
+                    <td><code>fast_brain/deploy_groq.py</code></td>
+                    <td>~1,500</td>
+                    <td>Hybrid inference engine</td>
+                    <td>fast-brain-lpu</td>
+                </tr>
+            </table>
+
+            <h3>📦 Package Files (fast_brain/)</h3>
+            <table>
+                <tr>
+                    <th>File</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td><code>fast_brain/__init__.py</code></td>
+                    <td>Package initialization, version info</td>
+                </tr>
+                <tr>
+                    <td><code>fast_brain/client.py</code></td>
+                    <td>FastBrainClient for HTTP/WebSocket calls</td>
+                </tr>
+                <tr>
+                    <td><code>fast_brain/config.py</code></td>
+                    <td>Configuration dataclasses</td>
+                </tr>
+                <tr>
+                    <td><code>fast_brain/model.py</code></td>
+                    <td>Model loading utilities</td>
+                </tr>
+                <tr>
+                    <td><code>fast_brain/skills.py</code></td>
+                    <td>Skill definitions</td>
+                </tr>
+                <tr>
+                    <td><code>fast_brain/deploy.py</code></td>
+                    <td>Generic deployment script</td>
+                </tr>
+                <tr>
+                    <td><code>fast_brain/deploy_bitnet.py</code></td>
+                    <td>BitNet deployment (unused)</td>
+                </tr>
+                <tr>
+                    <td><code>fast_brain/deploy_simple.py</code></td>
+                    <td>Simplified deployment</td>
+                </tr>
+            </table>
+
+            <h3>👷 Worker Files (worker/)</h3>
+            <table>
+                <tr>
+                    <th>File</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td><code>worker/voice_agent.py</code></td>
+                    <td>LiveKit voice agent (connects to Fast Brain)</td>
+                </tr>
+                <tr>
+                    <td><code>worker/test_fast_brain.py</code></td>
+                    <td>Test script for Fast Brain connection</td>
+                </tr>
+                <tr>
+                    <td><code>worker/.env.example</code></td>
+                    <td>Environment variables template</td>
+                </tr>
+            </table>
+
+            <h3>⏸️ Undeployed / Waiting</h3>
+            <table>
+                <tr>
+                    <th>File</th>
+                    <th>Lines</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                </tr>
+                <tr>
+                    <td><code>training_the_expert.py</code></td>
+                    <td>71</td>
+                    <td>⏸️ Pending implementation</td>
+                    <td>Colab-style training script, needs Modal integration</td>
+                </tr>
+                <tr>
+                    <td><code>training_collector.py</code></td>
+                    <td>~600</td>
+                    <td>⏸️ Review needed</td>
+                    <td>Training data collection utilities</td>
+                </tr>
+                <tr>
+                    <td><code>continuous_learner.py</code></td>
+                    <td>~350</td>
+                    <td>⏸️ Review needed</td>
+                    <td>Continuous learning system</td>
+                </tr>
+                <tr>
+                    <td><code>turn_taking.py</code></td>
+                    <td>~500</td>
+                    <td>⏸️ Review needed</td>
+                    <td>Voice turn-taking logic</td>
+                </tr>
+                <tr>
+                    <td><code>golden_prompts.py</code></td>
+                    <td>~450</td>
+                    <td>⏸️ Review needed</td>
+                    <td>Golden prompt generation</td>
+                </tr>
+                <tr>
+                    <td><code>modal_lpu.py</code></td>
+                    <td>~120</td>
+                    <td>❌ Broken</td>
+                    <td>BitNet build broken, skip deployment</td>
+                </tr>
+            </table>
+
+            <h3>📄 Documentation</h3>
+            <table>
+                <tr>
+                    <th>File</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td><code>README.md</code></td>
+                    <td>Project overview</td>
+                </tr>
+                <tr>
+                    <td><code>CLAUDE.md</code></td>
+                    <td>Claude Code instructions (SESSION RULES)</td>
+                </tr>
+                <tr>
+                    <td><code>CLAUDE_LOG.md</code></td>
+                    <td>Development log</td>
+                </tr>
+                <tr>
+                    <td><code>CHANGELOG.md</code></td>
+                    <td>Version history</td>
+                </tr>
+                <tr>
+                    <td><code>TODO.md</code></td>
+                    <td>Task list</td>
+                </tr>
+                <tr>
+                    <td><code>FASTBRAIN_MODAL_DEPLOY.md</code></td>
+                    <td>Modal deployment guide</td>
+                </tr>
+                <tr>
+                    <td><code>HIVE215_INTEGRATION.md</code></td>
+                    <td>HIVE215 integration guide</td>
+                </tr>
+                <tr>
+                    <td><code>FAST_BRAIN_HANDOFF.md</code></td>
+                    <td>Handoff documentation</td>
+                </tr>
+                <tr>
+                    <td><code>docs/ARCHITECTURE.md</code></td>
+                    <td>System architecture</td>
+                </tr>
+                <tr>
+                    <td><code>docs/HIVE215_INTEGRATION_GUIDE.md</code></td>
+                    <td>Detailed integration guide</td>
+                </tr>
+            </table>
+
+            <h3>🗑️ Extracted (Now in D:\FastBrain_HIVE215_Transfer)</h3>
+            <table>
+                <tr>
+                    <th>File</th>
+                    <th>Key Features</th>
+                    <th>Target</th>
+                </tr>
+                <tr>
+                    <td><code>skill_command_center.py</code></td>
+                    <td>LatencyMasker, SmartRouter, QueryAnalysis</td>
+                    <td>HIVE215</td>
+                </tr>
+                <tr>
+                    <td><code>skill_factory.py</code></td>
+                    <td>FAQ parser, document processing</td>
+                    <td>HIVE215</td>
+                </tr>
+                <tr>
+                    <td><code>skill_dashboard.py</code></td>
+                    <td>P50/P99 metrics, feedback queue</td>
+                    <td>HIVE215</td>
+                </tr>
+                <tr>
+                    <td><code>dashboard.py</code></td>
+                    <td>LLM clients, compare providers</td>
+                    <td>HIVE215</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- SECTION 7: PACKAGES -->
+        <section id="packages" class="section">
+            <h2>7. Python Package Structure</h2>
+            <div class="flow-diagram">
+fast_brain/                     # Root repository
+├── fast_brain/                 # Python package (importable)
+│   ├── __init__.py            # Package init, exports FastBrainClient
+│   ├── client.py              # FastBrainClient, FastBrainWebSocket
+│   ├── config.py              # Configuration dataclasses
+│   ├── model.py               # Model loading
+│   ├── skills.py              # Skill definitions
+│   ├── deploy.py              # Generic Modal deployment
+│   ├── deploy_groq.py         # Production deployment (Groq + Claude)
+│   ├── deploy_bitnet.py       # BitNet deployment (unused)
+│   └── deploy_simple.py       # Simplified deployment
+│
+├── worker/                     # Voice agent worker
+│   ├── __init__.py
+│   ├── voice_agent.py         # LiveKit voice agent
+│   ├── test_fast_brain.py     # Connection tests
+│   └── .env.example           # Environment template
+│
+├── app/                        # (Legacy Flask app structure)
+├── docs/                       # Documentation
+├── screenshots/                # UI screenshots
+└── smart_cleanup/              # Tracking folder for undeployed files
+            </div>
+
+            <h3>Usage Example</h3>
+            <div class="flow-diagram">
+from fast_brain.client import FastBrainClient
+
+client = FastBrainClient(
+    url="https://jenkintownelectricity--fast-brain-lpu-fastapi-app.modal.run",
+    skill_adapter="plumbing_receptionist_expert"
+)
+
+# Streaming chat (recommended for voice)
+async for chunk in client.stream_chat("What are your hours?"):
+    print(chunk.text, end="")
+
+# Health check
+health = await client.health_check()
+print(health["skills_available"])
+            </div>
+        </section>
+
+        <!-- SECTION 8: VOLUMES -->
+        <section id="volumes" class="section">
+            <h2>8. Modal Volumes</h2>
+            <table>
+                <tr>
+                    <th>Volume Name</th>
+                    <th>Mount Path</th>
+                    <th>Contents</th>
+                    <th>Used By</th>
+                </tr>
+                <tr>
+                    <td><code>hive215-data</code></td>
+                    <td>/data</td>
+                    <td>SQLite database (hive215.db)</td>
+                    <td>Dashboard, Fast Brain LPU</td>
+                </tr>
+                <tr>
+                    <td><code>hive215-adapters</code></td>
+                    <td>/adapters</td>
+                    <td>Trained LoRA adapters</td>
+                    <td>Skill Trainer</td>
+                </tr>
+            </table>
+
+            <div class="success">
+                <strong>✅ 2025-12-30 Fix:</strong> Added <code>volumes={"/data": skills_volume}</code> to FastBrain class to enable database access for skill loading.
+            </div>
+        </section>
+
+        <!-- SECTION 9: SECRETS -->
+        <section id="secrets" class="section">
+            <h2>9. Required Modal Secrets</h2>
+            <p><strong>Workspace:</strong> jenkintownelectricity</p>
+            <table>
+                <tr>
+                    <th>Secret Name</th>
+                    <th>Key</th>
+                    <th>Used By</th>
+                </tr>
+                <tr>
+                    <td><code>groq-api-key</code></td>
+                    <td>GROQ_API_KEY</td>
+                    <td>fast-brain-lpu (System 1)</td>
+                </tr>
+                <tr>
+                    <td><code>anthropic-api-key</code></td>
+                    <td>ANTHROPIC_API_KEY</td>
+                    <td>fast-brain-lpu (System 2)</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- SECTION 10: DEPLOYMENT -->
+        <section id="deployment" class="section">
+            <h2>10. Deployment Commands</h2>
+
+            <h3>Deploy All Apps</h3>
+            <div class="flow-diagram">
+# Switch to correct Modal profile
+py -3.11 -m modal profile activate jenkintownelectricity
+
+# Deploy Dashboard
+py -3.11 -m modal deploy deploy_dashboard.py
+
+# Deploy Fast Brain LPU
+py -3.11 -m modal deploy fast_brain/deploy_groq.py
+
+# Deploy Skill Trainer
+py -3.11 -m modal deploy train_skill_modal.py
+
+# Deploy Parler TTS
+py -3.11 -m modal deploy parler_integration.py
+            </div>
+
+            <h3>Verify Deployment</h3>
+            <div class="flow-diagram">
+# List all apps
+py -3.11 -m modal app list
+
+# Check Fast Brain health
+Invoke-RestMethod -Uri "https://jenkintownelectricity--fast-brain-lpu-fastapi-app.modal.run/health"
+
+# Check Dashboard → Fast Brain connection
+Invoke-RestMethod -Uri "https://jenkintownelectricity--hive215-dashboard-flask-app.modal.run/api/fast-brain/health"
+
+# List skills
+Invoke-RestMethod -Uri "https://jenkintownelectricity--fast-brain-lpu-fastapi-app.modal.run/v1/skills"
+
+# Test chat with skill
+$body = '{"messages":[{"role":"user","content":"Hello"}],"skill":"plumbing_receptionist_expert"}'
+Invoke-RestMethod -Uri "https://jenkintownelectricity--fast-brain-lpu-fastapi-app.modal.run/v1/chat/hybrid" -Method POST -Body $body -ContentType "application/json"
+            </div>
+
+            <h3>View Logs</h3>
+            <div class="flow-diagram">
+py -3.11 -m modal app logs fast-brain-lpu
+py -3.11 -m modal app logs hive215-dashboard
+py -3.11 -m modal app logs hive215-skill-trainer
+            </div>
+        </section>
+
+        <hr>
+        <p class="dim" style="text-align: center;">
+            Fast Brain Architecture Documentation | Generated 2025-12-30<br>
+            Repository: jenkintownelectricity/fast_brain
+        </p>
+    </div>
+</body>
+</html>

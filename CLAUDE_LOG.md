@@ -1,5 +1,151 @@
 # Claude Development Log
 
+## 2025-12-30: Critical Bug Fix - Skills Not Applied in Chat
+
+### Session: `claude/cleanup-codebase-MI92F`
+
+#### Problem
+When calling the Fast Brain `/v1/chat/hybrid` endpoint with a skill like `plumbing_receptionist_expert`, the AI responded as the base Llama model ("I work for Meta") instead of using the trained skill's system prompt.
+
+The skill was correctly stored in the database and returned correctly from `/v1/skills/plumbing_receptionist_expert`, but the chat endpoint ignored it.
+
+#### Root Cause Analysis
+
+**Two separate database loader functions existed:**
+
+| Function | Location | Used By | Error Handling |
+|----------|----------|---------|----------------|
+| `_get_database_skill()` | Line 1110 | `/v1/skills/{id}` endpoint | ✅ Logs errors |
+| `_load_database_skill()` | Line 442 | `get_skill()` for chat | ❌ Silent `except: pass` |
+
+**Flow of the Bug:**
+```
+User calls /v1/chat/hybrid with skill="plumbing_receptionist_expert"
+    ↓
+hybrid_chat_completion() calls brain.think_hybrid.remote()
+    ↓
+think_hybrid() calls get_skill("plumbing_receptionist_expert")
+    ↓
+get_skill() calls _load_database_skill()
+    ↓
+_load_database_skill() FAILS SILENTLY (no volume mounted on FastBrain class!)
+    ↓
+Falls back to BUILT_IN_SKILLS["default"]
+    ↓
+AI responds as generic assistant, not plumbing receptionist
+```
+
+**Missing Volume Mount:**
+```python
+# FastBrain class was missing the volume:
+@app.cls(
+    image=image,
+    secrets=[...],
+    # ❌ NO volumes={"/data": skills_volume} HERE!
+)
+class FastBrain:
+    ...
+```
+
+The web_app function HAD the volume mounted (line 1412), but the FastBrain class did NOT.
+
+#### Solution
+
+**Fix 1:** Replace `_load_database_skill()` with `_get_database_skill()` in `get_skill()`:
+```python
+# Before (broken):
+db_skill = _load_database_skill(skill_id)
+if db_skill:
+    return db_skill
+
+# After (fixed):
+db_skill = _get_database_skill(skill_id)
+if db_skill:
+    return {
+        "name": db_skill.get("name", skill_id),
+        "system_prompt": db_skill.get("system_prompt", ""),
+        ...
+    }
+```
+
+**Fix 2:** Add volume mount to FastBrain class:
+```python
+@app.cls(
+    image=image,
+    secrets=[...],
+    volumes={"/data": skills_volume},  # ← ADDED THIS
+    ...
+)
+class FastBrain:
+```
+
+**Fix 3:** Remove unused `_load_database_skill()` function entirely.
+
+#### Files Modified
+- `fast_brain/deploy_groq.py` - Fixed skill loading, added volume mount
+
+#### Verification
+```powershell
+# Before fix:
+$body = '{"messages":[{"role":"user","content":"What company do you work for?"}],"skill":"plumbing_receptionist_expert"}'
+Invoke-RestMethod ...
+# Response: "I work for Meta" ❌
+
+# After fix:
+# Response: Proper plumbing receptionist greeting ✓
+```
+
+#### Commits
+1. `fix: Use correct database skill loader in chat endpoint`
+2. `fix: Mount database volume in FastBrain class for skill loading`
+
+---
+
+## 2025-12-30: Codebase Cleanup & Feature Extraction
+
+### Session: `claude/cleanup-codebase-MI92F`
+
+#### Overview
+Full codebase audit to identify dead code, extract valuable undeployed features for HIVE215 re-implementation, and establish tracking system.
+
+#### Files Extracted to D:\FastBrain_HIVE215_Transfer
+
+| File | Lines | Key Features |
+|------|-------|--------------|
+| `skill_factory.py` | 636 | Gradio skill creation UI, FAQ parser, document processing |
+| `skill_dashboard.py` | 1,394 | Flask dashboard, P50/P99 metrics, feedback queue |
+| `skill_command_center.py` | 431 | LatencyMasker, SmartRouter, cached responses |
+| `dashboard.py` | 611 | LLM clients, compare providers, LiveKit examples |
+
+#### Features Awaiting HIVE215 Re-implementation
+
+**HIGH PRIORITY:**
+- **LatencyMasker** - Generates filler sounds ("Hmm...", "Let me think...") while waiting for LLM
+- **SmartRouter** - Routes simple queries to Groq, complex to Claude
+- **Cached Responses** - Zero-latency pattern-matched replies
+
+**MEDIUM PRIORITY:**
+- Skill-specific fillers (technical, customer_service, scheduling, sales)
+- P50/P99 latency tracking
+- Feedback queue for continuous learning
+
+#### Tracking System Created
+
+```
+smart_cleanup/
+├── README.md      # File list with summaries
+└── inventory.csv  # Detailed tracking (features, dependencies, etc.)
+```
+
+#### Files Deleted
+- `skill_factory.py` (extracted)
+- `skill_dashboard.py` (extracted)
+- `skill_command_center.py` (extracted)
+- `dashboard.py` (extracted)
+- `extract_voice_features.ps1` (executed, no longer needed)
+
+---
+
 ## 2025-12-22: 3-Step Workflow UI Restructure
 
 ### Session: `claude/fix-skill-creation-error-5QeBQ`
