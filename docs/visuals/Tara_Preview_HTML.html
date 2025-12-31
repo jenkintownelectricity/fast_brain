@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tara's Assistant | Executive Sales Nexus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #fdfdfd; font-family: 'Outfit', sans-serif; color: #1e293b; overflow-x: hidden; }
+        .dashboard-card { background: white; border: 1px solid #f1f5f9; border-radius: 28px; transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .dashboard-card:hover { transform: translateY(-8px); box-shadow: 0 40px 80px -20px rgba(0,0,0,0.08); }
+        .sales-accent { border-top: 6px solid #6366f1; }
+        .live-terminal { background: #020617; border-radius: 24px; color: #94a3b8; font-family: 'JetBrains Mono', monospace; box-shadow: 0 20px 40px rgba(0,0,0,0.2); }
+        
+        /* Animated Voice Waves */
+        .voice-wave { display: flex; align-items: center; gap: 4px; height: 30px; }
+        .wave-bar { width: 3px; background: #6366f1; border-radius: 10px; animation: wave-pulse 1.4s ease-in-out infinite; }
+        @keyframes wave-pulse { 0%, 100% { height: 8px; } 50% { height: 28px; } }
+
+        .status-on { color: #10b981; animation: pulse-glow 2s infinite; }
+        @keyframes pulse-glow { 0% { opacity: 1; text-shadow: 0 0 10px #10b981; } 50% { opacity: 0.4; text-shadow: none; } 100% { opacity: 1; text-shadow: 0 0 10px #10b981; } }
+        
+        .gradient-bg { background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); }
+    </style>
+</head>
+<body class="p-8 lg:p-20">
+
+    <header class="max-w-[1600px] mx-auto flex flex-col md:flex-row justify-between items-center mb-20 gap-8">
+        <div class="flex items-center gap-6">
+            <div class="w-16 h-16 gradient-bg rounded-2xl flex items-center justify-center text-white font-black text-3xl shadow-2xl shadow-indigo-200">T</div>
+            <div>
+                <h1 class="text-5xl font-extrabold tracking-tight text-slate-900 leading-none">Tara's Assistant</h1>
+                <p class="text-indigo-500 font-bold text-sm uppercase tracking-[0.4em] mt-3">Voice Intelligence Command</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-10">
+            <div class="text-right">
+                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">STT/TTS Latency</p>
+                <p class="text-3xl font-bold text-slate-800">118<span class="text-indigo-400 text-sm ml-1">ms</span></p>
+            </div>
+            <div class="h-12 w-[1px] bg-slate-100"></div>
+            <div class="bg-slate-900 rounded-3xl px-8 py-4 text-white flex flex-col justify-center">
+                <div class="flex items-center gap-2">
+                    <span class="status-on text-xl leading-none">●</span>
+                    <span class="text-[10px] font-bold tracking-[0.2em] uppercase">LPU ACTIVE</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12">
+        
+        <div class="lg:col-span-4 space-y-10">
+            
+            <div class="dashboard-card p-10 sales-accent">
+                <div class="flex justify-between items-center mb-10">
+                    <h3 class="font-bold text-slate-400 uppercase tracking-widest text-xs">Engine Profile</h3>
+                    <div class="voice-wave">
+                        <div class="wave-bar" style="animation-delay: 0.1s"></div>
+                        <div class="wave-bar" style="animation-delay: 0.3s"></div>
+                        <div class="wave-bar" style="animation-delay: 0.2s"></div>
+                        <div class="wave-bar" style="animation-delay: 0.4s"></div>
+                    </div>
+                </div>
+                
+                <div class="mb-10">
+                    <p class="text-2xl font-bold text-slate-800 mb-4 italic leading-snug">"It's nice to meet you. I'm Tara's Assistant. How can I assist you today?"</p>
+                    <div class="flex gap-4">
+                        <button class="flex-grow py-5 bg-indigo-600 text-white rounded-2xl font-bold text-xs uppercase tracking-[0.2em] shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all">
+                            Stream Response
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-6 pt-10 border-t border-slate-50">
+                    <div class="text-center">
+                        <p class="text-[10px] font-bold text-slate-300 uppercase mb-2">Stability</p>
+                        <p class="font-bold text-slate-800">99.2%</p>
+                    </div>
+                    <div class="text-center border-x border-slate-100">
+                        <p class="text-[10px] font-bold text-slate-300 uppercase mb-2">Clarity</p>
+                        <p class="font-bold text-slate-800 text-indigo-500">ULTRA</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-[10px] font-bold text-slate-300 uppercase mb-2">Provider</p>
+                        <p class="font-bold text-slate-800">Cartesia</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-6">
+                <div class="dashboard-card p-10 flex justify-between items-center">
+                    <div>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Conversion Lift</p>
+                        <p class="text-6xl font-black text-indigo-600 tracking-tighter">+42%</p>
+                    </div>
+                    <div class="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center">
+                        <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                    </div>
+                </div>
+                <div class="dashboard-card p-10 flex justify-between items-center">
+                    <div>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Automated Hours</p>
+                        <p class="text-6xl font-black text-slate-800 tracking-tighter">840<span class="text-2xl text-slate-300">h</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="lg:col-span-8">
+            <div class="live-terminal h-full flex flex-col overflow-hidden">
+                <div class="px-8 py-5 border-b border-white/5 flex justify-between items-center">
+                    <div class="flex gap-2">
+                        <div class="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50"></div>
+                        <div class="w-3 h-3 rounded-full bg-amber-500/20 border border-amber-500/50"></div>
+                        <div class="w-3 h-3 rounded-full bg-emerald-500/20 border border-emerald-500/50"></div>
+                    </div>
+                    <span class="text-[10px] font-bold uppercase tracking-[0.3em] text-indigo-400/60">Live Intelligence Stream</span>
+                </div>
+
+                <div class="p-12 flex-grow space-y-10 text-sm leading-relaxed overflow-y-auto max-h-[600px]">
+                    <div class="space-y-1">
+                        <p class="text-indigo-400 opacity-50 text-xs tracking-tighter font-bold uppercase">[System] Cartesia Sonic Sync... OK</p>
+                        <p class="text-indigo-400 opacity-50 text-xs tracking-tighter font-bold uppercase">[System] Fast-Brain Hybrid-LPU... CONNECTED</p>
+                    </div>
+
+                    <div class="space-y-6">
+                        <div class="flex gap-6 items-start">
+                            <span class="text-slate-600 font-bold uppercase text-[10px] mt-1 tracking-widest">Prospect:</span>
+                            <span class="text-white text-lg font-light opacity-90 italic">"I'm actually quite busy today, can we make this quick?"</span>
+                        </div>
+                        
+                        <div class="flex gap-6 items-start">
+                            <span class="text-indigo-500 font-bold uppercase text-[10px] mt-1 tracking-widest">Tara_AI:</span>
+                            <div class="space-y-4">
+                                <span class="text-indigo-100 text-lg font-medium leading-snug block">"I completely respect your time. Let's get straight to the value—I’ve prioritized the three key points that will impact your conversion targets immediately."</span>
+                                <div class="bg-indigo-500/10 border border-indigo-500/20 px-6 py-4 rounded-2xl inline-block">
+                                    <p class="text-indigo-300 text-[10px] font-bold uppercase tracking-widest mb-1">Neural Intent Capture</p>
+                                    <p class="text-white text-xs font-bold">Priority: High | Intent: Efficient_Discovery | Confidence: 0.994</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex gap-3 items-center pt-8">
+                        <div class="w-2 h-2 rounded-full bg-indigo-500 animate-bounce"></div>
+                        <div class="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style="animation-delay: 0.2s"></div>
+                        <div class="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style="animation-delay: 0.4s"></div>
+                    </div>
+                </div>
+
+                <div class="p-10 border-t border-white/5 bg-white/5 mt-auto flex gap-6">
+                    <button class="bg-white text-slate-900 px-12 py-5 rounded-2xl font-bold uppercase tracking-widest text-xs hover:bg-indigo-50 transition-all active:scale-95">
+                        Sync Data to CRM
+                    </button>
+                    <button class="border border-white/10 text-white/40 px-12 py-5 rounded-2xl font-bold uppercase tracking-widest text-xs hover:text-white hover:border-white transition-all">
+                        View Schema
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="max-w-[1600px] mx-auto mt-20 text-center">
+        <p class="text-[10px] text-slate-300 font-bold uppercase tracking-[0.8em]">Jenkintown Electricity Intelligence Cluster // HIVE215 Nexus</p>
+    </footer>
+
+</body>
+</html>
