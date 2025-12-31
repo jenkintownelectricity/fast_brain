@@ -1,5 +1,120 @@
 # Claude Development Log
 
+## 2025-12-30: Golden State Cleanup & Architectural Fixes
+
+### Session: `claude/cleanup-obsolete-files-zBim6`
+
+#### Overview
+Comprehensive cleanup to reach "Golden State" before HIVE215 migration. Removed dead code, fixed persistence issues, and organized transfer files.
+
+#### Architectural Fixes Applied
+
+**1. Database Persistence (`fast_brain/deploy_groq.py`)**
+
+| Fix | Location | Description |
+|-----|----------|-------------|
+| `skills_volume.reload()` | Line 1104 | Refresh volume data from other containers |
+| `db.create_skill(...)` | Line 1200-1208 | Persist skills to SQLite database |
+| `skills_volume.commit()` | Line 1210 | Commit changes to Modal volume |
+
+```python
+# In _get_database_skill():
+skills_volume.reload()  # ← Added as first line
+
+# In create_skill():
+db.create_skill(skill_id=..., name=..., ...)
+skills_volume.commit()  # ← Persist to volume
+```
+
+**2. Logging Paths (`continuous_learner.py`)**
+
+Changed all paths to absolute `/data/` paths for Modal volume persistence:
+
+| Before | After |
+|--------|-------|
+| `Path("logs/feedback.jsonl")` | `Path("/data/logs/feedback.jsonl")` |
+| `Path("logs/corrections.jsonl")` | `Path("/data/logs/corrections.jsonl")` |
+| `Path("training_data")` | `Path("/data/training_data")` |
+| `Path("adapters")` | `Path("/data/adapters")` |
+
+Added startup check: `os.makedirs("/data/logs", exist_ok=True)`
+
+**3. Dashboard Sync (`unified_dashboard.py`)**
+
+Added retry logic with exponential backoff for LPU sync:
+
+```python
+max_retries = 3
+for attempt in range(max_retries):
+    try:
+        response = client.post(f"{url}/v1/skills", ...)
+        if response.status_code == 200:
+            lpu_sync_success = True
+            break
+    except Exception:
+        time.sleep(2 ** attempt)  # Exponential backoff
+
+# Return 202 if saved locally but sync failed
+if not lpu_sync_success:
+    return jsonify({...}), 202
+```
+
+#### Files Deleted (Dead Code)
+
+| File | Reason |
+|------|--------|
+| `modal_lpu.py` | Obsolete BitNet deployment |
+| `training_the_expert.py` | Superseded by `train_skill_modal.py` |
+| `fast_brain/deploy_bitnet.py` | BitNet build broken |
+| `fast_brain/deploy_simple.py` | Superseded by `deploy_groq.py` |
+
+#### Files Organized
+
+Voice feature files moved from root to `_TRANSFER_TO_HIVE215/`:
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `skill_command_center.py` | 430 | LatencyMasker, SmartRouter |
+| `turn_taking.py` | 575 | Silence detection, backchanneling |
+| `READ_ME_FIRST.txt` | - | Transfer instructions |
+
+#### Final Structure (Golden State)
+
+```
+fast_brain/                    # Clean repo root
+├── fast_brain/                # Package directory
+│   ├── deploy_groq.py         # Main Fast Brain API (with persistence fixes)
+│   ├── skills.py
+│   ├── config.py
+│   └── ...
+├── _TRANSFER_TO_HIVE215/      # Voice files for HIVE215
+│   ├── skill_command_center.py
+│   ├── turn_taking.py
+│   └── READ_ME_FIRST.txt
+├── unified_dashboard.py       # Dashboard (with retry logic)
+├── continuous_learner.py      # Learning system (with /data/ paths)
+├── database.py
+└── ...
+```
+
+#### Branches Merged & Deleted
+
+| Branch | Status |
+|--------|--------|
+| `claude/multiple-tasks-zBim6` | ✅ Merged to main, deleted |
+| `claude/cleanup-codebase-MI92F` | ✅ Merged to main, deleted |
+| `claude/fix-database-sync-issue-D8GO5` | ✅ Deleted |
+| `claude/cleanup-obsolete-files-zBim6` | ✅ Merged to main, deleted |
+
+#### Commits
+
+1. `feat: Implement pending architectural updates for volume and sync reliability`
+2. `chore: Remove obsolete files and stage HIVE215 transfer`
+3. `feat: Restore skill_command_center.py (LatencyMasker, SmartRouter)`
+4. `chore: Move voice files to _TRANSFER_TO_HIVE215 only (declutter root)`
+
+---
+
 ## 2025-12-30: Critical Bug Fix - Skills Not Applied in Chat
 
 ### Session: `claude/cleanup-codebase-MI92F`
