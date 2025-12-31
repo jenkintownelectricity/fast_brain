@@ -6,3 +6,5 @@ outputs/
 adapters/
 *.egg-info/
 *.db
+
+venv/
