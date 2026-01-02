@@ -66,29 +66,39 @@ class CADProcessor:
     def _parse_once(self, file_path: str = None, file_obj = None) -> Tuple:
         """Parse file ONCE - critical for efficiency."""
         if file_obj:
-            import io
+            import tempfile
+            import os
+
             # Handle Flask FileStorage or similar objects
             filename = getattr(file_obj, 'filename', getattr(file_obj, 'name', 'uploaded.dxf'))
             if hasattr(filename, 'split'):
                 filename = Path(filename).name if '/' in filename or '\\' in filename else filename
 
-            # Read content as bytes and wrap in BytesIO for ezdxf
-            if hasattr(file_obj, 'read'):
+            # Get content from file object
+            if hasattr(file_obj, 'stream'):
+                # Flask FileStorage
+                file_obj.stream.seek(0)
+                content = file_obj.stream.read()
+            elif hasattr(file_obj, 'read'):
                 if hasattr(file_obj, 'seek'):
                     file_obj.seek(0)
                 content = file_obj.read()
-                # Ensure we have bytes
-                if isinstance(content, str):
-                    content = content.encode('utf-8')
-                binary_stream = io.BytesIO(content)
-            elif hasattr(file_obj, 'stream'):
-                # Flask FileStorage
-                file_obj.stream.seek(0)
-                binary_stream = io.BytesIO(file_obj.stream.read())
             else:
                 raise ValueError("Unable to read file object")
 
-            doc = ezdxf.read(binary_stream)
+            # Ensure bytes
+            if isinstance(content, str):
+                content = content.encode('utf-8')
+
+            # Write to temp file - ezdxf.readfile works most reliably
+            with tempfile.NamedTemporaryFile(mode='wb', suffix='.dxf', delete=False) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+
+            try:
+                doc = ezdxf.readfile(tmp_path)
+            finally:
+                os.unlink(tmp_path)  # Clean up temp file
         elif file_path:
             doc = ezdxf.readfile(file_path)
             filename = Path(file_path).name
