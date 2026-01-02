@@ -16,6 +16,12 @@ data_volume = modal.Volume.from_name("hive215-data", create_if_missing=True)
 adapters_volume = modal.Volume.from_name("hive215-adapters", create_if_missing=True)
 shop_drawings_volume = modal.Volume.from_name("hive215-shop-drawings", create_if_missing=True)
 
+# Mount for local files
+local_mount = modal.Mount.from_local_file(
+    "shop_drawing_generator.py",
+    remote_path="/root/shop_drawing_generator.py"
+)
+
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
@@ -29,7 +35,6 @@ image = (
         # Utilities
         "werkzeug>=2.0.0",
     )
-    .add_local_file("shop_drawing_generator.py", "/root/shop_drawing_generator.py")
 )
 
 
@@ -40,6 +45,7 @@ image = (
         "/adapters": adapters_volume,
         "/shop_drawings": shop_drawings_volume,
     },
+    mounts=[local_mount],
     scaledown_window=300,
     min_containers=0,
 )
