@@ -892,9 +892,12 @@ def list_trained_adapters():
     List all trained LoRA adapters from Modal volume.
 
     Uses Modal Python API to call SkillTrainer.list_adapters.
+    Always fetches fresh data.
     """
     try:
         import modal
+
+        reload_volume()  # Always get fresh data
 
         # Get reference to deployed Modal class
         SkillTrainer = modal.Cls.from_name("hive215-skill-trainer", "SkillTrainer")
@@ -983,6 +986,42 @@ def get_skill_adapters(skill_id):
 
     except Exception as e:
         return jsonify({"adapters": [], "success": False, "error": str(e)})
+
+
+@app.route('/api/training/adapters/<skill_id>/download')
+def download_adapter(skill_id):
+    """Download adapter files as a zip archive."""
+    import io
+    import zipfile
+    from pathlib import Path
+
+    try:
+        reload_volume()  # Get fresh data from Modal volume
+
+        adapter_path = Path(f"/adapters/{skill_id}")
+        if not adapter_path.exists():
+            return jsonify({"success": False, "error": f"Adapter not found for skill: {skill_id}"}), 404
+
+        # Create zip in memory
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for file_path in adapter_path.rglob('*'):
+                if file_path.is_file():
+                    arcname = file_path.relative_to(adapter_path)
+                    zip_file.write(file_path, arcname)
+
+        zip_buffer.seek(0)
+
+        return Response(
+            zip_buffer.getvalue(),
+            mimetype='application/zip',
+            headers={
+                'Content-Disposition': f'attachment; filename={skill_id}_adapter.zip'
+            }
+        )
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route('/api/debug/database')
@@ -10581,15 +10620,12 @@ pipeline = Pipeline([
                         <p style="color: var(--text-secondary); margin-bottom: 1rem;">Training requires a GPU. Generate a script to run on Colab, Modal, or your own machine.</p>
                         <div class="form-group">
                             <label class="form-label">Select Skill to Train</label>
-                            <select class="form-select" id="fb-train-profile">
-                                <option value="receptionist">Receptionist</option>
-                                <option value="electrician">Electrician</option>
-                                <option value="plumber">Plumber</option>
-                                <option value="lawyer">Lawyer</option>
-                                <option value="solar">Solar</option>
-                                <option value="tara-sales">Tara Sales</option>
-                                <option value="general">General</option>
+                            <select class="form-select" id="fb-train-profile" onchange="updateTrainTabStats()">
+                                <option value="">-- Select a skill --</option>
                             </select>
+                            <div id="fb-train-stats" style="margin-top: 0.5rem; padding: 0.5rem; background: var(--glass-surface); border-radius: 4px; display: none;">
+                                <span style="color: var(--neon-cyan);">Training examples: <strong id="fb-train-count">0</strong></span>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Base Model</label>
@@ -13683,8 +13719,9 @@ pipeline = Pipeline([
                                 <div><span style="color: var(--text-secondary);">Loss:</span> ${adapter.final_loss?.toFixed(4) || '--'}</div>
                                 <div><span style="color: var(--text-secondary);">Examples:</span> ${adapter.training_examples || '--'}</div>
                             </div>
-                            <div style="display: flex; gap: 0.5rem;">
+                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                                 <button class="btn btn-secondary btn-sm" onclick="testAdapterFromGallery('${adapter.skill_id}')">Test</button>
+                                <button class="btn btn-secondary btn-sm" onclick="downloadAdapter('${adapter.skill_id}')" title="Download adapter files">⬇ Download</button>
                                 <button class="btn btn-secondary btn-sm" onclick="showAdapterDetails('${adapter.skill_id}')">⋮</button>
                             </div>
                         </div>
@@ -13698,6 +13735,12 @@ pipeline = Pipeline([
             } catch (err) {
                 console.error('Failed to load adapters:', err);
             }
+        }
+
+        // Download adapter as zip file
+        function downloadAdapter(skillId) {
+            showToast(`Preparing download for ${skillId}...`, 'info');
+            window.location.href = `/api/training/adapters/${skillId}/download`;
         }
 
         async function loadTrainingJobs() {
@@ -15660,6 +15703,7 @@ print("Training complete: adapters/${skillId}")`;
             if (tabId === 'dashboard') refreshSystemStatus();
             if (tabId === 'integration') loadIntegrationChecklist();
             if (tabId === 'golden') loadGoldenPromptFB();
+            if (tabId === 'train') loadTrainTabSkills();  // Dynamically load skills
         }
 
         // Golden Prompts functions for Skills tab
@@ -15760,9 +15804,60 @@ print("Training complete: adapters/${skillId}")`;
             } catch (e) { console.error(e); }
         }
 
+        // Load skills dynamically for Train tab
+        async function loadTrainTabSkills() {
+            const select = document.getElementById('fb-train-profile');
+            if (!select) return;
+
+            try {
+                const response = await fetch('/api/skills');
+                const data = await response.json();
+
+                select.innerHTML = '<option value="">-- Select a skill --</option>';
+
+                const skills = data.skills || data || [];
+                skills.forEach(skill => {
+                    const option = document.createElement('option');
+                    option.value = skill.id;
+                    option.textContent = skill.name || skill.id;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Failed to load skills for Train tab:', error);
+            }
+        }
+
+        // Update training stats when skill is selected
+        async function updateTrainTabStats() {
+            const skillId = document.getElementById('fb-train-profile').value;
+            const statsDiv = document.getElementById('fb-train-stats');
+            const countSpan = document.getElementById('fb-train-count');
+
+            if (!skillId) {
+                statsDiv.style.display = 'none';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/parser/data?skill_id=${skillId}`);
+                const data = await response.json();
+
+                const count = data.total || (data.items ? data.items.length : 0);
+                countSpan.textContent = count;
+                statsDiv.style.display = 'block';
+            } catch (error) {
+                console.error('Failed to load training stats:', error);
+                statsDiv.style.display = 'none';
+            }
+        }
+
         // Training script generation
         function generateTrainingScriptFB() {
             const skill = document.getElementById('fb-train-profile').value;
+            if (!skill) {
+                alert('Please select a skill first');
+                return;
+            }
             const model = document.getElementById('fb-train-model').value;
             const steps = document.getElementById('fb-train-steps').value;
 
