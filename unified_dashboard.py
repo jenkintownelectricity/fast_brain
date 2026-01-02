@@ -50,7 +50,7 @@ def commit_volume():
     """
     try:
         import modal
-        # Get the volume reference - this works because Modal injects the volume at runtime
+        # Commit data volume (database)
         volume = modal.Volume.from_name("hive215-data")
         volume.commit()
         print("[Volume] Committed database changes to Modal volume")
@@ -63,15 +63,19 @@ def commit_volume():
 
 
 def reload_volume():
-    """Reload Modal volume to see changes made by other containers.
+    """Reload Modal volumes to see changes made by other containers.
 
     In Modal's multi-container environment, each container has its own cached view
     of the volume. Call this before reading to ensure you see the latest data.
     """
     try:
         import modal
+        # Reload data volume (database)
         volume = modal.Volume.from_name("hive215-data")
         volume.reload()
+        # Reload adapters volume (trained models)
+        adapters_volume = modal.Volume.from_name("hive215-adapters")
+        adapters_volume.reload()
     except ImportError:
         # Not running on Modal (local development)
         pass
@@ -8389,6 +8393,37 @@ DASHBOARD_HTML = '''
                         <p style="color: var(--text-secondary); text-align: center;">Select a skill to view training data</p>
                     </div>
                 </div>
+
+                <!-- Visual Training Data Section -->
+                <div class="glass-card" style="margin-top: 1rem;" id="unified-visual-section">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">📸</span> Visual Training Data</div>
+                    </div>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Upload images for visual training: products, details, logos, finished work, marketing materials, etc.
+                    </p>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+                        <button class="btn btn-sm" style="background: rgba(59, 130, 246, 0.3); border: 1px solid rgba(59, 130, 246, 0.5);" onclick="setUnifiedVisualCategory('products')">📦 Products</button>
+                        <button class="btn btn-sm" style="background: rgba(139, 92, 246, 0.3); border: 1px solid rgba(139, 92, 246, 0.5);" onclick="setUnifiedVisualCategory('details')">🔧 Details</button>
+                        <button class="btn btn-sm" style="background: rgba(236, 72, 153, 0.3); border: 1px solid rgba(236, 72, 153, 0.5);" onclick="setUnifiedVisualCategory('logos')">🏷️ Logos</button>
+                        <button class="btn btn-sm" style="background: rgba(34, 197, 94, 0.3); border: 1px solid rgba(34, 197, 94, 0.5);" onclick="setUnifiedVisualCategory('finished')">✅ Finished Work</button>
+                        <button class="btn btn-sm" style="background: rgba(251, 146, 60, 0.3); border: 1px solid rgba(251, 146, 60, 0.5);" onclick="setUnifiedVisualCategory('marketing')">📢 Marketing</button>
+                        <button class="btn btn-sm" style="background: rgba(168, 162, 158, 0.3); border: 1px solid rgba(168, 162, 158, 0.5);" onclick="setUnifiedVisualCategory('reference')">📚 Reference</button>
+                        <button class="btn btn-sm" style="background: rgba(234, 179, 8, 0.3); border: 1px solid rgba(234, 179, 8, 0.5);" onclick="setUnifiedVisualCategory('materials')">🧱 Materials</button>
+                        <button class="btn btn-sm" style="background: rgba(239, 68, 68, 0.3); border: 1px solid rgba(239, 68, 68, 0.5);" onclick="setUnifiedVisualCategory('safety')">⚠️ Safety</button>
+                    </div>
+                    <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+                        <div style="flex: 1;">
+                            <input type="file" id="unified-visual-upload" accept="image/*" multiple style="display: none;" onchange="uploadUnifiedVisualFiles()">
+                            <button class="btn btn-primary" onclick="document.getElementById('unified-visual-upload').click()" style="width: 100%;">
+                                📤 Upload Images (<span id="unified-visual-category">reference</span>)
+                            </button>
+                        </div>
+                    </div>
+                    <div id="unified-visual-gallery" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.75rem; max-height: 300px; overflow-y: auto;">
+                        <p style="grid-column: 1 / -1; color: var(--text-secondary); text-align: center;">Select a skill to view images</p>
+                    </div>
+                </div>
             </div>
 
             <!-- Test Chat Sub-tab -->
@@ -11756,6 +11791,83 @@ pipeline = Pipeline([
                 }
             } catch (err) {
                 console.error('Failed to load data:', err);
+            }
+
+            // Also load visual training data
+            loadUnifiedVisualGallery(skillId);
+        }
+
+        // Unified Visual Training Data functions
+        let unifiedVisualCategory = 'reference';
+
+        function setUnifiedVisualCategory(category) {
+            unifiedVisualCategory = category;
+            document.getElementById('unified-visual-category').textContent = category;
+        }
+
+        async function uploadUnifiedVisualFiles() {
+            const skillId = document.getElementById('unified-data-skill').value;
+            if (!skillId) {
+                showToast('Please select a skill first', 'error');
+                return;
+            }
+
+            const files = document.getElementById('unified-visual-upload').files;
+            if (!files.length) return;
+
+            for (const file of files) {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('skill_id', skillId);
+                formData.append('category', unifiedVisualCategory);
+
+                try {
+                    const res = await fetch('/api/visual-training/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast(`Uploaded: ${file.name}`, 'success');
+                    } else {
+                        showToast(`Failed: ${data.error}`, 'error');
+                    }
+                } catch (err) {
+                    showToast(`Upload error: ${err.message}`, 'error');
+                }
+            }
+
+            // Refresh gallery
+            loadUnifiedVisualGallery(skillId);
+            document.getElementById('unified-visual-upload').value = '';
+        }
+
+        async function loadUnifiedVisualGallery(skillId) {
+            const gallery = document.getElementById('unified-visual-gallery');
+            if (!skillId) {
+                gallery.innerHTML = '<p style="grid-column: 1 / -1; color: var(--text-secondary); text-align: center;">Select a skill to view images</p>';
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/visual-training?skill_id=${skillId}`);
+                const data = await res.json();
+
+                if (!data.images || data.images.length === 0) {
+                    gallery.innerHTML = '<p style="grid-column: 1 / -1; color: var(--text-secondary); text-align: center;">No images uploaded yet</p>';
+                    return;
+                }
+
+                gallery.innerHTML = data.images.map(img => `
+                    <div style="position: relative; border-radius: 8px; overflow: hidden; background: var(--glass-surface);">
+                        <img src="${img.url}" alt="${img.category}" style="width: 100%; height: 80px; object-fit: cover;">
+                        <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); padding: 0.25rem; font-size: 0.7rem; text-align: center; color: white;">
+                            ${img.category}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                gallery.innerHTML = '<p style="grid-column: 1 / -1; color: var(--text-secondary); text-align: center;">Failed to load images</p>';
             }
         }
 

@@ -25,6 +25,9 @@ app = modal.App("hive215-dashboard")
 # Create a persistent volume for database storage
 volume = modal.Volume.from_name("hive215-data", create_if_missing=True)
 
+# Create volume for trained adapters (shared with trainer)
+adapters_volume = modal.Volume.from_name("hive215-adapters", create_if_missing=True)
+
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("tesseract-ocr", "tesseract-ocr-eng")  # OCR engine for images
@@ -56,7 +59,10 @@ image = (
 
 @app.function(
     image=image,
-    volumes={"/data": volume},  # Mount persistent volume
+    volumes={
+        "/data": volume,  # Database storage
+        "/adapters": adapters_volume,  # Trained adapters (shared with trainer)
+    },
     scaledown_window=300,  # 5 min idle before shutdown
     min_containers=0,  # Scale to zero when not in use
 )
