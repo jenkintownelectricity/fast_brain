@@ -8658,6 +8658,40 @@ DASHBOARD_HTML = '''
                                 <div id="wf-upload-status" style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);"></div>
                             </div>
 
+                            <!-- CAD File Processing -->
+                            <div class="glass-card" style="margin-bottom: 1rem;">
+                                <h4>📐 CAD Files (DXF)</h4>
+                                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+                                    Convert CAD drawings to JSON for training spatial analysis skills
+                                </p>
+                                <div id="wf-cad-upload-zone" class="upload-zone" onclick="document.getElementById('wf-cad-file-input').click()"
+                                     style="padding: 1rem; min-height: auto;">
+                                    <div style="color: var(--text-primary); font-weight: 500;">📁 Drop DXF file or click to upload</div>
+                                    <input type="file" id="wf-cad-file-input" style="display: none;" accept=".dxf" onchange="handleWorkflowCADUpload(this.files[0])">
+                                </div>
+                                <div id="wf-cad-options" style="display: none; margin-top: 0.75rem;">
+                                    <label class="form-label" style="margin-bottom: 0.5rem;">Output Format:</label>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+                                            <input type="checkbox" name="wf-cad-type" value="spatial" checked> 👁️ Spatial
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+                                            <input type="checkbox" name="wf-cad-type" value="quantity"> 🧮 Quantity
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+                                            <input type="checkbox" name="wf-cad-type" value="specs"> 📋 Specs
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+                                            <input type="checkbox" name="wf-cad-type" value="full"> 📦 Full
+                                        </label>
+                                    </div>
+                                    <button class="btn btn-primary" onclick="processWorkflowCAD()" style="width: 100%;">
+                                        ⚙️ Process & Add to Training
+                                    </button>
+                                </div>
+                                <div id="wf-cad-status" style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);"></div>
+                            </div>
+
                             <!-- AI Generate -->
                             <div class="glass-card">
                                 <h4>🤖 AI Generate</h4>
@@ -11542,6 +11576,85 @@ pipeline = Pipeline([
                 }
             } catch (err) {
                 statusDiv.innerHTML = `<span style="color: #ff6b6b;">✗ Failed to generate training data</span>`;
+            }
+
+            setTimeout(() => { statusDiv.innerHTML = ''; }, 5000);
+        }
+
+        // CAD file processing for workflow
+        let wfCadPendingFile = null;
+
+        function handleWorkflowCADUpload(file) {
+            if (!file) return;
+            if (!file.name.toLowerCase().endsWith('.dxf')) {
+                showToast('Please upload a DXF file', 'warning');
+                return;
+            }
+
+            wfCadPendingFile = file;
+            document.getElementById('wf-cad-options').style.display = 'block';
+            document.getElementById('wf-cad-status').innerHTML = `<span style="color: var(--neon-cyan);">📄 ${file.name} ready to process</span>`;
+        }
+
+        async function processWorkflowCAD() {
+            if (!wfCadPendingFile) {
+                showToast('Please upload a DXF file first', 'warning');
+                return;
+            }
+
+            if (!currentWorkflowSkill) {
+                showToast('Please select a skill first', 'warning');
+                return;
+            }
+
+            const selectedTypes = Array.from(document.querySelectorAll('input[name="wf-cad-type"]:checked')).map(cb => cb.value);
+            if (selectedTypes.length === 0) {
+                showToast('Please select at least one output format', 'warning');
+                return;
+            }
+
+            const statusDiv = document.getElementById('wf-cad-status');
+            statusDiv.innerHTML = '<span style="color: var(--neon-cyan);">⚙️ Processing CAD file...</span>';
+
+            try {
+                // Step 1: Process the DXF file
+                const formData = new FormData();
+                formData.append('file', wfCadPendingFile);
+                selectedTypes.forEach(t => formData.append('output_types', t));
+
+                const processResponse = await fetch('/api/cad/process', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const processData = await processResponse.json();
+                if (!processData.success) {
+                    statusDiv.innerHTML = `<span style="color: #ff6b6b;">✗ ${processData.error || 'Processing failed'}</span>`;
+                    return;
+                }
+
+                // Step 2: Save each output as training data
+                let savedCount = 0;
+                for (const [formatType, jsonData] of Object.entries(processData.outputs)) {
+                    const saveResponse = await fetch('/api/cad/save-training', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            skill_id: currentWorkflowSkill.id,
+                            json_data: jsonData,
+                            format_type: formatType
+                        })
+                    });
+                    const saveData = await saveResponse.json();
+                    if (saveData.success) savedCount++;
+                }
+
+                statusDiv.innerHTML = `<span style="color: var(--neon-green);">✓ Added ${savedCount} training examples!</span>`;
+                document.getElementById('wf-cad-options').style.display = 'none';
+                wfCadPendingFile = null;
+                loadWorkflowTrainingData();
+            } catch (err) {
+                statusDiv.innerHTML = `<span style="color: #ff6b6b;">✗ Failed to process CAD file</span>`;
             }
 
             setTimeout(() => { statusDiv.innerHTML = ''; }, 5000);
