@@ -998,6 +998,7 @@ def download_adapter(skill_id):
     import io
     import zipfile
     from pathlib import Path
+    from flask import Response
 
     try:
         reload_volume()  # Get fresh data from Modal volume
