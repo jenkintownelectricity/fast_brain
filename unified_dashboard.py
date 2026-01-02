@@ -2106,6 +2106,138 @@ def bulk_update_extracted(skill_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# =============================================================================
+# CAD FILE PROCESSING (DXF → JSON)
+# =============================================================================
+
+@app.route('/api/cad/preview', methods=['POST'])
+def preview_cad_file():
+    """Preview DXF file contents before processing."""
+    try:
+        from cad_processor import CADProcessor
+    except ImportError as e:
+        return jsonify({'success': False, 'error': f'CAD processor not available: {str(e)}. Install ezdxf with: pip install ezdxf'}), 500
+
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file provided'}), 400
+
+    file = request.files['file']
+    if not file.filename.lower().endswith('.dxf'):
+        return jsonify({'success': False, 'error': 'Only DXF files are supported'}), 400
+
+    try:
+        processor = CADProcessor()
+        preview = processor.get_preview(file_obj=file)
+        return jsonify(preview)
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Failed to parse DXF: {str(e)}'}), 500
+
+
+@app.route('/api/cad/process', methods=['POST'])
+def process_cad_file():
+    """Process DXF file and generate requested JSON formats."""
+    try:
+        from cad_processor import CADProcessor
+    except ImportError as e:
+        return jsonify({'success': False, 'error': f'CAD processor not available: {str(e)}. Install ezdxf with: pip install ezdxf'}), 500
+
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file provided'}), 400
+
+    file = request.files['file']
+    if not file.filename.lower().endswith('.dxf'):
+        return jsonify({'success': False, 'error': 'Only DXF files are supported'}), 400
+
+    # Get requested output types
+    output_types = request.form.getlist('output_types')
+    if not output_types:
+        output_types = ['full']
+
+    try:
+        processor = CADProcessor()
+        results = processor.process(file_obj=file, output_types=output_types)
+
+        if 'error' in results:
+            return jsonify({'success': False, 'error': results['error']}), 500
+
+        return jsonify({
+            'success': True,
+            'filename': file.filename,
+            'outputs': results
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Processing failed: {str(e)}'}), 500
+
+
+@app.route('/api/cad/save-training', methods=['POST'])
+def save_cad_as_training():
+    """Save processed CAD JSON as training data for a skill."""
+    data = request.json
+    if not data:
+        return jsonify({'success': False, 'error': 'No data provided'}), 400
+
+    skill_id = data.get('skill_id')
+    json_data = data.get('json_data')
+    format_type = data.get('format_type', 'full')
+
+    if not skill_id or not json_data:
+        return jsonify({'success': False, 'error': 'skill_id and json_data required'}), 400
+
+    try:
+        # Create training example from CAD data
+        user_message = f"Analyze this {format_type.upper()} CAD data and provide insights."
+        assistant_response = f"Based on the {format_type} analysis of {json_data.get('meta', {}).get('filename', 'the drawing')}:\n\n"
+
+        if format_type == 'quantity':
+            linear_data = json_data.get('linear_feet_by_layer', {})
+            block_counts = json_data.get('block_counts', {})
+            assistant_response += f"Linear Footage by Layer:\n"
+            for layer, feet in linear_data.items():
+                assistant_response += f"  - {layer}: {feet:.2f} ft\n"
+            if block_counts:
+                assistant_response += f"\nBlock Counts:\n"
+                for block, count in block_counts.items():
+                    assistant_response += f"  - {block}: {count}\n"
+
+        elif format_type == 'specs':
+            notes = json_data.get('notes', [])
+            dims = json_data.get('dimensions', [])
+            assistant_response += f"Found {len(notes)} text notes and {len(dims)} dimensions.\n"
+            if notes[:5]:
+                assistant_response += "Sample notes:\n"
+                for note in notes[:5]:
+                    assistant_response += f"  - {note.get('text', '')[:100]}\n"
+
+        elif format_type == 'spatial':
+            geom = json_data.get('geometry', [])
+            layers = json_data.get('layers_with_geometry', [])
+            assistant_response += f"Found {len(geom)} geometry entities across {len(layers)} layers.\n"
+            assistant_response += f"Layers: {', '.join(layers[:10])}\n"
+
+        else:
+            entity_count = json_data.get('entity_count', 0)
+            assistant_response += f"Total entities: {entity_count}\n"
+            assistant_response += f"Data has been extracted and is ready for analysis.\n"
+
+        # Save as training example
+        db.add_training_example(
+            skill_id=skill_id,
+            user_message=user_message,
+            assistant_response=assistant_response,
+            metadata={
+                'source': 'cad_import',
+                'format': format_type,
+                'filename': json_data.get('meta', {}).get('filename', 'unknown')
+            }
+        )
+        commit_volume()
+
+        return jsonify({'success': True, 'message': f'Saved {format_type} CAD data as training example'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/parser/generate', methods=['POST'])
 def generate_ai_training_data():
     """Generate AI training data using LLM based on a topic/context."""
@@ -7608,6 +7740,7 @@ DASHBOARD_HTML = '''
             <div class="sub-tabs">
                 <button class="sub-tab-btn active" onclick="showTrainingTab('console')">🎯 Console</button>
                 <button class="sub-tab-btn" onclick="showTrainingTab('data')">📄 Data Manager</button>
+                <button class="sub-tab-btn" onclick="showTrainingTab('cad')">📐 CAD Files</button>
                 <button class="sub-tab-btn" onclick="showTrainingTab('progress')">📊 Progress</button>
                 <button class="sub-tab-btn" onclick="showTrainingTab('adapters')">📦 Adapters</button>
             </div>
@@ -8064,6 +8197,145 @@ DASHBOARD_HTML = '''
                             <button class="btn btn-secondary" onclick="showTrainingTab('console')">🔄 Train Again</button>
                             <button class="btn btn-secondary" onclick="showTrainingTab('adapters')">📦 View Adapters</button>
                             <button class="btn btn-primary" onclick="showMainTab('skills')">🏠 Back to Skills</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CAD Files Processing -->
+            <div id="training-cad" class="sub-tab-content">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <div class="section-title"><span class="section-icon">📐</span> CAD File Processing (DXF → JSON)</div>
+                    </div>
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                        Convert CAD drawings into AI-readable JSON for training. Supports DXF files only (no external software needed).
+                    </p>
+
+                    <!-- Step 1: Select Output Format -->
+                    <div class="glass-card" style="background: var(--glass-surface); padding: 1.25rem; margin-bottom: 1rem;">
+                        <h4 style="margin: 0 0 1rem 0; color: var(--neon-cyan);">Step 1: What JSON format do you need?</h4>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;">
+                            <label class="cad-option-card" style="display: flex; align-items: flex-start; gap: 0.75rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s;">
+                                <input type="checkbox" name="cad-output-type" value="spatial" style="margin-top: 0.25rem;">
+                                <div>
+                                    <div style="font-weight: 600; color: var(--neon-green);">👁️ SPATIAL</div>
+                                    <div style="font-size: 0.85rem; color: var(--text-secondary);">Bounding boxes, layers, closed/open geometry</div>
+                                    <div style="font-size: 0.75rem; color: var(--neon-cyan); margin-top: 0.25rem;">Best for: "The Eyes" - spatial analysis</div>
+                                </div>
+                            </label>
+                            <label class="cad-option-card" style="display: flex; align-items: flex-start; gap: 0.75rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s;">
+                                <input type="checkbox" name="cad-output-type" value="quantity" style="margin-top: 0.25rem;">
+                                <div>
+                                    <div style="font-weight: 600; color: var(--neon-orange);">🧮 QUANTITY</div>
+                                    <div style="font-size: 0.85rem; color: var(--text-secondary);">Linear feet (normalized), block counts</div>
+                                    <div style="font-size: 0.75rem; color: var(--neon-cyan); margin-top: 0.25rem;">Best for: "The Estimator" - takeoffs</div>
+                                </div>
+                            </label>
+                            <label class="cad-option-card" style="display: flex; align-items: flex-start; gap: 0.75rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s;">
+                                <input type="checkbox" name="cad-output-type" value="specs" style="margin-top: 0.25rem;">
+                                <div>
+                                    <div style="font-weight: 600; color: var(--neon-purple);">📜 SPECS</div>
+                                    <div style="font-size: 0.85rem; color: var(--text-secondary);">Text notes, dimensions, leaders</div>
+                                    <div style="font-size: 0.75rem; color: var(--neon-cyan); margin-top: 0.25rem;">Best for: "The Detailer" - spec compliance</div>
+                                </div>
+                            </label>
+                            <label class="cad-option-card" style="display: flex; align-items: flex-start; gap: 0.75rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s;">
+                                <input type="checkbox" name="cad-output-type" value="full" style="margin-top: 0.25rem;">
+                                <div>
+                                    <div style="font-weight: 600; color: var(--neon-blue);">📦 FULL</div>
+                                    <div style="font-size: 0.85rem; color: var(--text-secondary);">All entities with complete geometry data</div>
+                                    <div style="font-size: 0.75rem; color: var(--neon-cyan); margin-top: 0.25rem;">Best for: Complete data extraction</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Upload DXF File -->
+                    <div class="glass-card" style="background: var(--glass-surface); padding: 1.25rem; margin-bottom: 1rem;">
+                        <h4 style="margin: 0 0 1rem 0; color: var(--neon-cyan);">Step 2: Upload DXF File</h4>
+                        <div class="upload-zone" id="cad-upload-zone"
+                             onclick="document.getElementById('cad-file-input').click()"
+                             ondragover="event.preventDefault(); this.classList.add('dragover')"
+                             ondragleave="this.classList.remove('dragover')"
+                             ondrop="handleCADDrop(event)"
+                             style="border: 2px dashed var(--glass-border); border-radius: 12px; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.2s;">
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📐</div>
+                            <div style="color: var(--text-primary); font-weight: 500;">Drop DXF file here or click to upload</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">Only .dxf files supported (no external software needed)</div>
+                            <input type="file" id="cad-file-input" style="display: none;" accept=".dxf" onchange="handleCADUpload(this.files[0])">
+                        </div>
+                    </div>
+
+                    <!-- Step 3: File Preview (shown after upload, before processing) -->
+                    <div id="cad-preview-section" class="glass-card" style="background: var(--glass-surface); padding: 1.25rem; margin-bottom: 1rem; display: none;">
+                        <h4 style="margin: 0 0 1rem 0; color: var(--neon-cyan);">Step 3: Preview & Confirm</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                            <div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Filename</div>
+                                <div id="cad-preview-filename" style="font-weight: 600; color: var(--text-primary);">--</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Units</div>
+                                <div id="cad-preview-units" style="font-weight: 600; color: var(--neon-green);">--</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Layers</div>
+                                <div id="cad-preview-layers" style="font-weight: 600; color: var(--neon-cyan);">--</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Total Entities</div>
+                                <div id="cad-preview-entities" style="font-weight: 600; color: var(--neon-orange);">--</div>
+                            </div>
+                        </div>
+
+                        <!-- Entity Breakdown -->
+                        <div style="margin-bottom: 1rem;">
+                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Entity Breakdown</div>
+                            <div id="cad-preview-entity-counts" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+                        </div>
+
+                        <!-- Layer List -->
+                        <div style="margin-bottom: 1rem;">
+                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Layers Found</div>
+                            <div id="cad-preview-layer-list" style="max-height: 100px; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 0.5rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem;"></div>
+                        </div>
+
+                        <!-- Recommendations -->
+                        <div id="cad-preview-recommendations" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem;">
+                            <div style="font-size: 0.8rem; color: var(--neon-green); margin-bottom: 0.25rem;">💡 Recommendations</div>
+                            <div id="cad-preview-rec-list" style="font-size: 0.85rem; color: var(--text-secondary);"></div>
+                        </div>
+
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-primary" onclick="processCADFile()" id="cad-process-btn">✅ Process & Generate JSON</button>
+                            <button class="btn btn-secondary" onclick="cancelCADUpload()">❌ Cancel</button>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: JSON Output (shown after processing) -->
+                    <div id="cad-output-section" class="glass-card" style="background: var(--glass-surface); padding: 1.25rem; display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h4 style="margin: 0; color: var(--neon-green);">✅ JSON Generated Successfully</h4>
+                            <button class="btn btn-secondary btn-sm" onclick="resetCADProcessor()">🔄 Process Another</button>
+                        </div>
+
+                        <!-- Generated Files -->
+                        <div id="cad-output-files" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;"></div>
+
+                        <!-- JSON Preview -->
+                        <div style="margin-bottom: 1rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <span style="font-size: 0.9rem; color: var(--text-secondary);">Preview:</span>
+                                <select id="cad-output-preview-select" class="form-select" style="width: auto; padding: 0.25rem 0.5rem;" onchange="showCADOutputPreview()"></select>
+                            </div>
+                            <pre id="cad-output-preview" style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px; max-height: 300px; overflow: auto; font-size: 0.8rem; color: var(--neon-cyan);"></pre>
+                        </div>
+
+                        <!-- Actions -->
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button class="btn btn-primary" onclick="downloadCADOutputs()">💾 Download All JSON</button>
+                            <button class="btn btn-secondary" onclick="saveCADAsTraining()">📚 Save as Training Data</button>
                         </div>
                     </div>
                 </div>
@@ -12606,6 +12878,250 @@ pipeline = Pipeline([
             if (subTab === 'adapters') refreshAdapters();
             if (subTab === 'progress') checkActiveTraining();
             if (subTab === 'data') loadDataManagerSkillsDropdown();
+            if (subTab === 'cad') resetCADProcessor();
+        }
+
+        // ============================================================
+        // CAD FILE PROCESSING FUNCTIONS
+        // ============================================================
+        let cadPendingFile = null;
+        let cadOutputData = null;
+
+        function handleCADDrop(event) {
+            event.preventDefault();
+            event.target.classList.remove('dragover');
+            const file = event.dataTransfer.files[0];
+            if (file) handleCADUpload(file);
+        }
+
+        async function handleCADUpload(file) {
+            if (!file) return;
+
+            if (!file.name.toLowerCase().endsWith('.dxf')) {
+                showToast('Only DXF files are supported', 'error');
+                return;
+            }
+
+            cadPendingFile = file;
+
+            // Show loading state
+            const uploadZone = document.getElementById('cad-upload-zone');
+            uploadZone.innerHTML = `
+                <div style="font-size: 2rem; animation: pulse 1s infinite;">⏳</div>
+                <div style="color: var(--text-primary); font-weight: 500;">Analyzing ${file.name}...</div>
+            `;
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch('/api/cad/preview', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const preview = await response.json();
+
+                if (!preview.success && preview.error) {
+                    throw new Error(preview.error);
+                }
+
+                // Populate preview section
+                document.getElementById('cad-preview-filename').textContent = preview.filename;
+                document.getElementById('cad-preview-units').textContent = preview.units;
+                document.getElementById('cad-preview-layers').textContent = preview.layer_count;
+                document.getElementById('cad-preview-entities').textContent = preview.total_entities;
+
+                // Entity breakdown badges
+                const countsDiv = document.getElementById('cad-preview-entity-counts');
+                countsDiv.innerHTML = Object.entries(preview.entity_counts || {})
+                    .map(([type, count]) => `<span style="background: var(--glass-surface); padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">${type}: ${count}</span>`)
+                    .join('');
+
+                // Layer list
+                const layerList = document.getElementById('cad-preview-layer-list');
+                layerList.innerHTML = (preview.layers || []).join('<br>');
+
+                // Recommendations
+                const recList = document.getElementById('cad-preview-rec-list');
+                recList.innerHTML = (preview.recommendations || [])
+                    .map(r => `• ${r}`)
+                    .join('<br>');
+
+                // Show preview section
+                document.getElementById('cad-preview-section').style.display = 'block';
+
+                // Reset upload zone
+                uploadZone.innerHTML = `
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">✅</div>
+                    <div style="color: var(--neon-green); font-weight: 500;">${file.name} ready</div>
+                    <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">Click to upload a different file</div>
+                    <input type="file" id="cad-file-input" style="display: none;" accept=".dxf" onchange="handleCADUpload(this.files[0])">
+                `;
+
+            } catch (err) {
+                showToast('Failed to analyze DXF: ' + err.message, 'error');
+                resetCADProcessor();
+            }
+        }
+
+        async function processCADFile() {
+            if (!cadPendingFile) {
+                showToast('No file selected', 'error');
+                return;
+            }
+
+            // Get selected output types
+            const checkboxes = document.querySelectorAll('input[name="cad-output-type"]:checked');
+            const outputTypes = Array.from(checkboxes).map(cb => cb.value);
+
+            if (outputTypes.length === 0) {
+                showToast('Please select at least one output format', 'warning');
+                return;
+            }
+
+            const btn = document.getElementById('cad-process-btn');
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Processing...';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', cadPendingFile);
+                outputTypes.forEach(t => formData.append('output_types', t));
+
+                const response = await fetch('/api/cad/process', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (!result.success) {
+                    throw new Error(result.error);
+                }
+
+                cadOutputData = result.outputs;
+
+                // Hide preview, show output
+                document.getElementById('cad-preview-section').style.display = 'none';
+                document.getElementById('cad-output-section').style.display = 'block';
+
+                // Populate output files list
+                const filesDiv = document.getElementById('cad-output-files');
+                const previewSelect = document.getElementById('cad-output-preview-select');
+                previewSelect.innerHTML = '';
+
+                filesDiv.innerHTML = Object.entries(cadOutputData).map(([format, data]) => {
+                    previewSelect.innerHTML += `<option value="${format}">${format.toUpperCase()}</option>`;
+                    const entityCount = data.entity_count || data.geometry_count || data.note_count || Object.keys(data).length;
+                    return `
+                        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 0.75rem 1rem; border-radius: 8px;">
+                            <div>
+                                <span style="font-weight: 600; color: var(--text-primary);">${format.toUpperCase()}.json</span>
+                                <span style="color: var(--text-secondary); font-size: 0.85rem; margin-left: 0.5rem;">(${entityCount} items)</span>
+                            </div>
+                            <button class="btn btn-secondary btn-sm" onclick="downloadSingleCADOutput('${format}')">⬇️ Download</button>
+                        </div>
+                    `;
+                }).join('');
+
+                showCADOutputPreview();
+                showToast('JSON generated successfully!', 'success');
+
+            } catch (err) {
+                showToast('Processing failed: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '✅ Process & Generate JSON';
+            }
+        }
+
+        function showCADOutputPreview() {
+            const format = document.getElementById('cad-output-preview-select').value;
+            const previewEl = document.getElementById('cad-output-preview');
+            if (cadOutputData && cadOutputData[format]) {
+                previewEl.textContent = JSON.stringify(cadOutputData[format], null, 2);
+            }
+        }
+
+        function downloadSingleCADOutput(format) {
+            if (!cadOutputData || !cadOutputData[format]) return;
+
+            const data = cadOutputData[format];
+            const filename = `${data.meta?.filename?.replace('.dxf', '') || 'cad_output'}_${format.toUpperCase()}.json`;
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadCADOutputs() {
+            if (!cadOutputData) return;
+
+            Object.keys(cadOutputData).forEach(format => {
+                downloadSingleCADOutput(format);
+            });
+        }
+
+        async function saveCADAsTraining() {
+            if (!cadOutputData) {
+                showToast('No data to save', 'error');
+                return;
+            }
+
+            // Get selected skill
+            const skillId = currentTrainingSkillId || prompt('Enter skill ID to save training data to:');
+            if (!skillId) {
+                showToast('Skill ID required', 'error');
+                return;
+            }
+
+            try {
+                for (const [format, data] of Object.entries(cadOutputData)) {
+                    await fetch('/api/cad/save-training', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            skill_id: skillId,
+                            json_data: data,
+                            format_type: format
+                        })
+                    });
+                }
+                showToast('CAD data saved as training examples!', 'success');
+            } catch (err) {
+                showToast('Failed to save: ' + err.message, 'error');
+            }
+        }
+
+        function cancelCADUpload() {
+            cadPendingFile = null;
+            document.getElementById('cad-preview-section').style.display = 'none';
+            resetCADProcessor();
+        }
+
+        function resetCADProcessor() {
+            cadPendingFile = null;
+            cadOutputData = null;
+            document.getElementById('cad-preview-section').style.display = 'none';
+            document.getElementById('cad-output-section').style.display = 'none';
+
+            const uploadZone = document.getElementById('cad-upload-zone');
+            if (uploadZone) {
+                uploadZone.innerHTML = `
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📐</div>
+                    <div style="color: var(--text-primary); font-weight: 500;">Drop DXF file here or click to upload</div>
+                    <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">Only .dxf files supported (no external software needed)</div>
+                    <input type="file" id="cad-file-input" style="display: none;" accept=".dxf" onchange="handleCADUpload(this.files[0])">
+                `;
+            }
+
+            // Reset checkboxes
+            document.querySelectorAll('input[name="cad-output-type"]').forEach(cb => cb.checked = false);
         }
 
         async function loadTrainingSkillsDropdown() {
