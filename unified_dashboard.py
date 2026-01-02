@@ -61,6 +61,24 @@ def commit_volume():
         # Log but don't fail - volume commit errors shouldn't break the app
         print(f"[Volume] Warning: Failed to commit volume: {e}")
 
+
+def reload_volume():
+    """Reload Modal volume to see changes made by other containers.
+
+    In Modal's multi-container environment, each container has its own cached view
+    of the volume. Call this before reading to ensure you see the latest data.
+    """
+    try:
+        import modal
+        volume = modal.Volume.from_name("hive215-data")
+        volume.reload()
+    except ImportError:
+        # Not running on Modal (local development)
+        pass
+    except Exception as e:
+        # Log but don't fail - reload errors shouldn't break reads
+        print(f"[Volume] Warning: Failed to reload volume: {e}")
+
 app = Flask(__name__)
 CORS(app, origins=[
     "https://453rahul.com",
@@ -436,6 +454,7 @@ def add_activity(message, icon="", category="general"):
 @app.route('/api/skills')
 def get_skills():
     """Get all registered skills with their status from database."""
+    reload_volume()  # Sync volume to see changes from other containers
     skills = []
     if USE_DATABASE:
         db_skills = db.get_all_skills()
@@ -463,6 +482,7 @@ def get_skills():
 @app.route('/api/skills-table')
 def get_skills_table():
     """Get skills in table format for filtering from database."""
+    reload_volume()  # Sync volume to see changes from other containers
     skills = []
     if USE_DATABASE:
         db_skills = db.get_all_skills()
@@ -3680,6 +3700,7 @@ def fast_brain_benchmark():
 def get_fast_brain_skills():
     """Get all available skills from unified database."""
     try:
+        reload_volume()  # Sync volume to see changes from other containers
         skills = []
         selected = 'general'
         source = 'none'
@@ -3950,6 +3971,7 @@ def delete_fast_brain_skill(skill_id):
 @app.route('/api/fast-brain/skills/<skill_id>')
 def get_single_skill(skill_id):
     """Get a single skill by ID."""
+    reload_volume()  # Sync volume to see changes from other containers
     if USE_DATABASE:
         skill = db.get_skill(skill_id)
         if not skill:
