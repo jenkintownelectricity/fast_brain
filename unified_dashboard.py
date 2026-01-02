@@ -10578,14 +10578,7 @@ pipeline = Pipeline([
                                 <div class="form-group" style="flex: 2;">
                                     <label class="form-label">Select Skill</label>
                                     <select class="form-select" id="vl-edit-skill-link">
-                                        <option value="">-- Select a skill --</option>
-                                        <option value="receptionist">Receptionist</option>
-                                        <option value="electrician">Electrician</option>
-                                        <option value="plumber">Plumber</option>
-                                        <option value="lawyer">Lawyer</option>
-                                        <option value="solar">Solar</option>
-                                        <option value="tara-sales">Tara Sales</option>
-                                        <option value="general">General</option>
+                                        <option value="">-- Loading skills... --</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
@@ -17168,7 +17161,8 @@ print("Training complete! Adapter saved to adapters/${skill}")
                 document.getElementById('vl-edit-emotion').value = settings.emotion || 'neutral';
                 document.getElementById('vl-edit-style').value = settings.style || 'conversational';
 
-                // Linked skill
+                // Linked skill - load skills first, then set value
+                await loadSkillsForDropdowns();
                 document.getElementById('vl-edit-skill-link').value = project.skill_id || '';
                 document.getElementById('vl-edit-linked-skill').textContent =
                     project.skill_id ? `Currently linked to: ${project.skill_id}` : '';
@@ -17465,12 +17459,14 @@ print("Training complete! Adapter saved to adapters/${skill}")
 
                 const ftSelect = document.getElementById('ft-skill-select');
                 const fbSelect = document.getElementById('feedback-skill-select');
+                const vlSkillLink = document.getElementById('vl-edit-skill-link');
 
                 const options = '<option value="">Select a skill...</option>' +
                     skills.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
 
-                ftSelect.innerHTML = options;
-                fbSelect.innerHTML = options;
+                if (ftSelect) ftSelect.innerHTML = options;
+                if (fbSelect) fbSelect.innerHTML = options;
+                if (vlSkillLink) vlSkillLink.innerHTML = options;
             } catch (e) {
                 console.error('Failed to load skills for dropdowns:', e);
             }
