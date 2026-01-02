@@ -8142,10 +8142,14 @@ DASHBOARD_HTML = '''
                                 <div class="form-group">
                                     <label class="form-label">Number of Examples</label>
                                     <select id="wf-ai-count" class="form-select">
-                                        <option value="5">5 examples</option>
                                         <option value="10" selected>10 examples</option>
-                                        <option value="20">20 examples</option>
+                                        <option value="25">25 examples</option>
                                         <option value="50">50 examples</option>
+                                        <option value="100">100 examples</option>
+                                        <option value="250">250 examples</option>
+                                        <option value="500">500 examples</option>
+                                        <option value="750">750 examples</option>
+                                        <option value="1000">1000 examples</option>
                                     </select>
                                 </div>
                                 <button class="btn btn-primary" onclick="generateWorkflowAiData()" style="width: 100%;">
@@ -8868,10 +8872,14 @@ DASHBOARD_HTML = '''
                     <div class="form-group">
                         <label class="form-label">Number of Examples</label>
                         <select id="ai-generate-count" class="form-select">
-                            <option value="5">5 examples</option>
                             <option value="10" selected>10 examples</option>
-                            <option value="20">20 examples</option>
+                            <option value="25">25 examples</option>
                             <option value="50">50 examples</option>
+                            <option value="100">100 examples</option>
+                            <option value="250">250 examples</option>
+                            <option value="500">500 examples</option>
+                            <option value="750">750 examples</option>
+                            <option value="1000">1000 examples</option>
                         </select>
                     </div>
                     <div class="form-group">
