@@ -44,10 +44,13 @@ image = (
         "beautifulsoup4>=4.12.0",  # HTML parsing
         "Pillow>=10.0.0",  # Image handling
         "pytesseract>=0.3.0",  # Image OCR
+        # CAD file processing
+        "ezdxf>=1.0.0",  # DXF file parsing
     )
     .add_local_file("unified_dashboard.py", "/root/unified_dashboard.py")
     .add_local_file("golden_prompts.py", "/root/golden_prompts.py")
     .add_local_file("database.py", "/root/database.py")
+    .add_local_file("cad_processor.py", "/root/cad_processor.py")
 )
 
 
