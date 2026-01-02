@@ -11911,13 +11911,16 @@ pipeline = Pipeline([
             if (wfFactInterval) clearInterval(wfFactInterval);
             wfFactInterval = setInterval(rotateWfFact, 6000);
 
+            let wfPollLock = false;
             workflowTrainingPollInterval = setInterval(async () => {
+                if (wfPollLock) return; // Prevent stacking
                 if (!currentWorkflowSkill) {
                     clearInterval(workflowTrainingPollInterval);
                     hideWfTrainingUI();
                     return;
                 }
 
+                wfPollLock = true;
                 try {
                     const res = await fetch(`/api/training/status/${currentWorkflowSkill.id}`);
                     const data = await res.json();
@@ -11951,6 +11954,8 @@ pipeline = Pipeline([
                     }
                 } catch (err) {
                     console.error('Training poll error:', err);
+                } finally {
+                    wfPollLock = false; // Release lock
                 }
             }, 3000);
         }
@@ -13650,7 +13655,10 @@ pipeline = Pipeline([
             pollTrainingStatus(skillId);
         }
 
+        let trainingPollLock = false;
         async function pollTrainingStatus(skillId) {
+            if (trainingPollLock) return; // Prevent stacking
+            trainingPollLock = true;
             try {
                 // Use the enhanced training status endpoint
                 const response = await fetch(`/api/training/status/${skillId}`);
@@ -13740,6 +13748,8 @@ pipeline = Pipeline([
 
             } catch (err) {
                 console.error('Failed to poll training status:', err);
+            } finally {
+                trainingPollLock = false; // Release lock
             }
         }
 
@@ -17497,6 +17507,24 @@ print("Training complete! Adapter saved to adapters/${skill}")
         }
 
         // ============================================================
+        // ============================================================
+        // SAFE UPDATE WRAPPER - Prevents request stacking that causes white box
+        // ============================================================
+        const updateLocks = {};
+
+        async function safeUpdate(key, fn) {
+            if (updateLocks[key]) return; // Already running, skip
+            updateLocks[key] = true;
+            try {
+                await fn();
+            } catch (e) {
+                console.warn(`Update ${key} skipped:`, e);
+            } finally {
+                updateLocks[key] = false;
+            }
+        }
+
+        // ============================================================
         // INITIALIZATION
         // ============================================================
         document.addEventListener('DOMContentLoaded', () => {
@@ -17507,9 +17535,10 @@ print("Training complete! Adapter saved to adapters/${skill}")
             loadVoiceProviders();
             loadPlatforms();
 
-            setInterval(loadSkills, 30000);
-            setInterval(refreshServerStatus, 10000);
-            setInterval(loadActivity, 15000);
+            // Safe intervals - prevent stacking requests
+            setInterval(() => safeUpdate('skills', loadSkills), 30000);
+            setInterval(() => safeUpdate('status', refreshServerStatus), 10000);
+            setInterval(() => safeUpdate('activity', loadActivity), 15000);
         });
     </script>
 </body>
