@@ -63,16 +63,32 @@ class CADProcessor:
         units = doc.header.get('$INSUNITS', 0)
         return self.UNITS_NAMES.get(units, 'Unknown')
 
-    def _parse_once(self, file_path: str = None, file_obj: BinaryIO = None) -> Tuple:
+    def _parse_once(self, file_path: str = None, file_obj = None) -> Tuple:
         """Parse file ONCE - critical for efficiency."""
         if file_obj:
-            # Reset position if file object
-            if hasattr(file_obj, 'seek'):
-                file_obj.seek(0)
-            doc = ezdxf.read(file_obj)
+            import io
+            # Handle Flask FileStorage or similar objects
             filename = getattr(file_obj, 'filename', getattr(file_obj, 'name', 'uploaded.dxf'))
             if hasattr(filename, 'split'):
                 filename = Path(filename).name if '/' in filename or '\\' in filename else filename
+
+            # Read content as bytes and wrap in BytesIO for ezdxf
+            if hasattr(file_obj, 'read'):
+                if hasattr(file_obj, 'seek'):
+                    file_obj.seek(0)
+                content = file_obj.read()
+                # Ensure we have bytes
+                if isinstance(content, str):
+                    content = content.encode('utf-8')
+                binary_stream = io.BytesIO(content)
+            elif hasattr(file_obj, 'stream'):
+                # Flask FileStorage
+                file_obj.stream.seek(0)
+                binary_stream = io.BytesIO(file_obj.stream.read())
+            else:
+                raise ValueError("Unable to read file object")
+
+            doc = ezdxf.read(binary_stream)
         elif file_path:
             doc = ezdxf.readfile(file_path)
             filename = Path(file_path).name
