@@ -1054,19 +1054,46 @@ def get_parser_stats():
 @app.route('/api/parser/data')
 def get_parser_data():
     """
-    Get parsed training data for a skill.
+    Get ALL training data for a skill from BOTH tables.
     Query params: skill_id
+    Always fetches fresh data from Modal volume.
     """
     try:
         skill_id = request.args.get('skill_id')
         if not skill_id:
             return jsonify({"items": [], "error": "skill_id required"})
 
+        reload_volume()  # Always get fresh data from Modal volume
+
+        items = []
         if USE_DATABASE:
-            items = db.get_extracted_data_by_skill(skill_id)
-        else:
-            items = []
-        return jsonify({"items": items, "success": True})
+            # Get from extracted_data table
+            extracted_items = db.get_extracted_data_by_skill(skill_id)
+            for item in extracted_items:
+                item['source_table'] = 'extracted_data'
+                items.append(item)
+
+            # Get from training_data table
+            with db.get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT id, skill_id, user_message, assistant_response, rating, created_at
+                    FROM training_data WHERE skill_id = ?
+                ''', (skill_id,))
+                rows = cursor.fetchall()
+                for row in rows:
+                    items.append({
+                        'id': f"td_{row[0]}",  # Prefix to distinguish from extracted_data ids
+                        'skill_id': row[1],
+                        'user_input': row[2],  # Normalize to user_input for consistency
+                        'assistant_response': row[3],
+                        'rating': row[4],
+                        'created_at': row[5],
+                        'source_table': 'training_data',
+                        'is_approved': 1  # Training data is pre-approved
+                    })
+
+        return jsonify({"items": items, "success": True, "total": len(items)})
     except Exception as e:
         return jsonify({"items": [], "success": False, "error": str(e)})
 
