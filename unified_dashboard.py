@@ -11387,8 +11387,8 @@ pipeline = Pipeline([
 
             // Update chart
             if (wfLossChart && data.loss_history && data.loss_history.length > 0) {
-                wfLossChart.data.labels = data.loss_history.map((_, i) => i + 1);
-                wfLossChart.data.datasets[0].data = data.loss_history;
+                wfLossChart.data.labels = data.loss_history.map(h => h.step);
+                wfLossChart.data.datasets[0].data = data.loss_history.map(h => h.loss);
                 wfLossChart.update('none');
             }
         }
