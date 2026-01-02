@@ -1193,12 +1193,18 @@ def delete_parser_data(item_id):
 
 @app.route('/api/parser/data/<item_id>/approve', methods=['POST'])
 def approve_parser_data(item_id):
-    """Approve a training data item."""
+    """Approve a training data item from either extracted_data or training_data table."""
     try:
         if USE_DATABASE:
             with db.get_db() as conn:
                 cursor = conn.cursor()
-                cursor.execute('UPDATE extracted_data SET is_approved = 1 WHERE id = ?', (item_id,))
+                # Check if it's from training_data table (prefixed with td_)
+                if item_id.startswith('td_'):
+                    actual_id = item_id[3:]  # Remove 'td_' prefix
+                    cursor.execute('UPDATE training_data SET rating = 5 WHERE id = ?', (actual_id,))
+                else:
+                    cursor.execute('UPDATE extracted_data SET is_approved = 1 WHERE id = ?', (item_id,))
+                conn.commit()
             commit_volume()  # Persist to Modal volume
             return jsonify({"success": True})
         else:
@@ -2302,6 +2308,90 @@ def save_cad_as_training():
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================
+# VISUAL TRAINING DATA API
+# ============================================================
+@app.route('/api/visual-training/upload', methods=['POST'])
+def upload_visual_training():
+    """Upload image for visual training data."""
+    import os
+    import uuid as uuid_module
+    from pathlib import Path
+
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file provided'}), 400
+
+    file = request.files['file']
+    skill_id = request.form.get('skill_id')
+    category = request.form.get('category', 'reference')
+
+    if not skill_id:
+        return jsonify({'success': False, 'error': 'skill_id required'}), 400
+
+    try:
+        # Create visual training directory
+        visual_dir = Path(f"/data/visual_training/{skill_id}")
+        visual_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate unique filename
+        ext = Path(file.filename).suffix.lower()
+        if ext not in ['.jpg', '.jpeg', '.png', '.webp', '.gif']:
+            return jsonify({'success': False, 'error': 'Invalid image format'}), 400
+
+        unique_name = f"{category}_{uuid_module.uuid4().hex[:8]}{ext}"
+        file_path = visual_dir / unique_name
+        file.save(str(file_path))
+
+        commit_volume()
+        return jsonify({'success': True, 'filename': unique_name, 'category': category})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/visual-training')
+def get_visual_training():
+    """Get visual training images for a skill."""
+    from pathlib import Path
+
+    skill_id = request.args.get('skill_id')
+    if not skill_id:
+        return jsonify({'images': [], 'error': 'skill_id required'})
+
+    try:
+        reload_volume()
+        visual_dir = Path(f"/data/visual_training/{skill_id}")
+        if not visual_dir.exists():
+            return jsonify({'images': []})
+
+        images = []
+        for img_path in visual_dir.glob('*'):
+            if img_path.suffix.lower() in ['.jpg', '.jpeg', '.png', '.webp', '.gif']:
+                # Extract category from filename
+                name_parts = img_path.stem.split('_')
+                category = name_parts[0] if name_parts else 'reference'
+                images.append({
+                    'filename': img_path.name,
+                    'category': category,
+                    'url': f'/api/visual-training/image/{skill_id}/{img_path.name}'
+                })
+
+        return jsonify({'images': images, 'count': len(images)})
+    except Exception as e:
+        return jsonify({'images': [], 'error': str(e)})
+
+
+@app.route('/api/visual-training/image/<skill_id>/<filename>')
+def serve_visual_image(skill_id, filename):
+    """Serve a visual training image."""
+    from pathlib import Path
+    from flask import send_file
+
+    file_path = Path(f"/data/visual_training/{skill_id}/{filename}")
+    if file_path.exists():
+        return send_file(str(file_path))
+    return jsonify({'error': 'Image not found'}), 404
 
 
 @app.route('/api/parser/generate', methods=['POST'])
@@ -7800,659 +7890,6 @@ DASHBOARD_HTML = '''
         </div>
 
         <!-- ================================================================ -->
-        <!-- TRAINING TAB - LoRA Fine-tuning Console -->
-        <!-- ================================================================ -->
-        <div id="tab-training" class="tab-content">
-            <div class="sub-tabs">
-                <button class="sub-tab-btn active" onclick="showTrainingTab('console')">🎯 Console</button>
-                <button class="sub-tab-btn" onclick="showTrainingTab('data')">📄 Data Manager</button>
-                <button class="sub-tab-btn" onclick="showTrainingTab('cad')">📐 CAD Files</button>
-                <button class="sub-tab-btn" onclick="showTrainingTab('progress')">📊 Progress</button>
-                <button class="sub-tab-btn" onclick="showTrainingTab('adapters')">📦 Adapters</button>
-            </div>
-
-            <!-- Training Console -->
-            <div id="training-console" class="sub-tab-content active">
-                <div class="glass-card">
-                    <div class="section-header">
-                        <div class="section-title"><span class="section-icon">🧠</span> Skill Training</div>
-                        <a href="#" onclick="showTrainingHelp(); return false;" style="color: var(--neon-cyan); font-size: 0.9rem;">? Help</a>
-                    </div>
-
-                    <!-- Skill Selector -->
-                    <div class="form-group" style="margin-bottom: 1.5rem;">
-                        <label class="form-label">Select Skill to Train</label>
-                        <select id="training-skill-select" class="form-select" onchange="loadTrainingDataStatus()">
-                            <option value="">-- Select a skill --</option>
-                        </select>
-                    </div>
-
-                    <!-- Training Data Status -->
-                    <div id="training-data-status" class="glass-card" style="background: var(--glass-surface); padding: 1rem; margin-bottom: 1.5rem; display: none;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                            <span style="font-weight: 600; color: var(--neon-cyan);">📊 Training Data Status</span>
-                            <span id="training-quality-badge" class="badge" style="padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.8rem;">--</span>
-                        </div>
-                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1rem;">
-                            <div>
-                                <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-green);" id="training-examples-count">0</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Examples</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-blue);" id="training-avg-tokens">0</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Avg Tokens</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 1.5rem; font-weight: bold;" id="training-quality-score">--</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Quality</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-purple);" id="training-topics">0</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Topics</div>
-                            </div>
-                        </div>
-                        <div id="training-recommendation" style="background: rgba(255, 200, 0, 0.1); border-left: 3px solid var(--neon-orange); padding: 0.5rem 1rem; font-size: 0.85rem; color: var(--text-secondary); display: none;">
-                            <strong style="color: var(--neon-orange);">⚠️ Recommendation:</strong> <span id="training-recommendation-text"></span>
-                        </div>
-                        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                            <button class="btn btn-secondary btn-sm" onclick="showMainTab('skills'); showSkillsTab('data');">+ Add Training Data</button>
-                            <button class="btn btn-secondary btn-sm" onclick="viewTrainingExamples()">📄 View Examples</button>
-                        </div>
-                    </div>
-
-                    <!-- Training Configuration -->
-                    <div class="glass-card" style="background: var(--glass-surface); padding: 1rem; margin-bottom: 1.5rem;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                            <span style="font-weight: 600; color: var(--neon-cyan);">⚙️ Training Configuration</span>
-                            <div>
-                                <button class="btn btn-secondary btn-sm" onclick="setTrainingPreset('simple')" id="preset-simple" style="opacity: 1;">Simple</button>
-                                <button class="btn btn-secondary btn-sm" onclick="setTrainingPreset('advanced')" id="preset-advanced" style="opacity: 0.5;">Advanced</button>
-                            </div>
-                        </div>
-
-                        <!-- Simple Mode -->
-                        <div id="training-config-simple">
-                            <div class="form-group">
-                                <label class="form-label">Training Intensity</label>
-                                <div style="display: flex; align-items: center; gap: 1rem;">
-                                    <input type="range" id="training-intensity" min="1" max="3" value="2" style="flex: 1;" onchange="updateIntensityLabel()">
-                                    <span id="training-intensity-label" style="color: var(--neon-green); font-weight: 600; min-width: 100px;">Standard</span>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                                    <span>Quick (~5 min)</span>
-                                    <span>Standard (~10 min)</span>
-                                    <span>Deep (~20 min)</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Advanced Mode (Hidden by default) -->
-                        <div id="training-config-advanced" style="display: none;">
-                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1rem;">
-                                <div class="form-group">
-                                    <label class="form-label">Base Model</label>
-                                    <select id="training-base-model" class="form-select">
-                                        <option value="unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit">Llama-3.1-8B (Recommended)</option>
-                                        <option value="unsloth/Llama-3.2-3B-Instruct-bnb-4bit">Llama-3.2-3B (Faster)</option>
-                                        <option value="unsloth/Mistral-7B-Instruct-v0.3-bnb-4bit">Mistral-7B</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Epochs</label>
-                                    <select id="training-epochs" class="form-select">
-                                        <option value="3">3 (Quick)</option>
-                                        <option value="5">5</option>
-                                        <option value="10" selected>10 (Standard)</option>
-                                        <option value="20">20 (Deep)</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Learning Rate</label>
-                                    <select id="training-lr" class="form-select">
-                                        <option value="1e-4">1e-4 (Conservative)</option>
-                                        <option value="2e-4" selected>2e-4 (Recommended)</option>
-                                        <option value="5e-4">5e-4 (Aggressive)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
-                                <div class="form-group">
-                                    <label class="form-label">LoRA Rank (r)</label>
-                                    <select id="training-lora-r" class="form-select">
-                                        <option value="8">8 (Small)</option>
-                                        <option value="16" selected>16 (Standard)</option>
-                                        <option value="32">32 (Large)</option>
-                                        <option value="64">64 (Very Large)</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">LoRA Alpha</label>
-                                    <select id="training-lora-alpha" class="form-select">
-                                        <option value="16" selected>16</option>
-                                        <option value="32">32</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Batch Size</label>
-                                    <select id="training-batch-size" class="form-select">
-                                        <option value="1">1</option>
-                                        <option value="2" selected>2</option>
-                                        <option value="4">4</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Cost Estimate -->
-                        <div style="background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.3); border-radius: 8px; padding: 0.75rem 1rem; margin-top: 1rem; display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <span style="color: var(--text-secondary);">Estimated Time:</span>
-                                <span style="color: var(--neon-green); font-weight: 600;" id="training-time-estimate">~10 minutes</span>
-                            </div>
-                            <div>
-                                <span style="color: var(--text-secondary);">Estimated Cost:</span>
-                                <span style="color: var(--neon-green); font-weight: 600;" id="training-cost-estimate">~$0.65</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Start Training Button -->
-                    <button class="btn btn-primary" style="width: 100%; padding: 1rem; font-size: 1.1rem;" onclick="startTraining()" id="start-training-btn">
-                        🚀 Start Training
-                    </button>
-                </div>
-            </div>
-
-            <!-- Data Manager - Parse & Extract Training Data -->
-            <div id="training-data" class="sub-tab-content">
-                <div class="glass-card">
-                    <div class="section-header">
-                        <div class="section-title"><span class="section-icon">📄</span> Data Manager</div>
-                        <button class="btn btn-primary btn-sm" onclick="openParserModal()">📤 Parse Documents</button>
-                    </div>
-
-                    <!-- Quick Stats -->
-                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
-                        <div class="glass-card" style="background: var(--glass-surface); padding: 1rem; text-align: center;">
-                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-cyan);" id="dm-total-items">0</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Total Items</div>
-                        </div>
-                        <div class="glass-card" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(239, 68, 68, 0.2)); border: 1px solid rgba(245, 158, 11, 0.3); padding: 1rem; text-align: center;">
-                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-orange);" id="dm-pending-items">0</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Pending Review</div>
-                        </div>
-                        <div class="glass-card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(0, 212, 170, 0.2)); border: 1px solid rgba(16, 185, 129, 0.3); padding: 1rem; text-align: center;">
-                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-green);" id="dm-approved-items">0</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Approved</div>
-                        </div>
-                        <div class="glass-card" style="background: var(--glass-surface); padding: 1rem; text-align: center;">
-                            <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-purple);" id="dm-total-tokens">0</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Total Tokens</div>
-                        </div>
-                    </div>
-
-                    <!-- Skill Selector for Data -->
-                    <div class="form-group" style="margin-bottom: 1rem;">
-                        <label class="form-label">Select Skill</label>
-                        <select id="dm-skill-select" class="form-select" onchange="loadDataManagerData()">
-                            <option value="">-- Select a skill --</option>
-                        </select>
-                    </div>
-
-                    <!-- Toolbar -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
-                        <div style="display: flex; gap: 0.5rem; align-items: center;">
-                            <input type="text" id="dm-search" class="form-input" placeholder="Search..." style="width: 200px;" onkeyup="filterDataManager()">
-                            <select id="dm-category-filter" class="form-select" style="width: 140px;" onchange="filterDataManager()">
-                                <option value="">All Categories</option>
-                                <option value="general">General</option>
-                                <option value="faq">FAQ</option>
-                                <option value="technical">Technical</option>
-                                <option value="pricing">Pricing</option>
-                                <option value="procedure">Procedure</option>
-                            </select>
-                            <select id="dm-status-filter" class="form-select" style="width: 120px;" onchange="filterDataManager()">
-                                <option value="">All Status</option>
-                                <option value="pending">Pending</option>
-                                <option value="approved">Approved</option>
-                            </select>
-                        </div>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <button class="btn btn-secondary btn-sm" onclick="bulkApproveSelected()">✅ Approve Selected</button>
-                            <button class="btn btn-secondary btn-sm" onclick="bulkMoveToTraining()">📥 Move to Training</button>
-                            <button class="btn btn-secondary btn-sm" onclick="bulkDeleteSelected()" style="color: #ff4444;">🗑️ Delete</button>
-                        </div>
-                    </div>
-
-                    <!-- Data List -->
-                    <div id="dm-data-list" style="background: var(--glass-surface); border-radius: 12px; max-height: 500px; overflow-y: auto;">
-                        <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
-                            <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
-                            <p>No extracted data yet</p>
-                            <p style="font-size: 0.9rem;">Upload and parse documents to extract training data</p>
-                            <button class="btn btn-primary" style="margin-top: 1rem;" onclick="openParserModal()">📤 Parse Documents</button>
-                        </div>
-                    </div>
-
-                    <!-- Pagination -->
-                    <div id="dm-pagination" style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem;">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Document Parser Modal -->
-            <div id="parser-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
-                <div class="glass-card" style="width: 600px; max-width: 90%; max-height: 80vh; overflow-y: auto;">
-                    <div class="section-header">
-                        <div class="section-title"><span class="section-icon">📤</span> Parse Documents</div>
-                        <button class="btn btn-secondary btn-sm" onclick="closeParserModal()">✕</button>
-                    </div>
-
-                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Upload documents to extract Q&A pairs for training. Supports 70+ file types.</p>
-                    <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem;">
-                        <strong style="color: var(--neon-orange);">⚠️ Note:</strong>
-                        <span style="color: var(--text-secondary);">Files are processed and <strong>immediately deleted</strong>. Only extracted Q&A data is stored - zero storage waste!</span>
-                    </div>
-
-                    <!-- Skill Selector -->
-                    <div class="form-group" style="margin-bottom: 1rem;">
-                        <label class="form-label">Target Skill</label>
-                        <select id="parser-skill-select" class="form-select">
-                            <option value="">-- Select a skill --</option>
-                        </select>
-                    </div>
-
-                    <!-- File Upload -->
-                    <div id="parser-dropzone" style="border: 2px dashed var(--neon-cyan); border-radius: 12px; padding: 2rem; text-align: center; margin-bottom: 1rem; cursor: pointer;" onclick="document.getElementById('parser-files').click()">
-                        <div style="font-size: 3rem; margin-bottom: 0.5rem;">📁</div>
-                        <p style="color: var(--text-secondary);">Drop files here or click to browse</p>
-                        <p style="font-size: 0.8rem; color: var(--text-secondary);">PDF, DOCX, TXT, CSV, JSON, Images, Audio, and more</p>
-                        <input type="file" id="parser-files" multiple style="display: none;" onchange="handleParserFiles(this.files)">
-                    </div>
-
-                    <!-- Selected Files -->
-                    <div id="parser-file-list" style="margin-bottom: 1rem;"></div>
-
-                    <!-- Progress -->
-                    <div id="parser-progress" style="display: none; margin-bottom: 1rem;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                            <span>Processing...</span>
-                            <span id="parser-progress-text">0%</span>
-                        </div>
-                        <div style="background: var(--glass-surface); border-radius: 8px; height: 8px; overflow: hidden;">
-                            <div id="parser-progress-bar" style="background: var(--neon-cyan); height: 100%; width: 0%; transition: width 0.3s;"></div>
-                        </div>
-                    </div>
-
-                    <!-- Buttons -->
-                    <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                        <button class="btn btn-secondary" onclick="closeParserModal()">Cancel</button>
-                        <button class="btn btn-primary" id="parser-submit-btn" onclick="submitParserFiles()">🚀 Parse & Extract</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Training Progress -->
-            <div id="training-progress" class="sub-tab-content">
-                <div class="glass-card">
-                    <div class="section-header">
-                        <div class="section-title"><span class="section-icon">📊</span> Training Progress</div>
-                        <button class="btn btn-secondary btn-sm" id="cancel-training-btn" onclick="cancelTraining()" style="display: none;">Cancel</button>
-                    </div>
-
-                    <!-- No Active Training -->
-                    <div id="no-training-message" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
-                        <div style="font-size: 3rem; margin-bottom: 1rem;">🧘</div>
-                        <p style="font-size: 1.1rem;">No training in progress</p>
-                        <p style="font-size: 0.9rem;">Select a skill and start training from the Console tab</p>
-                        <button class="btn btn-primary" style="margin-top: 1rem;" onclick="showTrainingTab('console')">Go to Console</button>
-                    </div>
-
-                    <!-- Active Training Display - Enhanced Dashboard -->
-                    <div id="active-training-display" style="display: none;">
-                        <!-- Header with pulse indicator -->
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
-                            <div style="display: flex; align-items: center; gap: 12px;">
-                                <div id="training-pulse" style="width: 12px; height: 12px; background: var(--neon-green); border-radius: 50%; animation: pulse 2s infinite; box-shadow: 0 0 20px var(--neon-green);"></div>
-                                <h3 style="margin: 0; font-size: 1.2rem;">🧠 Training: <span id="progress-skill-name" style="color: var(--neon-cyan);">--</span></h3>
-                            </div>
-                            <span id="progress-status" class="badge" style="background: linear-gradient(135deg, var(--neon-green), #059669); padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600;">● Running</span>
-                        </div>
-
-                        <!-- Stats Grid - 4 Cards -->
-                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 1.5rem;">
-                            <div class="glass-card" style="background: var(--glass-surface); border-radius: 16px; padding: 20px; text-align: center; border: 1px solid var(--glass-border);">
-                                <div style="font-size: 24px; margin-bottom: 8px;">📉</div>
-                                <div id="stat-loss" style="font-size: 28px; font-weight: 700; background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">--</div>
-                                <div style="color: var(--text-secondary); font-size: 12px; margin-top: 4px;">Current Loss</div>
-                                <div id="stat-loss-trend" style="font-size: 11px; color: var(--neon-green); margin-top: 8px;">--</div>
-                            </div>
-                            <div class="glass-card" style="background: var(--glass-surface); border-radius: 16px; padding: 20px; text-align: center; border: 1px solid var(--glass-border);">
-                                <div style="font-size: 24px; margin-bottom: 8px;">🔄</div>
-                                <div id="stat-steps" style="font-size: 28px; font-weight: 700; background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">0/0</div>
-                                <div style="color: var(--text-secondary); font-size: 12px; margin-top: 4px;">Training Steps</div>
-                                <div style="height: 4px; background: var(--glass-surface); border-radius: 2px; margin-top: 12px; overflow: hidden;">
-                                    <div id="stat-steps-bar" style="height: 100%; background: linear-gradient(90deg, var(--neon-green), var(--neon-cyan)); border-radius: 2px; transition: width 0.5s; width: 0%;"></div>
-                                </div>
-                            </div>
-                            <div class="glass-card" style="background: var(--glass-surface); border-radius: 16px; padding: 20px; text-align: center; border: 1px solid var(--glass-border);">
-                                <div style="font-size: 24px; margin-bottom: 8px;">⏱️</div>
-                                <div id="stat-eta" style="font-size: 28px; font-weight: 700; background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">--:--</div>
-                                <div style="color: var(--text-secondary); font-size: 12px; margin-top: 4px;">Time Remaining</div>
-                                <div id="stat-elapsed" style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">Elapsed: --</div>
-                            </div>
-                            <div class="glass-card" style="background: var(--glass-surface); border-radius: 16px; padding: 20px; text-align: center; border: 1px solid var(--glass-border);">
-                                <div style="font-size: 24px; margin-bottom: 8px;">🎯</div>
-                                <div id="stat-epoch" style="font-size: 28px; font-weight: 700; background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">0</div>
-                                <div style="color: var(--text-secondary); font-size: 12px; margin-top: 4px;">Current Epoch</div>
-                                <div id="stat-epoch-total" style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">of 10 epochs</div>
-                            </div>
-                        </div>
-
-                        <!-- Chart and GPU Section -->
-                        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 1.5rem;">
-                            <div class="glass-card" style="background: var(--glass-surface); border-radius: 16px; padding: 20px; border: 1px solid var(--glass-border);">
-                                <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">📈 Loss Curve (Real-Time)</div>
-                                <canvas id="loss-chart" height="180"></canvas>
-                            </div>
-                            <div class="glass-card" style="background: var(--glass-surface); border-radius: 16px; padding: 20px; border: 1px solid var(--glass-border);">
-                                <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">🖥️ GPU Metrics</div>
-                                <div id="gpu-name" style="font-size: 18px; font-weight: 600; margin-bottom: 16px; color: var(--neon-green);">NVIDIA A10G</div>
-                                <div style="margin-bottom: 16px;">
-                                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;">
-                                        <span>Memory</span>
-                                        <span id="gpu-mem-text">18.2 / 22 GB</span>
-                                    </div>
-                                    <div style="height: 8px; background: var(--glass-border); border-radius: 4px; overflow: hidden;">
-                                        <div id="gpu-mem-bar" style="height: 100%; background: linear-gradient(90deg, var(--neon-green), var(--neon-cyan)); border-radius: 4px; transition: width 0.3s; width: 83%;"></div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;">
-                                        <span>Utilization</span>
-                                        <span id="gpu-util-text">94%</span>
-                                    </div>
-                                    <div style="height: 8px; background: var(--glass-border); border-radius: 4px; overflow: hidden;">
-                                        <div id="gpu-util-bar" style="height: 100%; background: linear-gradient(90deg, var(--neon-green), var(--neon-cyan)); border-radius: 4px; transition: width 0.3s; width: 94%;"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Example Preview and Education Section -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 1.5rem;">
-                            <div class="glass-card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(0, 255, 242, 0.1)); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 16px; padding: 20px;">
-                                <div style="font-size: 14px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">📝 Currently Learning...</div>
-                                <div id="current-example-card" style="background: rgba(0,0,0,0.2); border-radius: 12px; padding: 16px;">
-                                    <div style="margin-bottom: 12px;">
-                                        <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">👤 User Question</div>
-                                        <div id="current-example-input" style="font-size: 14px; line-height: 1.5;">"How do I set up automation?"</div>
-                                    </div>
-                                    <div>
-                                        <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">🤖 Expected Response</div>
-                                        <div id="current-example-output" style="font-size: 14px; line-height: 1.5;">"To set up automation, click..."</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="glass-card" style="background: var(--glass-surface); border-radius: 16px; padding: 20px; border: 1px solid var(--glass-border);">
-                                <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">💡 Did You Know?</div>
-                                <div id="fact-card" style="text-align: center;">
-                                    <div id="fact-icon" style="font-size: 48px; margin-bottom: 12px;">🧠</div>
-                                    <h4 id="fact-title" style="font-size: 18px; margin-bottom: 8px;">What is LoRA?</h4>
-                                    <p id="fact-text" style="color: var(--text-secondary); font-size: 14px; line-height: 1.6;">Low-Rank Adaptation trains only <strong style="color: var(--neon-green);">0.92%</strong> of parameters, making it 10x faster than full fine-tuning!</p>
-                                </div>
-                                <div style="display: flex; justify-content: center; gap: 8px; margin-top: 16px;">
-                                    <span class="fact-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--neon-green);"></span>
-                                    <span class="fact-dot" style="width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2);"></span>
-                                    <span class="fact-dot" style="width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2);"></span>
-                                    <span class="fact-dot" style="width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2);"></span>
-                                    <span class="fact-dot" style="width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2);"></span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Training Log (Collapsed by default) -->
-                        <details class="glass-card" style="background: var(--glass-surface); padding: 1rem; border-radius: 16px; border: 1px solid var(--glass-border);">
-                            <summary style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600; color: var(--neon-cyan);">
-                                📋 Training Log
-                            </summary>
-                            <div id="training-log" class="console" style="height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; padding: 0.5rem; background: #0a0a0f; border-radius: 4px; margin-top: 1rem;">
-                                <div style="color: var(--text-secondary);">Waiting for training to start...</div>
-                            </div>
-                        </details>
-                    </div>
-
-                    <!-- Training Complete Display -->
-                    <div id="training-complete-display" style="display: none;">
-                        <div style="text-align: center; padding: 2rem;">
-                            <div style="font-size: 4rem; margin-bottom: 1rem;">🎉</div>
-                            <h2 style="color: var(--neon-green); margin-bottom: 0.5rem;">Training Complete!</h2>
-                            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Your skill adapter is ready to use</p>
-                        </div>
-
-                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
-                            <div class="glass-card" style="background: var(--glass-surface); padding: 1rem; text-align: center;">
-                                <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-green);" id="result-final-loss">--</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Final Loss</div>
-                            </div>
-                            <div class="glass-card" style="background: var(--glass-surface); padding: 1rem; text-align: center;">
-                                <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-cyan);" id="result-training-time">--</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Training Time</div>
-                            </div>
-                            <div class="glass-card" style="background: var(--glass-surface); padding: 1rem; text-align: center;">
-                                <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-purple);" id="result-examples">--</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Examples</div>
-                            </div>
-                            <div class="glass-card" style="background: var(--glass-surface); padding: 1rem; text-align: center;">
-                                <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-orange);" id="result-cost">--</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Cost</div>
-                            </div>
-                        </div>
-
-                        <!-- Test Chat -->
-                        <div class="glass-card" style="background: var(--glass-surface); padding: 1rem; margin-bottom: 1.5rem;">
-                            <div style="font-weight: 600; margin-bottom: 0.75rem; color: var(--neon-cyan);">💬 Test Your Trained Skill</div>
-                            <div style="display: flex; gap: 0.5rem;">
-                                <input type="text" id="test-adapter-prompt" class="form-input" placeholder="Ask your trained skill something..." style="flex: 1;">
-                                <button class="btn btn-primary" onclick="testTrainedAdapter()">Send</button>
-                            </div>
-                            <div id="test-adapter-response" class="console" style="margin-top: 1rem; min-height: 60px; padding: 0.75rem; display: none;"></div>
-                        </div>
-
-                        <div style="display: flex; gap: 0.5rem; justify-content: center;">
-                            <button class="btn btn-secondary" onclick="showTrainingTab('console')">🔄 Train Again</button>
-                            <button class="btn btn-secondary" onclick="showTrainingTab('adapters')">📦 View Adapters</button>
-                            <button class="btn btn-primary" onclick="showMainTab('skills')">🏠 Back to Skills</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- CAD Files Processing -->
-            <div id="training-cad" class="sub-tab-content">
-                <div class="glass-card">
-                    <div class="section-header">
-                        <div class="section-title"><span class="section-icon">📐</span> CAD File Processing (DXF → JSON)</div>
-                    </div>
-                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
-                        Convert CAD drawings into AI-readable JSON for training. Supports DXF files only (no external software needed).
-                    </p>
-
-                    <!-- Step 1: Select Output Format -->
-                    <div class="glass-card" style="background: var(--glass-surface); padding: 1.25rem; margin-bottom: 1rem;">
-                        <h4 style="margin: 0 0 1rem 0; color: var(--neon-cyan);">Step 1: What JSON format do you need?</h4>
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;">
-                            <label class="cad-option-card" style="display: flex; align-items: flex-start; gap: 0.75rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s;">
-                                <input type="checkbox" name="cad-output-type" value="spatial" style="margin-top: 0.25rem;">
-                                <div>
-                                    <div style="font-weight: 600; color: var(--neon-green);">👁️ SPATIAL</div>
-                                    <div style="font-size: 0.85rem; color: var(--text-secondary);">Bounding boxes, layers, closed/open geometry</div>
-                                    <div style="font-size: 0.75rem; color: var(--neon-cyan); margin-top: 0.25rem;">Best for: "The Eyes" - spatial analysis</div>
-                                </div>
-                            </label>
-                            <label class="cad-option-card" style="display: flex; align-items: flex-start; gap: 0.75rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s;">
-                                <input type="checkbox" name="cad-output-type" value="quantity" style="margin-top: 0.25rem;">
-                                <div>
-                                    <div style="font-weight: 600; color: var(--neon-orange);">🧮 QUANTITY</div>
-                                    <div style="font-size: 0.85rem; color: var(--text-secondary);">Linear feet (normalized), block counts</div>
-                                    <div style="font-size: 0.75rem; color: var(--neon-cyan); margin-top: 0.25rem;">Best for: "The Estimator" - takeoffs</div>
-                                </div>
-                            </label>
-                            <label class="cad-option-card" style="display: flex; align-items: flex-start; gap: 0.75rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s;">
-                                <input type="checkbox" name="cad-output-type" value="specs" style="margin-top: 0.25rem;">
-                                <div>
-                                    <div style="font-weight: 600; color: var(--neon-purple);">📜 SPECS</div>
-                                    <div style="font-size: 0.85rem; color: var(--text-secondary);">Text notes, dimensions, leaders</div>
-                                    <div style="font-size: 0.75rem; color: var(--neon-cyan); margin-top: 0.25rem;">Best for: "The Detailer" - spec compliance</div>
-                                </div>
-                            </label>
-                            <label class="cad-option-card" style="display: flex; align-items: flex-start; gap: 0.75rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s;">
-                                <input type="checkbox" name="cad-output-type" value="full" style="margin-top: 0.25rem;">
-                                <div>
-                                    <div style="font-weight: 600; color: var(--neon-blue);">📦 FULL</div>
-                                    <div style="font-size: 0.85rem; color: var(--text-secondary);">All entities with complete geometry data</div>
-                                    <div style="font-size: 0.75rem; color: var(--neon-cyan); margin-top: 0.25rem;">Best for: Complete data extraction</div>
-                                </div>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Step 2: Upload DXF File -->
-                    <div class="glass-card" style="background: var(--glass-surface); padding: 1.25rem; margin-bottom: 1rem;">
-                        <h4 style="margin: 0 0 1rem 0; color: var(--neon-cyan);">Step 2: Upload DXF File</h4>
-                        <div class="upload-zone" id="cad-upload-zone"
-                             onclick="document.getElementById('cad-file-input').click()"
-                             ondragover="event.preventDefault(); this.classList.add('dragover')"
-                             ondragleave="this.classList.remove('dragover')"
-                             ondrop="handleCADDrop(event)"
-                             style="border: 2px dashed var(--glass-border); border-radius: 12px; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.2s;">
-                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📐</div>
-                            <div style="color: var(--text-primary); font-weight: 500;">Drop DXF file here or click to upload</div>
-                            <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">Only .dxf files supported (no external software needed)</div>
-                            <input type="file" id="cad-file-input" style="display: none;" accept=".dxf" onchange="handleCADUpload(this.files[0])">
-                        </div>
-                    </div>
-
-                    <!-- Step 3: File Preview (shown after upload, before processing) -->
-                    <div id="cad-preview-section" class="glass-card" style="background: var(--glass-surface); padding: 1.25rem; margin-bottom: 1rem; display: none;">
-                        <h4 style="margin: 0 0 1rem 0; color: var(--neon-cyan);">Step 3: Preview & Confirm</h4>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-                            <div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Filename</div>
-                                <div id="cad-preview-filename" style="font-weight: 600; color: var(--text-primary);">--</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Units</div>
-                                <div id="cad-preview-units" style="font-weight: 600; color: var(--neon-green);">--</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Layers</div>
-                                <div id="cad-preview-layers" style="font-weight: 600; color: var(--neon-cyan);">--</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Total Entities</div>
-                                <div id="cad-preview-entities" style="font-weight: 600; color: var(--neon-orange);">--</div>
-                            </div>
-                        </div>
-
-                        <!-- Entity Breakdown -->
-                        <div style="margin-bottom: 1rem;">
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Entity Breakdown</div>
-                            <div id="cad-preview-entity-counts" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
-                        </div>
-
-                        <!-- Layer List -->
-                        <div style="margin-bottom: 1rem;">
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Layers Found</div>
-                            <div id="cad-preview-layer-list" style="max-height: 100px; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 0.5rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem;"></div>
-                        </div>
-
-                        <!-- Recommendations -->
-                        <div id="cad-preview-recommendations" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem;">
-                            <div style="font-size: 0.8rem; color: var(--neon-green); margin-bottom: 0.25rem;">💡 Recommendations</div>
-                            <div id="cad-preview-rec-list" style="font-size: 0.85rem; color: var(--text-secondary);"></div>
-                        </div>
-
-                        <div style="display: flex; gap: 0.5rem;">
-                            <button class="btn btn-primary" onclick="processCADFile()" id="cad-process-btn">✅ Process & Generate JSON</button>
-                            <button class="btn btn-secondary" onclick="cancelCADUpload()">❌ Cancel</button>
-                        </div>
-                    </div>
-
-                    <!-- Step 4: JSON Output (shown after processing) -->
-                    <div id="cad-output-section" class="glass-card" style="background: var(--glass-surface); padding: 1.25rem; display: none;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                            <h4 style="margin: 0; color: var(--neon-green);">✅ JSON Generated Successfully</h4>
-                            <button class="btn btn-secondary btn-sm" onclick="resetCADProcessor()">🔄 Process Another</button>
-                        </div>
-
-                        <!-- Generated Files -->
-                        <div id="cad-output-files" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;"></div>
-
-                        <!-- JSON Preview -->
-                        <div style="margin-bottom: 1rem;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                <span style="font-size: 0.9rem; color: var(--text-secondary);">Preview:</span>
-                                <select id="cad-output-preview-select" class="form-select" style="width: auto; padding: 0.25rem 0.5rem;" onchange="showCADOutputPreview()"></select>
-                            </div>
-                            <pre id="cad-output-preview" style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px; max-height: 300px; overflow: auto; font-size: 0.8rem; color: var(--neon-cyan);"></pre>
-                        </div>
-
-                        <!-- Actions -->
-                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                            <button class="btn btn-primary" onclick="downloadCADOutputs()">💾 Download All JSON</button>
-                            <button class="btn btn-secondary" onclick="saveCADAsTraining()">📚 Save as Training Data</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Adapters Gallery -->
-            <div id="training-adapters" class="sub-tab-content">
-                <div class="glass-card">
-                    <div class="section-header">
-                        <div class="section-title"><span class="section-icon">📦</span> Trained Adapters</div>
-                        <button class="btn btn-secondary btn-sm" onclick="refreshAdapters()">↻ Refresh</button>
-                    </div>
-
-                    <div id="adapters-gallery" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-                        <!-- Adapters will be loaded here -->
-                        <div id="no-adapters-message" style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);">
-                            <div style="font-size: 3rem; margin-bottom: 1rem;">📦</div>
-                            <p>No trained adapters yet</p>
-                            <p style="font-size: 0.9rem;">Train a skill to create your first adapter</p>
-                            <button class="btn btn-primary" style="margin-top: 1rem;" onclick="showTrainingTab('console')">Start Training</button>
-                        </div>
-                    </div>
-
-                    <!-- Training History Table -->
-                    <div class="section-header" style="margin-top: 2rem;">
-                        <div class="section-title"><span class="section-icon">📊</span> Training History</div>
-                    </div>
-                    <div style="overflow-x: auto;">
-                        <table class="skills-table" style="width: 100%;">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Skill</th>
-                                    <th>Status</th>
-                                    <th>Loss</th>
-                                    <th>Time</th>
-                                    <th>Cost</th>
-                                </tr>
-                            </thead>
-                            <tbody id="training-history-table">
-                                <tr>
-                                    <td colspan="6" style="text-align: center; color: var(--text-secondary);">No training history</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ================================================================ -->
         <!-- UNIFIED SKILLS & TRAINING TAB -->
         <!-- ================================================================ -->
         <div id="tab-skills-training" class="tab-content">
@@ -9063,22 +8500,30 @@ DASHBOARD_HTML = '''
                             <!-- Stats -->
                             <div class="glass-card" style="padding: 1.25rem;">
                                 <h4 style="margin: 0 0 1rem 0; color: var(--neon-cyan);">📊 Statistics</h4>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                                    <div style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; text-align: center;">
-                                        <div style="font-size: 1.75rem; font-weight: bold; color: var(--neon-green);" id="skill-modal-stat-examples">0</div>
-                                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Training Examples</div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem;">
+                                    <div style="background: var(--glass-surface); padding: 0.75rem; border-radius: 8px; text-align: center;">
+                                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-green);" id="skill-modal-stat-examples">0</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary);">Examples</div>
                                     </div>
-                                    <div style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; text-align: center;">
-                                        <div style="font-size: 1.75rem; font-weight: bold; color: var(--neon-blue);" id="skill-modal-stat-tokens">0</div>
-                                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Total Tokens</div>
+                                    <div style="background: var(--glass-surface); padding: 0.75rem; border-radius: 8px; text-align: center;">
+                                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-blue);" id="skill-modal-stat-tokens">0</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary);">Tokens</div>
                                     </div>
-                                    <div style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; text-align: center;">
-                                        <div style="font-size: 1.75rem; font-weight: bold; color: var(--neon-purple);" id="skill-modal-stat-adapters">0</div>
-                                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Adapters</div>
+                                    <div style="background: var(--glass-surface); padding: 0.75rem; border-radius: 8px; text-align: center;">
+                                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-purple);" id="skill-modal-stat-adapters">0</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary);">Adapters</div>
                                     </div>
-                                    <div style="background: var(--glass-surface); padding: 1rem; border-radius: 8px; text-align: center;">
-                                        <div style="font-size: 1.75rem; font-weight: bold; color: var(--neon-orange);" id="skill-modal-stat-quality">--</div>
-                                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Data Quality</div>
+                                    <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(0, 200, 150, 0.1)); padding: 0.75rem; border-radius: 8px; text-align: center;">
+                                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-green);" id="skill-modal-stat-loss">--</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary);">Final Loss</div>
+                                    </div>
+                                    <div style="background: var(--glass-surface); padding: 0.75rem; border-radius: 8px; text-align: center;">
+                                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--neon-cyan);" id="skill-modal-stat-trained">--</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary);">Last Trained</div>
+                                    </div>
+                                    <div style="background: var(--glass-surface); padding: 0.75rem; border-radius: 8px; text-align: center;">
+                                        <div id="skill-modal-stat-quality-badge" style="font-size: 0.9rem; font-weight: bold; padding: 0.25rem 0.5rem; border-radius: 4px; background: var(--glass-surface); color: var(--text-secondary);">--</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Quality</div>
                                     </div>
                                 </div>
                             </div>
@@ -9098,17 +8543,85 @@ DASHBOARD_HTML = '''
                     <!-- Training Data Tab -->
                     <div id="skill-modal-training-data" class="modal-tab-content">
                         <!-- Data Actions -->
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
-                            <div style="display: flex; gap: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                                 <button class="btn btn-primary btn-sm" onclick="openManualEntryModal()">✏️ Manual Entry</button>
                                 <button class="btn btn-secondary btn-sm" onclick="openBulkImportModal()">📤 Bulk Import</button>
                                 <button class="btn btn-secondary btn-sm" onclick="openAiGenerateModal()">🤖 AI Generate</button>
+                                <button class="btn btn-secondary btn-sm" onclick="toggleModalCADSection()">📐 CAD Import</button>
+                                <button class="btn btn-secondary btn-sm" onclick="toggleModalVisualSection()">📸 Visual Data</button>
                             </div>
                             <div style="display: flex; gap: 0.5rem; align-items: center;">
                                 <span id="skill-data-selected-count" style="color: var(--text-secondary); font-size: 0.9rem;">0 selected</span>
                                 <button class="btn btn-secondary btn-sm" onclick="approveSelectedData()" id="approve-selected-btn" disabled>✓ Approve</button>
                                 <button class="btn btn-danger btn-sm" onclick="deleteSelectedData()" id="delete-selected-btn" disabled>🗑 Delete</button>
                             </div>
+                        </div>
+
+                        <!-- CAD Import Section (Hidden by default) -->
+                        <div id="modal-cad-section" class="glass-card" style="display: none; padding: 1rem; margin-bottom: 1rem; background: linear-gradient(135deg, rgba(0, 217, 255, 0.05), rgba(124, 58, 237, 0.05));">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h4 style="margin: 0; color: var(--neon-cyan);">📐 CAD File Import (DXF → JSON)</h4>
+                                <button class="btn btn-sm" onclick="toggleModalCADSection()" style="background: transparent; color: var(--text-secondary);">✕</button>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                <div>
+                                    <div id="modal-cad-upload-zone" class="upload-zone" onclick="document.getElementById('modal-cad-file-input').click()" style="padding: 1rem; min-height: auto; cursor: pointer;">
+                                        <div style="color: var(--text-primary); font-weight: 500;">📁 Drop DXF file or click</div>
+                                        <input type="file" id="modal-cad-file-input" style="display: none;" accept=".dxf" onchange="handleModalCADUpload(this.files[0])">
+                                    </div>
+                                    <div id="modal-cad-file-preview" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);"></div>
+                                </div>
+                                <div>
+                                    <label class="form-label" style="margin-bottom: 0.5rem; display: block;">Output Format (per UFCS):</label>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; cursor: pointer;">
+                                            <input type="checkbox" name="modal-cad-type" value="spatial" checked> 703 Spatial
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; cursor: pointer;">
+                                            <input type="checkbox" name="modal-cad-type" value="specs"> 704 Specs
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; cursor: pointer;">
+                                            <input type="checkbox" name="modal-cad-type" value="quantity"> 705 Measurements
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; cursor: pointer;">
+                                            <input type="checkbox" name="modal-cad-type" value="full"> 706 Full Export
+                                        </label>
+                                    </div>
+                                    <button class="btn btn-primary btn-sm" onclick="processModalCAD()" style="width: 100%; margin-top: 0.75rem;">⚙️ Process & Add to Training</button>
+                                </div>
+                            </div>
+                            <div id="modal-cad-status" style="margin-top: 0.75rem; font-size: 0.85rem;"></div>
+                            <!-- Processed CAD Files for Download -->
+                            <div id="modal-cad-outputs" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">📥 Download Processed JSON:</div>
+                                <div id="modal-cad-download-list" style="display: flex; gap: 0.5rem; flex-wrap: wrap;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Visual Training Data Section (Hidden by default) -->
+                        <div id="modal-visual-section" class="glass-card" style="display: none; padding: 1rem; margin-bottom: 1rem; background: linear-gradient(135deg, rgba(245, 158, 11, 0.05), rgba(239, 68, 68, 0.05));">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h4 style="margin: 0; color: var(--neon-orange);">📸 Visual Training Data</h4>
+                                <button class="btn btn-sm" onclick="toggleModalVisualSection()" style="background: transparent; color: var(--text-secondary);">✕</button>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-bottom: 1rem;">
+                                <button class="btn btn-sm btn-secondary" onclick="setVisualCategory('products')">📦 Products</button>
+                                <button class="btn btn-sm btn-secondary" onclick="setVisualCategory('details')">🔧 Details</button>
+                                <button class="btn btn-sm btn-secondary" onclick="setVisualCategory('logos')">🎨 Logos</button>
+                                <button class="btn btn-sm btn-secondary" onclick="setVisualCategory('finished')">🏠 Finished Work</button>
+                                <button class="btn btn-sm btn-secondary" onclick="setVisualCategory('marketing')">📢 Marketing</button>
+                                <button class="btn btn-sm btn-secondary" onclick="setVisualCategory('reference')">📋 Reference</button>
+                                <button class="btn btn-sm btn-secondary" onclick="setVisualCategory('materials')">🧱 Materials</button>
+                                <button class="btn btn-sm btn-secondary" onclick="setVisualCategory('safety')">⚠️ Safety</button>
+                            </div>
+                            <div id="modal-visual-upload-zone" class="upload-zone" onclick="document.getElementById('modal-visual-file-input').click()" style="padding: 1rem; cursor: pointer;">
+                                <div style="color: var(--text-primary); font-weight: 500;">📁 Drop images or click to upload</div>
+                                <div style="color: var(--text-secondary); font-size: 0.8rem;">JPG, PNG, WebP - Max 10MB each</div>
+                                <input type="file" id="modal-visual-file-input" style="display: none;" accept="image/*" multiple onchange="handleModalVisualUpload(this.files)">
+                            </div>
+                            <div id="modal-visual-preview" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.5rem; margin-top: 1rem;"></div>
+                            <div id="modal-visual-gallery" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.5rem; margin-top: 1rem;"></div>
                         </div>
 
                         <!-- Data Stats -->
@@ -11193,7 +10706,6 @@ pipeline = Pipeline([
             if (tabId === 'dashboard') { loadSkills(); loadMetrics(); }
             if (tabId === 'skills' || tabId === 'skills-training') { loadUnifiedSkills(); }  // New unified Skills & Training tab
             if (tabId === 'fastbrain') { loadFastBrainConfig(); loadFastBrainSkills(); refreshSystemStatus(); loadApiConnections(); }  // Legacy
-            if (tabId === 'training') { loadTrainingSkillsDropdown(); refreshAdapters(); loadTrainingJobs(); }
             if (tabId === 'voice' || tabId === 'voicelab') { loadVoiceProjects(); loadSkillsForDropdowns(); }
             if (tabId === 'settings' || tabId === 'command') { refreshStats(); loadApiKeys(); }
             if (tabId === 'factory') { loadProfileDropdowns(); }
@@ -12496,6 +12008,75 @@ pipeline = Pipeline([
             document.getElementById('skill-modal-stat-tokens').textContent = skill.training_data?.tokens || 0;
             document.getElementById('skill-modal-stat-adapters').textContent = skill.adapters?.length || 0;
 
+            // Get latest adapter for loss stats
+            const latestAdapter = skill.adapters?.length > 0
+                ? skill.adapters.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0]
+                : null;
+
+            const lossEl = document.getElementById('skill-modal-stat-loss');
+            const trainedEl = document.getElementById('skill-modal-stat-trained');
+            const qualityBadge = document.getElementById('skill-modal-stat-quality-badge');
+
+            if (latestAdapter && latestAdapter.final_loss != null) {
+                const loss = parseFloat(latestAdapter.final_loss);
+                lossEl.textContent = loss.toFixed(3);
+
+                // Color based on loss value
+                if (loss < 0.2) {
+                    lossEl.style.color = '#10B981'; // Excellent - green
+                } else if (loss < 0.3) {
+                    lossEl.style.color = '#00D9FF'; // Good - cyan
+                } else if (loss < 0.5) {
+                    lossEl.style.color = '#F59E0B'; // Fair - orange
+                } else {
+                    lossEl.style.color = '#EF4444'; // Poor - red
+                }
+
+                // Quality badge
+                if (loss < 0.2) {
+                    qualityBadge.textContent = 'Excellent';
+                    qualityBadge.style.background = 'rgba(16, 185, 129, 0.3)';
+                    qualityBadge.style.color = '#10B981';
+                } else if (loss < 0.3) {
+                    qualityBadge.textContent = 'Good';
+                    qualityBadge.style.background = 'rgba(0, 217, 255, 0.3)';
+                    qualityBadge.style.color = '#00D9FF';
+                } else if (loss < 0.5) {
+                    qualityBadge.textContent = 'Fair';
+                    qualityBadge.style.background = 'rgba(245, 158, 11, 0.3)';
+                    qualityBadge.style.color = '#F59E0B';
+                } else {
+                    qualityBadge.textContent = 'Needs Work';
+                    qualityBadge.style.background = 'rgba(239, 68, 68, 0.3)';
+                    qualityBadge.style.color = '#EF4444';
+                }
+
+                // Last trained date
+                if (latestAdapter.created_at) {
+                    const date = new Date(latestAdapter.created_at);
+                    const now = new Date();
+                    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+                    if (diffDays === 0) {
+                        trainedEl.textContent = 'Today';
+                    } else if (diffDays === 1) {
+                        trainedEl.textContent = '1d ago';
+                    } else if (diffDays < 7) {
+                        trainedEl.textContent = diffDays + 'd ago';
+                    } else {
+                        trainedEl.textContent = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    }
+                } else {
+                    trainedEl.textContent = '--';
+                }
+            } else {
+                lossEl.textContent = '--';
+                lossEl.style.color = 'var(--text-secondary)';
+                trainedEl.textContent = '--';
+                qualityBadge.textContent = 'Untrained';
+                qualityBadge.style.background = 'var(--glass-surface)';
+                qualityBadge.style.color = 'var(--text-secondary)';
+            }
+
             // Reset to overview tab
             showSkillModalTab('overview');
 
@@ -12571,6 +12152,178 @@ pipeline = Pipeline([
             }
         }
 
+        // ============================================================
+        // MODAL CAD IMPORT FUNCTIONS
+        // ============================================================
+        let modalCadPendingFile = null;
+        let modalCadOutputs = {};
+        const CAD_TYPE_CODES = { spatial: '703', specs: '704', quantity: '705', full: '706' };
+
+        function toggleModalCADSection() {
+            const section = document.getElementById('modal-cad-section');
+            section.style.display = section.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function handleModalCADUpload(file) {
+            if (!file) return;
+            if (!file.name.toLowerCase().endsWith('.dxf')) {
+                showToast('Please upload a DXF file', 'warning');
+                return;
+            }
+            modalCadPendingFile = file;
+            document.getElementById('modal-cad-file-preview').innerHTML = `<span style="color: var(--neon-cyan);">📄 ${file.name} (${(file.size/1024).toFixed(1)} KB)</span>`;
+        }
+
+        async function processModalCAD() {
+            if (!modalCadPendingFile) {
+                showToast('Please upload a DXF file first', 'warning');
+                return;
+            }
+            if (!currentModalSkillId) {
+                showToast('No skill selected', 'warning');
+                return;
+            }
+
+            const selectedTypes = Array.from(document.querySelectorAll('input[name="modal-cad-type"]:checked')).map(cb => cb.value);
+            if (selectedTypes.length === 0) {
+                showToast('Please select at least one output format', 'warning');
+                return;
+            }
+
+            const statusDiv = document.getElementById('modal-cad-status');
+            statusDiv.innerHTML = '<span style="color: var(--neon-cyan);">⚙️ Processing CAD file...</span>';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', modalCadPendingFile);
+                selectedTypes.forEach(t => formData.append('output_types', t));
+
+                const processRes = await fetch('/api/cad/process', { method: 'POST', body: formData });
+                const processData = await processRes.json();
+
+                if (!processData.success) {
+                    statusDiv.innerHTML = `<span style="color: #ff6b6b;">✗ ${processData.error}</span>`;
+                    return;
+                }
+
+                modalCadOutputs = processData.outputs;
+
+                // Show download buttons
+                const downloadList = document.getElementById('modal-cad-download-list');
+                downloadList.innerHTML = Object.entries(processData.outputs).map(([type, data]) => {
+                    const code = CAD_TYPE_CODES[type] || '700';
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    return `<a href="${url}" download="${code}_${type}_${modalCadPendingFile.name.replace('.dxf', '')}.json" class="btn btn-sm btn-secondary">${code} ${type.toUpperCase()}</a>`;
+                }).join('');
+                document.getElementById('modal-cad-outputs').style.display = 'block';
+
+                // Save to training data
+                let saved = 0;
+                for (const [type, jsonData] of Object.entries(processData.outputs)) {
+                    const saveRes = await fetch('/api/cad/save-training', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ skill_id: currentModalSkillId, json_data: jsonData, format_type: type })
+                    });
+                    const saveData = await saveRes.json();
+                    if (saveData.success) saved++;
+                }
+
+                statusDiv.innerHTML = `<span style="color: var(--neon-green);">✓ Processed! Added ${saved} training examples.</span>`;
+                loadSkillTrainingData(currentModalSkillId);
+            } catch (err) {
+                statusDiv.innerHTML = `<span style="color: #ff6b6b;">✗ Processing failed</span>`;
+            }
+        }
+
+        // ============================================================
+        // MODAL VISUAL TRAINING DATA FUNCTIONS
+        // ============================================================
+        let currentVisualCategory = 'reference';
+        let pendingVisualFiles = [];
+
+        function toggleModalVisualSection() {
+            const section = document.getElementById('modal-visual-section');
+            section.style.display = section.style.display === 'none' ? 'block' : 'none';
+            if (section.style.display !== 'none') loadVisualGallery();
+        }
+
+        function setVisualCategory(category) {
+            currentVisualCategory = category;
+            document.querySelectorAll('#modal-visual-section button[onclick*="setVisualCategory"]').forEach(btn => {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+            });
+            event.target.classList.remove('btn-secondary');
+            event.target.classList.add('btn-primary');
+            showToast(`Category: ${category}`, 'info');
+        }
+
+        function handleModalVisualUpload(files) {
+            const previewDiv = document.getElementById('modal-visual-preview');
+            pendingVisualFiles = Array.from(files);
+
+            previewDiv.innerHTML = pendingVisualFiles.map((file, i) => {
+                const url = URL.createObjectURL(file);
+                return `<div style="position: relative;">
+                    <img src="${url}" style="width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px;">
+                    <button onclick="removePendingVisual(${i})" style="position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.7); border: none; color: white; width: 20px; height: 20px; border-radius: 50%; cursor: pointer; font-size: 10px;">✕</button>
+                </div>`;
+            }).join('');
+
+            if (pendingVisualFiles.length > 0) {
+                previewDiv.innerHTML += `<button class="btn btn-primary btn-sm" onclick="uploadPendingVisuals()" style="grid-column: 1 / -1; margin-top: 0.5rem;">⬆️ Upload ${pendingVisualFiles.length} image(s) to "${currentVisualCategory}"</button>`;
+            }
+        }
+
+        function removePendingVisual(index) {
+            pendingVisualFiles.splice(index, 1);
+            handleModalVisualUpload(pendingVisualFiles);
+        }
+
+        async function uploadPendingVisuals() {
+            if (!currentModalSkillId) {
+                showToast('No skill selected', 'warning');
+                return;
+            }
+
+            for (const file of pendingVisualFiles) {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('skill_id', currentModalSkillId);
+                formData.append('category', currentVisualCategory);
+                await fetch('/api/visual-training/upload', { method: 'POST', body: formData });
+            }
+
+            showToast(`Uploaded ${pendingVisualFiles.length} image(s)`, 'success');
+            pendingVisualFiles = [];
+            document.getElementById('modal-visual-preview').innerHTML = '';
+            loadVisualGallery();
+        }
+
+        async function loadVisualGallery() {
+            if (!currentModalSkillId) return;
+            const gallery = document.getElementById('modal-visual-gallery');
+            try {
+                const res = await fetch(`/api/visual-training?skill_id=${currentModalSkillId}`);
+                const data = await res.json();
+                const images = data.images || [];
+                if (images.length === 0) {
+                    gallery.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 1rem;">No visual training data yet</div>';
+                    return;
+                }
+                gallery.innerHTML = images.map(img => `
+                    <div style="position: relative;">
+                        <img src="${img.url}" style="width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px;" title="${img.category}">
+                        <span style="position: absolute; bottom: 2px; left: 2px; background: rgba(0,0,0,0.7); color: white; font-size: 8px; padding: 2px 4px; border-radius: 2px;">${img.category}</span>
+                    </div>
+                `).join('');
+            } catch (e) {
+                gallery.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary);">Failed to load gallery</div>';
+            }
+        }
+
         async function loadSkillAdapters(skillId) {
             const container = document.getElementById('skill-adapters-list');
             const skill = unifiedSkillsData.find(s => s.id === skillId);
@@ -12584,21 +12337,50 @@ pipeline = Pipeline([
             container.innerHTML = adapters.map(adapter => `
                 <div class="glass-card" style="padding: 1rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
+                        <div style="flex: 1;">
                             <div style="font-weight: 600; color: var(--text-primary);">${adapter.adapter_name || adapter.id}</div>
                             <div style="font-size: 0.85rem; color: var(--text-secondary);">
                                 Base: ${adapter.base_model || 'Unknown'} |
-                                Loss: ${adapter.final_loss?.toFixed(3) || '--'} |
+                                Loss: <span style="color: ${adapter.final_loss < 0.3 ? 'var(--neon-green)' : 'var(--neon-orange)'}">${adapter.final_loss?.toFixed(3) || '--'}</span> |
                                 Created: ${new Date(adapter.created_at).toLocaleDateString()}
                             </div>
                         </div>
-                        <div style="display: flex; gap: 0.5rem;">
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                             <button class="btn btn-secondary btn-sm" onclick="testAdapter('${adapter.skill_id || adapter.id}')">🔬 Test</button>
+                            <button class="btn btn-secondary btn-sm" onclick="downloadSkillAdapter('${adapter.skill_id || skillId}')" title="Download adapter files">⬇️ Download</button>
                             <button class="btn btn-primary btn-sm" onclick="deployAdapter('${adapter.id}')">🚀 Deploy</button>
                         </div>
                     </div>
                 </div>
             `).join('');
+        }
+
+        async function downloadSkillAdapter(skillId) {
+            try {
+                showToast('Preparing adapter download...', 'info');
+                const response = await fetch(`/api/training/adapters/${skillId}/download`);
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Download failed');
+                }
+
+                // Get the blob and create download link
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${skillId}_adapter.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                showToast('Adapter downloaded successfully!', 'success');
+            } catch (error) {
+                console.error('Download error:', error);
+                showToast(`Download failed: ${error.message}`, 'error');
+            }
         }
 
         function updateTrainingReadiness(skillId) {
@@ -12909,10 +12691,24 @@ pipeline = Pipeline([
         }
 
         async function approveSelectedData() {
-            const ids = Array.from(document.querySelectorAll('#skill-data-tbody .data-checkbox:checked')).map(cb => cb.value);
-            for (const id of ids) {
-                await fetch(`/api/parser/data/${id}/approve`, { method: 'POST' });
+            const checkboxes = document.querySelectorAll('#skill-data-tbody .data-checkbox:checked');
+            const ids = Array.from(checkboxes).map(cb => cb.value);
+            if (ids.length === 0) {
+                showToast('No items selected', 'warning');
+                return;
             }
+
+            let approved = 0;
+            for (const id of ids) {
+                try {
+                    const res = await fetch(`/api/parser/data/${id}/approve`, { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) approved++;
+                } catch (e) {
+                    console.error('Failed to approve:', id, e);
+                }
+            }
+            showToast(`Approved ${approved} item(s)`, 'success');
             loadSkillTrainingData(currentModalSkillId);
         }
 
@@ -13080,21 +12876,6 @@ pipeline = Pipeline([
         let trainingPollInterval = null;
         let lossChartData = [];
         let lrChartData = [];
-
-        function showTrainingTab(subTab) {
-            document.querySelectorAll('#tab-training .sub-tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('#tab-training .sub-tab-btn').forEach(b => b.classList.remove('active'));
-
-            const tabContent = document.getElementById('training-' + subTab);
-            if (tabContent) tabContent.classList.add('active');
-
-            event.target.classList.add('active');
-
-            if (subTab === 'adapters') refreshAdapters();
-            if (subTab === 'progress') checkActiveTraining();
-            if (subTab === 'data') loadDataManagerSkillsDropdown();
-            if (subTab === 'cad') resetCADProcessor();
-        }
 
         // ============================================================
         // CAD FILE PROCESSING FUNCTIONS
