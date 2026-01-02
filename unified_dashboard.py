@@ -9062,7 +9062,7 @@ DASHBOARD_HTML = '''
                     </div>
 
                     <!-- Training Data Tab -->
-                    <div id="skill-modal-training-data" class="modal-tab-content" style="display: none;">
+                    <div id="skill-modal-training-data" class="modal-tab-content">
                         <!-- Data Actions -->
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
                             <div style="display: flex; gap: 0.5rem;">
@@ -9120,7 +9120,7 @@ DASHBOARD_HTML = '''
                     </div>
 
                     <!-- Train Tab -->
-                    <div id="skill-modal-train" class="modal-tab-content" style="display: none;">
+                    <div id="skill-modal-train" class="modal-tab-content">
                         <!-- Training Readiness Check -->
                         <div id="training-readiness" class="glass-card" style="padding: 1.25rem; margin-bottom: 1.5rem;">
                             <h4 style="margin: 0 0 1rem 0; color: var(--neon-cyan);">🔍 Training Readiness</h4>
@@ -9226,7 +9226,7 @@ DASHBOARD_HTML = '''
                     </div>
 
                     <!-- Adapters Tab -->
-                    <div id="skill-modal-adapters" class="modal-tab-content" style="display: none;">
+                    <div id="skill-modal-adapters" class="modal-tab-content">
                         <div id="skill-adapters-list" style="display: flex; flex-direction: column; gap: 1rem;">
                             <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
                                 No adapters for this skill yet. Train to create one!
