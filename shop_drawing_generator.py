@@ -641,6 +641,36 @@ def download_output(project_id, filename):
     return jsonify({"error": "File not found"}), 404
 
 
+@app.route('/api/project/<project_id>/download-all')
+def download_all_outputs(project_id):
+    """Download all output files as a ZIP archive."""
+    import io
+    import zipfile
+    from flask import Response
+
+    output_folder = os.path.join(OUTPUT_FOLDER, project_id)
+    if not os.path.exists(output_folder):
+        return jsonify({"error": "No outputs found"}), 404
+
+    # Create ZIP in memory
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for filename in os.listdir(output_folder):
+            file_path = os.path.join(output_folder, filename)
+            if os.path.isfile(file_path):
+                zip_file.write(file_path, filename)
+
+    zip_buffer.seek(0)
+
+    return Response(
+        zip_buffer.getvalue(),
+        mimetype='application/zip',
+        headers={
+            'Content-Disposition': f'attachment; filename={project_id}_outputs.zip'
+        }
+    )
+
+
 @app.route('/api/generate-drawings', methods=['POST'])
 def generate_drawings():
     """Generate shop drawings from analyzed data."""
@@ -901,9 +931,14 @@ DASHBOARD_HTML = '''
                     <!-- Outputs Tab -->
                     <div id="tab-outputs" class="tab-panel hidden">
                         <div class="bg-gray-900 p-4 rounded border border-gray-700">
-                            <h3 class="text-cyan-400 mb-2 font-bold">Generated Outputs</h3>
-                            <div id="outputsList" class="space-y-2">
-                                <p class="text-gray-500">No outputs generated yet</p>
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-cyan-400 font-bold"><i class="fas fa-file-export mr-2"></i>Generated JSON Outputs</h3>
+                                <button onclick="downloadAllOutputs()" class="glow-btn text-white px-4 py-2 rounded text-sm">
+                                    <i class="fas fa-download mr-2"></i>Download All (ZIP)
+                                </button>
+                            </div>
+                            <div id="outputsList" class="space-y-2 max-h-96 overflow-y-auto">
+                                <p class="text-gray-500">No outputs generated yet. Upload files and click "Generate Shop Drawings".</p>
                             </div>
                         </div>
                     </div>
@@ -1133,17 +1168,51 @@ DASHBOARD_HTML = '''
                 const res = await fetch(`/api/project/${projectId}/outputs`);
                 const data = await res.json();
 
+                if (!data.files || data.files.length === 0) {
+                    document.getElementById('outputsList').innerHTML = '<p class="text-gray-500">No outputs yet</p>';
+                    return;
+                }
+
                 const html = data.files.map(f => `
-                    <a href="${f.url}" class="block bg-gray-800 p-3 rounded hover:bg-gray-700 transition">
-                        <i class="fas fa-file-download mr-2 text-cyan-400"></i>
-                        ${f.name}
-                        <span class="text-gray-500 text-xs ml-2">(${(f.size / 1024).toFixed(1)} KB)</span>
-                    </a>
+                    <div class="flex justify-between items-center bg-gray-800 p-3 rounded hover:bg-gray-700 transition">
+                        <div>
+                            <i class="fas fa-file-code mr-2 text-cyan-400"></i>
+                            <span class="text-white">${f.name}</span>
+                            <span class="text-gray-500 text-xs ml-2">(${(f.size / 1024).toFixed(1)} KB)</span>
+                        </div>
+                        <a href="${f.url}" download class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-sm">
+                            <i class="fas fa-download mr-1"></i> Download
+                        </a>
+                    </div>
                 `).join('');
 
-                document.getElementById('outputsList').innerHTML = html || '<p class="text-gray-500">No outputs yet</p>';
+                document.getElementById('outputsList').innerHTML = html;
             } catch (err) {
                 console.error('Failed to load outputs:', err);
+            }
+        }
+
+        async function downloadAllOutputs() {
+            if (!currentProject) {
+                alert('No project loaded. Upload files first.');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/project/${currentProject.id}/download-all`);
+                if (!res.ok) throw new Error('Download failed');
+
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${currentProject.id}_outputs.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            } catch (err) {
+                alert('Download failed: ' + err.message);
             }
         }
     </script>
