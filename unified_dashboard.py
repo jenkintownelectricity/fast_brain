@@ -998,6 +998,7 @@ def download_adapter(skill_id):
     import io
     import zipfile
     from pathlib import Path
+    from flask import Response
 
     try:
         reload_volume()  # Get fresh data from Modal volume
@@ -2310,6 +2311,109 @@ def save_cad_as_training():
 
         return jsonify({'success': True, 'message': f'Saved {format_type} CAD data as training example'})
 
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================
+# CAD OUTPUT STORAGE & DOWNLOAD API
+# ============================================================
+CAD_OUTPUTS_DIR = '/data/cad_outputs'
+
+@app.route('/api/cad/save-json', methods=['POST'])
+def save_cad_json():
+    """Save raw CAD JSON output to disk for later download."""
+    import os
+    import json
+    from pathlib import Path
+
+    data = request.json
+    if not data:
+        return jsonify({'success': False, 'error': 'No data provided'}), 400
+
+    skill_id = data.get('skill_id')
+    json_data = data.get('json_data')
+    format_type = data.get('format_type', 'full')
+    filename = data.get('filename', 'output')
+
+    if not skill_id or not json_data:
+        return jsonify({'success': False, 'error': 'skill_id and json_data required'}), 400
+
+    try:
+        # Create output directory
+        output_dir = Path(CAD_OUTPUTS_DIR) / skill_id
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Clean filename
+        base_name = filename.replace('.dxf', '').replace('.DXF', '')
+        output_file = output_dir / f"{base_name}_{format_type}.json"
+
+        # Save JSON
+        with open(output_file, 'w') as f:
+            json.dump(json_data, f, indent=2)
+
+        commit_volume()
+
+        return jsonify({
+            'success': True,
+            'message': f'Saved {format_type} JSON',
+            'filename': output_file.name
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cad/outputs/<skill_id>')
+def list_cad_outputs(skill_id):
+    """List all saved CAD JSON outputs for a skill."""
+    import os
+    from pathlib import Path
+
+    try:
+        reload_volume()
+        output_dir = Path(CAD_OUTPUTS_DIR) / skill_id
+
+        if not output_dir.exists():
+            return jsonify({'success': True, 'outputs': []})
+
+        outputs = []
+        for file_path in output_dir.glob('*.json'):
+            stat = file_path.stat()
+            outputs.append({
+                'filename': file_path.name,
+                'size': stat.st_size,
+                'modified': stat.st_mtime
+            })
+
+        # Sort by modified time (newest first)
+        outputs.sort(key=lambda x: x['modified'], reverse=True)
+
+        return jsonify({'success': True, 'outputs': outputs})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cad/outputs/<skill_id>/<filename>')
+def download_cad_output(skill_id, filename):
+    """Download a specific CAD JSON output file."""
+    from pathlib import Path
+    from flask import Response
+
+    try:
+        reload_volume()
+        file_path = Path(CAD_OUTPUTS_DIR) / skill_id / filename
+
+        if not file_path.exists():
+            return jsonify({'success': False, 'error': 'File not found'}), 404
+
+        with open(file_path, 'r') as f:
+            content = f.read()
+
+        return Response(
+            content,
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -8631,11 +8735,13 @@ DASHBOARD_HTML = '''
                                 </div>
                             </div>
                             <div id="modal-cad-status" style="margin-top: 0.75rem; font-size: 0.85rem;"></div>
-                            <!-- Processed CAD Files for Download -->
+                            <!-- Processed CAD Files for Download (Immediate) -->
                             <div id="modal-cad-outputs" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">📥 Download Processed JSON:</div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">📥 Download Processed JSON (Current Session):</div>
                                 <div id="modal-cad-download-list" style="display: flex; gap: 0.5rem; flex-wrap: wrap;"></div>
                             </div>
+                            <!-- Saved CAD JSON Files (Persistent) -->
+                            <div id="modal-saved-cad-outputs" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);"></div>
                         </div>
 
                         <!-- Visual Training Data Section (Hidden by default) -->
@@ -10472,14 +10578,7 @@ pipeline = Pipeline([
                                 <div class="form-group" style="flex: 2;">
                                     <label class="form-label">Select Skill</label>
                                     <select class="form-select" id="vl-edit-skill-link">
-                                        <option value="">-- Select a skill --</option>
-                                        <option value="receptionist">Receptionist</option>
-                                        <option value="electrician">Electrician</option>
-                                        <option value="plumber">Plumber</option>
-                                        <option value="lawyer">Lawyer</option>
-                                        <option value="solar">Solar</option>
-                                        <option value="tara-sales">Tara Sales</option>
-                                        <option value="general">General</option>
+                                        <option value="">-- Loading skills... --</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
@@ -12282,6 +12381,9 @@ pipeline = Pipeline([
         function toggleModalCADSection() {
             const section = document.getElementById('modal-cad-section');
             section.style.display = section.style.display === 'none' ? 'block' : 'none';
+            if (section.style.display !== 'none' && currentModalSkillId) {
+                loadCadOutputs(currentModalSkillId);
+            }
         }
 
         function handleModalCADUpload(file) {
@@ -12338,9 +12440,10 @@ pipeline = Pipeline([
                 }).join('');
                 document.getElementById('modal-cad-outputs').style.display = 'block';
 
-                // Save to training data
+                // Save to training data AND save raw JSON files
                 let saved = 0;
                 for (const [type, jsonData] of Object.entries(processData.outputs)) {
+                    // Save as training example
                     const saveRes = await fetch('/api/cad/save-training', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -12348,12 +12451,54 @@ pipeline = Pipeline([
                     });
                     const saveData = await saveRes.json();
                     if (saveData.success) saved++;
+
+                    // Also save raw JSON file for download
+                    await fetch('/api/cad/save-json', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            skill_id: currentModalSkillId,
+                            json_data: jsonData,
+                            format_type: type,
+                            filename: modalCadPendingFile.name
+                        })
+                    });
                 }
 
-                statusDiv.innerHTML = `<span style="color: var(--neon-green);">✓ Processed! Added ${saved} training examples.</span>`;
+                statusDiv.innerHTML = `<span style="color: var(--neon-green);">✓ Processed! Added ${saved} training examples. JSON files saved for download.</span>`;
                 loadSkillTrainingData(currentModalSkillId);
+                loadCadOutputs(currentModalSkillId);  // Refresh saved outputs
             } catch (err) {
                 statusDiv.innerHTML = `<span style="color: #ff6b6b;">✗ Processing failed</span>`;
+            }
+        }
+
+        async function loadCadOutputs(skillId) {
+            const container = document.getElementById('modal-saved-cad-outputs');
+            if (!container) return;
+
+            try {
+                const res = await fetch(`/api/cad/outputs/${skillId}`);
+                const data = await res.json();
+
+                if (!data.success || !data.outputs.length) {
+                    container.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem;">No saved CAD outputs yet.</div>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">📥 Saved CAD JSON Files:</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                        ${data.outputs.map(f => `
+                            <a href="/api/cad/outputs/${skillId}/${f.filename}" download="${f.filename}"
+                               class="btn btn-sm btn-secondary" style="display: inline-flex; align-items: center; gap: 0.25rem;">
+                                📄 ${f.filename} <span style="font-size: 0.7rem; opacity: 0.7;">(${(f.size/1024).toFixed(1)}KB)</span>
+                            </a>
+                        `).join('')}
+                    </div>
+                `;
+            } catch (err) {
+                container.innerHTML = '<div style="color: #ff6b6b; font-size: 0.85rem;">Failed to load CAD outputs</div>';
             }
         }
 
@@ -17016,7 +17161,8 @@ print("Training complete! Adapter saved to adapters/${skill}")
                 document.getElementById('vl-edit-emotion').value = settings.emotion || 'neutral';
                 document.getElementById('vl-edit-style').value = settings.style || 'conversational';
 
-                // Linked skill
+                // Linked skill - load skills first, then set value
+                await loadSkillsForDropdowns();
                 document.getElementById('vl-edit-skill-link').value = project.skill_id || '';
                 document.getElementById('vl-edit-linked-skill').textContent =
                     project.skill_id ? `Currently linked to: ${project.skill_id}` : '';
@@ -17313,12 +17459,14 @@ print("Training complete! Adapter saved to adapters/${skill}")
 
                 const ftSelect = document.getElementById('ft-skill-select');
                 const fbSelect = document.getElementById('feedback-skill-select');
+                const vlSkillLink = document.getElementById('vl-edit-skill-link');
 
                 const options = '<option value="">Select a skill...</option>' +
                     skills.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
 
-                ftSelect.innerHTML = options;
-                fbSelect.innerHTML = options;
+                if (ftSelect) ftSelect.innerHTML = options;
+                if (fbSelect) fbSelect.innerHTML = options;
+                if (vlSkillLink) vlSkillLink.innerHTML = options;
             } catch (e) {
                 console.error('Failed to load skills for dropdowns:', e);
             }
