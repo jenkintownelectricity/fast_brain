@@ -11816,15 +11816,33 @@ pipeline = Pipeline([
         ];
 
         function initWfLossChart() {
-            const canvas = document.getElementById('wf-loss-chart');
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            if (wfLossChart) wfLossChart.destroy();
-            wfLossChart = new Chart(ctx, {
-                type: 'line',
-                data: { labels: [], datasets: [{ label: 'Loss', data: [], borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.4, pointRadius: 2 }] },
-                options: { responsive: true, maintainAspectRatio: false, animation: { duration: 300 }, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#A1A1AA', font: { size: 10 } } } } }
-            });
+            try {
+                const canvas = document.getElementById('wf-loss-chart');
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+                if (wfLossChart) {
+                    wfLossChart.destroy();
+                    wfLossChart = null;
+                }
+                wfLossChart = new Chart(ctx, {
+                    type: 'line',
+                    data: { labels: [], datasets: [{ label: 'Loss', data: [], borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.4, pointRadius: 2 }] },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,  // Disable all animations to prevent GPU issues
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { display: false },
+                            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#A1A1AA', font: { size: 10 } } }
+                        }
+                    }
+                });
+            } catch (err) {
+                console.error('Failed to init loss chart:', err);
+                wfLossChart = null;
+            }
         }
 
         function rotateWfFact() {
@@ -11855,11 +11873,27 @@ pipeline = Pipeline([
             if (progressPct) progressPct.textContent = progress.toFixed(0) + '%';
             if (progressBar) progressBar.style.width = progress + '%';
 
-            // Update chart
-            if (wfLossChart && data.loss_history && data.loss_history.length > 0) {
-                wfLossChart.data.labels = data.loss_history.map(h => h.step);
-                wfLossChart.data.datasets[0].data = data.loss_history.map(h => h.loss);
-                wfLossChart.update('none');
+            // Update chart with error handling and data limiting
+            try {
+                if (wfLossChart && data.loss_history && data.loss_history.length > 0) {
+                    // Limit to last 100 points to prevent memory/rendering issues
+                    const history = data.loss_history.slice(-100);
+                    const labels = [];
+                    const values = [];
+                    for (const h of history) {
+                        if (h && typeof h.step === 'number' && typeof h.loss === 'number' && !isNaN(h.loss)) {
+                            labels.push(h.step);
+                            values.push(h.loss);
+                        }
+                    }
+                    if (labels.length > 0) {
+                        wfLossChart.data.labels = labels;
+                        wfLossChart.data.datasets[0].data = values;
+                        wfLossChart.update('none');
+                    }
+                }
+            } catch (chartErr) {
+                console.error('Chart update error:', chartErr);
             }
         }
 
